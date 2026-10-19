@@ -1,0 +1,25 @@
+{
+  "summary": "First-finish smoke test of ApexOdds crypto sportsbook. Backend auth + odds + bets + wallet endpoints respond 200. Frontend: landing loads with 35 ESPN events, login via header modal works, httpOnly cookie session persists (/api/auth/me returns admin), odds-button adds selection to bet slip (bet-slip-count=1), stake/payout/coin selection compute correctly (10 USDT @ 1.82 => 18.2 USDT), place-bet succeeds with 'Bet placed!' toast and balance debit, wallet deposit works (balance increments visible in header), bet history modal opens with open/won/lost filters, logout clears session, and placing a bet while logged out opens the auth modal instead of erroring.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "GET /api/odds -> 200, 35 events with markets",
+    "POST /api/auth/login (admin) -> 200, sets cookie",
+    "GET /api/auth/me with cookie -> 200",
+    "Frontend loads, odds-grid visible, sidebar sport filters present",
+    "Login via header-signin-button + auth modal (admin@apexodds.io/admin123)",
+    "Logged-in state: header-wallet-button + balance badge ($10,560 -> updates after bet/deposit)",
+    "odds-button-* click adds to bet slip, bet-slip-count increments to 1",
+    "bet-slip-stake-input + bet-slip-coin-USDT + bet-slip-payout computes 18.2 USDT",
+    "bet-slip-place-button -> 'Bet placed!' toast, balance updated",
+    "header-wallet-button opens wallet-modal; deposit (USDT 100) submitted successfully",
+    "header-history-button opens history-modal; history-filter-open/won/lost all clickable",
+    "header-logout-button clears session (sign-in button reappears)",
+    "Logged-out place-bet attempt opens auth modal (does not error)"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Payment config UI (payment-config-toggle) lives inside the wallet modal rather than top-level; not retested here but main agent can verify. Bets remain 'open' because ESPN events are upcoming — expected per spec."
+}
