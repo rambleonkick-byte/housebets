@@ -9,6 +9,11 @@ import { AuthModal } from "@/components/AuthModal";
 import { WalletModal } from "@/components/WalletModal";
 import { BetHistoryModal } from "@/components/BetHistoryModal";
 import { Sportsbook } from "@/pages/Sportsbook";
+import { Casino } from "@/pages/Casino";
+import { Limbo } from "@/pages/games/Limbo";
+import { Mines } from "@/pages/games/Mines";
+import { Plinko } from "@/pages/games/Plinko";
+import { Keno } from "@/pages/games/Keno";
 
 function Shell() {
   const { user, setAuthOpen } = useAuth();
@@ -24,6 +29,11 @@ function Shell() {
       <div className="pt-16">
         <Routes>
           <Route path="/" element={<Sportsbook />} />
+          <Route path="/casino" element={<Casino />} />
+          <Route path="/casino/limbo" element={<Limbo />} />
+          <Route path="/casino/mines" element={<Mines />} />
+          <Route path="/casino/plinko" element={<Plinko />} />
+          <Route path="/casino/keno" element={<Keno />} />
         </Routes>
       </div>
       <AuthModal />

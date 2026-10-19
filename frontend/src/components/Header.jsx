@@ -1,25 +1,37 @@
 import { Zap, Wallet, History, LogOut, User as UserIcon } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { usdValue } from "@/lib/format";
 
 export function Header({ onWallet, onHistory }) {
   const { user, logout, setAuthOpen } = useAuth();
+  const { pathname } = useLocation();
   const total = user && user.balances ? usdValue(user.balances) : 0;
+  const onCasino = pathname.startsWith("/casino");
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 h-16 bg-[#090A0F]/90 backdrop-blur-md border-b border-[#2A2F45]">
       <div className="h-full px-4 md:px-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5" data-testid="brand-logo">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
-            <Zap size={18} className="text-black" fill="currentColor" />
-          </div>
-          <div className="leading-none">
-            <span className="font-display text-xl font-black tracking-tight">APEX</span>
-            <span className="font-display text-xl font-black tracking-tight text-emerald-400">ODDS</span>
-          </div>
-          <span className="hidden md:inline-flex ml-2 text-[10px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2F45] rounded px-1.5 py-0.5">
-            Crypto Sportsbook
-          </span>
+        <div className="flex items-center gap-5">
+          <Link to="/" className="flex items-center gap-2.5" data-testid="brand-logo">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
+              <Zap size={18} className="text-black" fill="currentColor" />
+            </div>
+            <div className="leading-none">
+              <span className="font-display text-xl font-black tracking-tight">APEX</span>
+              <span className="font-display text-xl font-black tracking-tight text-emerald-400">ODDS</span>
+            </div>
+          </Link>
+          <nav className="hidden sm:flex items-center gap-1">
+            <Link to="/" data-testid="nav-sports"
+              className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${!onCasino ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
+              Sports
+            </Link>
+            <Link to="/casino" data-testid="nav-casino"
+              className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${onCasino ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
+              Casino
+            </Link>
+          </nav>
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">

@@ -15,6 +15,8 @@ from bson import ObjectId
 import logging
 import uuid
 import asyncio
+import random
+import math
 import jwt
 import bcrypt
 import httpx
@@ -554,6 +556,214 @@ async def list_bets(user: dict = Depends(get_current_user)):
 # ----------------------------------------------------------------------------
 # Startup
 # ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# Casino house games (provably-fair style, server-authoritative)
+# ----------------------------------------------------------------------------
+EDGE = 0.99  # 1% house edge
+
+PLINKO_MULT = {
+    8:  {"low": [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6],
+         "medium": [13, 3, 1.3, 0.7, 0.4, 0.7, 1.3, 3, 13],
+         "high": [29, 4, 1.5, 0.3, 0.2, 0.3, 1.5, 4, 29]},
+    12: {"low": [10, 3, 1.6, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 1.6, 3, 10],
+         "medium": [24, 5, 3, 1.6, 1, 0.5, 0.3, 0.5, 1, 1.6, 3, 5, 24],
+         "high": [58, 8, 3, 2, 0.5, 0.2, 0.2, 0.2, 0.5, 2, 3, 8, 58]},
+    16: {"low": [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, 0.5, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16],
+         "medium": [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110],
+         "high": [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000]},
+}
+
+KENO_TABLE = {
+    1: [0, 1.9], 2: [0, 0, 4.5], 3: [0, 0, 1.4, 8], 4: [0, 0, 0, 2.2, 13],
+    5: [0, 0, 0, 1.5, 4, 30], 6: [0, 0, 0, 1, 2, 8, 50],
+    7: [0, 0, 0, 0.5, 1.5, 4, 15, 80], 8: [0, 0, 0, 0.5, 1, 2.5, 8, 30, 100],
+    9: [0, 0, 0, 0, 1, 2, 5, 12, 45, 150], 10: [0, 0, 0, 0, 0.6, 1.5, 3, 8, 20, 60, 200],
+}
+
+
+class LimboInput(BaseModel):
+    coin: str
+    stake: float
+    target: float
+
+
+class PlinkoInput(BaseModel):
+    coin: str
+    stake: float
+    risk: str = "medium"
+    rows: int = 16
+
+
+class KenoInput(BaseModel):
+    coin: str
+    stake: float
+    picks: List[int]
+    risk: str = "medium"
+
+
+class MinesStartInput(BaseModel):
+    coin: str
+    stake: float
+    mines: int = 3
+
+
+class MinesActionInput(BaseModel):
+    game_id: str
+    tile: Optional[int] = None
+
+
+async def _check_funds(user_id, coin, stake):
+    if coin not in STARTING_BALANCES:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    if stake <= 0:
+        raise HTTPException(status_code=400, detail="Invalid stake")
+    await ensure_wallet(user_id)
+    wallet = await db.wallets.find_one({"user_id": user_id})
+    if wallet["balances"].get(coin, 0) < stake:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+
+
+async def _adjust(user_id, coin, delta):
+    await db.wallets.update_one({"user_id": user_id}, {"$inc": {f"balances.{coin}": delta}})
+
+
+async def _balances(user_id):
+    w = await db.wallets.find_one({"user_id": user_id}, {"_id": 0})
+    return w["balances"]
+
+
+async def _record_game(user_id, game, coin, stake, multiplier, payout, won, detail):
+    await db.casino_games.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user_id, "game": game, "coin": coin,
+        "stake": stake, "multiplier": round(multiplier, 2), "payout": round(payout, 6),
+        "won": won, "detail": detail, "created_at": now_iso(),
+    })
+
+
+@api_router.post("/casino/limbo")
+async def play_limbo(body: LimboInput, user: dict = Depends(get_current_user)):
+    if body.target < 1.01 or body.target > 1000000:
+        raise HTTPException(status_code=400, detail="Target must be between 1.01 and 1,000,000")
+    await _check_funds(user["id"], body.coin, body.stake)
+    await _adjust(user["id"], body.coin, -body.stake)
+    u = random.random()
+    result = max(1.0, round(EDGE / u, 2)) if u > 0 else 1000000.0
+    won = result >= body.target
+    payout = round(body.stake * body.target, 6) if won else 0.0
+    if won:
+        await _adjust(user["id"], body.coin, payout)
+    await _record_game(user["id"], "limbo", body.coin, body.stake, body.target if won else 0,
+                       payout, won, {"result": result, "target": body.target})
+    return {"result": result, "won": won, "payout": payout, "balances": await _balances(user["id"])}
+
+
+@api_router.post("/casino/plinko")
+async def play_plinko(body: PlinkoInput, user: dict = Depends(get_current_user)):
+    if body.rows not in PLINKO_MULT or body.risk not in ("low", "medium", "high"):
+        raise HTTPException(status_code=400, detail="Invalid config")
+    await _check_funds(user["id"], body.coin, body.stake)
+    await _adjust(user["id"], body.coin, -body.stake)
+    path = [random.random() < 0.5 for _ in range(body.rows)]  # True=right
+    bucket = sum(1 for p in path if p)
+    mult = PLINKO_MULT[body.rows][body.risk][bucket]
+    payout = round(body.stake * mult, 6)
+    await _adjust(user["id"], body.coin, payout)
+    await _record_game(user["id"], "plinko", body.coin, body.stake, mult, payout, mult >= 1,
+                       {"bucket": bucket, "rows": body.rows, "risk": body.risk})
+    return {"path": ["R" if p else "L" for p in path], "bucket": bucket, "multiplier": mult,
+            "payout": payout, "balances": await _balances(user["id"])}
+
+
+@api_router.post("/casino/keno")
+async def play_keno(body: KenoInput, user: dict = Depends(get_current_user)):
+    picks = sorted(set(body.picks))
+    if not (1 <= len(picks) <= 10) or any(n < 1 or n > 40 for n in picks):
+        raise HTTPException(status_code=400, detail="Pick 1-10 numbers from 1-40")
+    await _check_funds(user["id"], body.coin, body.stake)
+    await _adjust(user["id"], body.coin, -body.stake)
+    drawn = random.sample(range(1, 41), 10)
+    hits = len([n for n in picks if n in drawn])
+    mult = KENO_TABLE[len(picks)][hits]
+    payout = round(body.stake * mult, 6)
+    if payout > 0:
+        await _adjust(user["id"], body.coin, payout)
+    await _record_game(user["id"], "keno", body.coin, body.stake, mult, payout, mult >= 1,
+                       {"picks": picks, "drawn": sorted(drawn), "hits": hits})
+    return {"drawn": sorted(drawn), "hits": hits, "multiplier": mult, "payout": payout,
+            "balances": await _balances(user["id"])}
+
+
+def mines_multiplier(mines: int, revealed: int) -> float:
+    if revealed == 0:
+        return 1.0
+    m = EDGE
+    for i in range(revealed):
+        m *= (25 - i) / (25 - mines - i)
+    return round(m, 4)
+
+
+@api_router.post("/casino/mines/start")
+async def mines_start(body: MinesStartInput, user: dict = Depends(get_current_user)):
+    if not (1 <= body.mines <= 24):
+        raise HTTPException(status_code=400, detail="Mines must be 1-24")
+    await _check_funds(user["id"], body.coin, body.stake)
+    # abandon any prior active game (stake already taken)
+    await db.mine_games.update_many({"user_id": user["id"], "status": "active"},
+                                    {"$set": {"status": "abandoned"}})
+    await _adjust(user["id"], body.coin, -body.stake)
+    positions = random.sample(range(25), body.mines)
+    gid = str(uuid.uuid4())
+    await db.mine_games.insert_one({
+        "id": gid, "user_id": user["id"], "coin": body.coin, "stake": body.stake,
+        "mines": positions, "mine_count": body.mines, "revealed": [], "status": "active",
+        "created_at": now_iso(),
+    })
+    return {"game_id": gid, "mine_count": body.mines, "balances": await _balances(user["id"])}
+
+
+@api_router.post("/casino/mines/reveal")
+async def mines_reveal(body: MinesActionInput, user: dict = Depends(get_current_user)):
+    g = await db.mine_games.find_one({"id": body.game_id, "user_id": user["id"]})
+    if not g or g["status"] != "active":
+        raise HTTPException(status_code=400, detail="No active game")
+    if body.tile is None or not (0 <= body.tile <= 24) or body.tile in g["revealed"]:
+        raise HTTPException(status_code=400, detail="Invalid tile")
+    if body.tile in g["mines"]:
+        await db.mine_games.update_one({"id": g["id"]}, {"$set": {"status": "lost"}})
+        await _record_game(user["id"], "mines", g["coin"], g["stake"], 0, 0.0, False,
+                           {"mines": g["mine_count"], "revealed": len(g["revealed"]), "hit": True})
+        return {"hit": True, "mines": g["mines"], "done": True, "balances": await _balances(user["id"])}
+    revealed = g["revealed"] + [body.tile]
+    await db.mine_games.update_one({"id": g["id"]}, {"$set": {"revealed": revealed}})
+    mult = mines_multiplier(g["mine_count"], len(revealed))
+    next_mult = mines_multiplier(g["mine_count"], len(revealed) + 1)
+    return {"hit": False, "revealed": revealed, "multiplier": mult, "next_multiplier": next_mult,
+            "cashout_value": round(g["stake"] * mult, 6), "done": False}
+
+
+@api_router.post("/casino/mines/cashout")
+async def mines_cashout(body: MinesActionInput, user: dict = Depends(get_current_user)):
+    g = await db.mine_games.find_one({"id": body.game_id, "user_id": user["id"]})
+    if not g or g["status"] != "active":
+        raise HTTPException(status_code=400, detail="No active game")
+    if not g["revealed"]:
+        raise HTTPException(status_code=400, detail="Reveal at least one tile first")
+    mult = mines_multiplier(g["mine_count"], len(g["revealed"]))
+    payout = round(g["stake"] * mult, 6)
+    await _adjust(user["id"], g["coin"], payout)
+    await db.mine_games.update_one({"id": g["id"]}, {"$set": {"status": "won"}})
+    await _record_game(user["id"], "mines", g["coin"], g["stake"], mult, payout, True,
+                       {"mines": g["mine_count"], "revealed": len(g["revealed"]), "hit": False})
+    return {"payout": payout, "multiplier": mult, "mines": g["mines"],
+            "balances": await _balances(user["id"])}
+
+
+@api_router.get("/casino/history")
+async def casino_history(user: dict = Depends(get_current_user)):
+    rows = await db.casino_games.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(40)
+    return {"games": rows}
+
+
 @api_router.get("/")
 async def root():
     return {"message": "ApexOdds API"}
