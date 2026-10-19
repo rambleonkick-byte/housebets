@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 import logging
 import uuid
+import asyncio
 import jwt
 import bcrypt
 import httpx
@@ -194,17 +195,51 @@ async def me(user: dict = Depends(get_current_user)):
 # ----------------------------------------------------------------------------
 # ESPN odds
 # ----------------------------------------------------------------------------
+# group = sidebar category | label = specific competition | sport/league = ESPN path
 SPORTS = [
-    {"key": "nba", "label": "NBA Basketball", "sport": "basketball", "league": "nba", "icon": "dribbble", "draw": False},
-    {"key": "wnba", "label": "WNBA", "sport": "basketball", "league": "wnba", "icon": "dribbble", "draw": False},
-    {"key": "mlb", "label": "MLB Baseball", "sport": "baseball", "league": "mlb", "icon": "circle-dot", "draw": False},
-    {"key": "nfl", "label": "NFL Football", "sport": "football", "league": "nfl", "icon": "shield", "draw": False},
-    {"key": "nhl", "label": "NHL Hockey", "sport": "hockey", "league": "nhl", "icon": "snowflake", "draw": False},
-    {"key": "epl", "label": "Premier League", "sport": "soccer", "league": "eng.1", "icon": "goal", "draw": True},
-    {"key": "mls", "label": "MLS Soccer", "sport": "soccer", "league": "usa.1", "icon": "goal", "draw": True},
-    {"key": "ucl", "label": "Champions League", "sport": "soccer", "league": "uefa.champions", "icon": "goal", "draw": True},
+    # Basketball
+    {"key": "nba", "group": "basketball", "label": "NBA", "sport": "basketball", "league": "nba", "draw": False},
+    {"key": "wnba", "group": "basketball", "label": "WNBA", "sport": "basketball", "league": "wnba", "draw": False},
+    {"key": "ncaam", "group": "basketball", "label": "NCAA Men's", "sport": "basketball", "league": "mens-college-basketball", "draw": False},
+    {"key": "ncaaw", "group": "basketball", "label": "NCAA Women's", "sport": "basketball", "league": "womens-college-basketball", "draw": False},
+    {"key": "nbl", "group": "basketball", "label": "NBL Australia", "sport": "basketball", "league": "nbl", "draw": False},
+    # American Football
+    {"key": "nfl", "group": "football", "label": "NFL", "sport": "football", "league": "nfl", "draw": False},
+    {"key": "ncaaf", "group": "football", "label": "NCAA Football", "sport": "football", "league": "college-football", "draw": False},
+    # Baseball
+    {"key": "mlb", "group": "baseball", "label": "MLB", "sport": "baseball", "league": "mlb", "draw": False},
+    {"key": "collegebb", "group": "baseball", "label": "College Baseball", "sport": "baseball", "league": "college-baseball", "draw": False},
+    # Hockey
+    {"key": "nhl", "group": "hockey", "label": "NHL", "sport": "hockey", "league": "nhl", "draw": False},
+    # Soccer
+    {"key": "eng.1", "group": "soccer", "label": "Premier League", "sport": "soccer", "league": "eng.1", "draw": True},
+    {"key": "eng.2", "group": "soccer", "label": "Championship", "sport": "soccer", "league": "eng.2", "draw": True},
+    {"key": "esp.1", "group": "soccer", "label": "La Liga", "sport": "soccer", "league": "esp.1", "draw": True},
+    {"key": "ita.1", "group": "soccer", "label": "Serie A", "sport": "soccer", "league": "ita.1", "draw": True},
+    {"key": "ger.1", "group": "soccer", "label": "Bundesliga", "sport": "soccer", "league": "ger.1", "draw": True},
+    {"key": "fra.1", "group": "soccer", "label": "Ligue 1", "sport": "soccer", "league": "fra.1", "draw": True},
+    {"key": "ned.1", "group": "soccer", "label": "Eredivisie", "sport": "soccer", "league": "ned.1", "draw": True},
+    {"key": "por.1", "group": "soccer", "label": "Primeira Liga", "sport": "soccer", "league": "por.1", "draw": True},
+    {"key": "usa.1", "group": "soccer", "label": "MLS", "sport": "soccer", "league": "usa.1", "draw": True},
+    {"key": "mex.1", "group": "soccer", "label": "Liga MX", "sport": "soccer", "league": "mex.1", "draw": True},
+    {"key": "uefa.champions", "group": "soccer", "label": "Champions League", "sport": "soccer", "league": "uefa.champions", "draw": True},
+    {"key": "uefa.europa", "group": "soccer", "label": "Europa League", "sport": "soccer", "league": "uefa.europa", "draw": True},
+    {"key": "sau.1", "group": "soccer", "label": "Saudi Pro League", "sport": "soccer", "league": "ksa.1", "draw": True},
+    {"key": "tur.1", "group": "soccer", "label": "Süper Lig", "sport": "soccer", "league": "tur.1", "draw": True},
+    # Tennis
+    {"key": "atp", "group": "tennis", "label": "ATP Tour", "sport": "tennis", "league": "atp", "draw": False},
+    {"key": "wta", "group": "tennis", "label": "WTA Tour", "sport": "tennis", "league": "wta", "draw": False},
 ]
 SPORTS_BY_KEY = {s["key"]: s for s in SPORTS}
+
+GROUPS = [
+    {"key": "soccer", "label": "Soccer", "icon": "goal"},
+    {"key": "basketball", "label": "Basketball", "icon": "dribbble"},
+    {"key": "football", "label": "Am. Football", "icon": "shield"},
+    {"key": "baseball", "label": "Baseball", "icon": "circle-dot"},
+    {"key": "hockey", "label": "Ice Hockey", "icon": "snowflake"},
+    {"key": "tennis", "label": "Tennis", "icon": "circle"},
+]
 
 _ODDS_CACHE: dict = {}
 
@@ -313,7 +348,8 @@ async def fetch_league_events(sport_meta) -> List[dict]:
             meta["label_away"] = a_team.get("abbreviation") or a_team.get("shortDisplayName", "AWAY")
             events.append({
                 "event_id": ev.get("id"),
-                "league": key,
+                "league": sport_meta["group"],
+                "league_key": sport_meta["key"],
                 "league_label": sport_meta["label"],
                 "name": ev.get("shortName") or ev.get("name"),
                 "start": ev.get("date"),
@@ -333,16 +369,18 @@ async def fetch_league_events(sport_meta) -> List[dict]:
 
 @api_router.get("/sports")
 async def list_sports():
-    return [{"key": s["key"], "label": s["label"], "icon": s["icon"]} for s in SPORTS]
+    return GROUPS
 
 
 @api_router.get("/odds")
 async def get_odds(league: Optional[str] = None):
-    metas = [SPORTS_BY_KEY[league]] if league and league in SPORTS_BY_KEY else SPORTS
+    metas = [s for s in SPORTS if s["group"] == league] if league else SPORTS
+    results = await asyncio.gather(*[fetch_league_events(m) for m in metas], return_exceptions=True)
     out = []
-    for m in metas:
-        out.extend(await fetch_league_events(m))
-    out.sort(key=lambda e: (0 if e["state"] == "in" else 1 if e["state"] == "pre" else 2))
+    for r in results:
+        if isinstance(r, list):
+            out.extend(r)
+    out.sort(key=lambda e: (0 if e["state"] == "in" else 1 if e["state"] == "pre" else 2, e.get("start") or ""))
     return {"events": out}
 
 
@@ -477,15 +515,12 @@ async def auto_settle(user_id: str):
     open_bets = await db.bets.find({"user_id": user_id, "status": "open"}).to_list(200)
     if not open_bets:
         return
-    # build finished event map
+    # fetch finished events across all leagues (cached), map by event_id
+    results = await asyncio.gather(*[fetch_league_events(m) for m in SPORTS], return_exceptions=True)
     finished = {}
-    needed_leagues = set()
-    for b in open_bets:
-        for s in b["selections"]:
-            needed_leagues.add(s["league"])
-    for lk in needed_leagues:
-        if lk in SPORTS_BY_KEY:
-            for ev in await fetch_league_events(SPORTS_BY_KEY[lk]):
+    for r in results:
+        if isinstance(r, list):
+            for ev in r:
                 if ev["state"] == "post":
                     finished[ev["event_id"]] = ev
     for b in open_bets:
