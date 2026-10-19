@@ -45,7 +45,7 @@ export function Limbo() {
   const color = last == null ? "#F4F4F5" : win ? "#22C55E" : "#EF4444";
 
   return (
-    <GameLayout title="Limbo" tag="House Game · provably fair"
+    <GameLayout title="Limbo" tag="House Game · 1% edge"
       controls={
         <BetControls {...g} disabled={loading}>
           <div>

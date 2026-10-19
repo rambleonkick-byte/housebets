@@ -12,7 +12,7 @@ const GAMES = [
 export function Casino() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Originals · provably fair</p>
+      <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Originals · 1% house edge</p>
       <h1 className="font-display text-4xl sm:text-5xl font-black tracking-tight">House Games</h1>
       <p className="text-sm text-zinc-400 mt-2 max-w-md">Instant-win crypto games. Bet from your simulated balance, 1% house edge.</p>
 

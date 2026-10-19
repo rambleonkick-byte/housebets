@@ -1,0 +1,25 @@
+{
+  "summary": "Added casino house games (Limbo, Mines, Plinko, Keno). Backend: 12 pytest cases cover auth gating, stake deduction, payout crediting, insufficient balance, invalid config, mines start/reveal/cashout, keno pick limits, limbo target bounds, plus sportsbook regression -- 12/12 passed. Frontend e2e via Playwright: logged in with admin, Casino lobby shows 4 cards, each game routes correctly, Limbo (stake 5 USDT target 2 -> result 2.39x won, balance updated), Plinko (3 USDT medium/16 rows, hit 1x bucket - net zero but mechanics correct), Keno (auto picks 8, stake 2 USDT -> payout 5 USDT, bal 2594.25->2597.25), Mines (3 mines, stake 2 USDT, start deducts, safe reveal at 1.13x, cashout credits 2.25 USDT), sportsbook regression (nav-sports returns, odds-grid visible), and logged-out limbo-play-button opens auth modal.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Casino games", "issues": ["Header shows balance in USD aggregate ($10,764) so a round-trip Plinko 1x hit leaves header unchanged -- misleading; per-coin balance inside BetControls (Bal: 2,594.25 USDT) updates correctly."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_casino.py", "/app/test_reports/pytest/casino.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~800 lines; consider splitting casino section into a casino router module for maintainability.",
+    "Casino routes use random.random/sample (not cryptographic). Marketed as 'provably fair' in UI but no seed/hash commitment is exposed to the client -- consider adding server/client seed + hash chain if you want to live up to that claim.",
+    "mines/start abandons any prior active game BUT the prior stake remains deducted (comment acknowledges this). Starting a new game while one is active silently forfeits previous stake -- consider returning the prior game-id or refunding."
+  ],
+  "updated_files": ["/app/backend/tests/test_casino.py", "/app/test_reports/iteration_2.json"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@apexodds.io / admin123",
+  "seed_data_creation": "None; used existing admin wallet.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Casino house games verified end-to-end with real stake/payout flow against the live backend. Mines flow is probabilistic -- for retests, loop reveals/restarts to find a safe tile (3 mines => ~88% chance per tile). Keno 'keno-drawn' testid wasn't located in DOM; non-blocking since mechanics verified via balance delta and sel count. Plinko can land on sub-1x -- do not assert >0 payout."
+}

@@ -707,7 +707,9 @@ async def mines_start(body: MinesStartInput, user: dict = Depends(get_current_us
     if not (1 <= body.mines <= 24):
         raise HTTPException(status_code=400, detail="Mines must be 1-24")
     await _check_funds(user["id"], body.coin, body.stake)
-    # abandon any prior active game (stake already taken)
+    # refund & close any prior active game (stake was taken on its start)
+    async for prior in db.mine_games.find({"user_id": user["id"], "status": "active"}):
+        await _adjust(user["id"], prior["coin"], prior["stake"])
     await db.mine_games.update_many({"user_id": user["id"], "status": "active"},
                                     {"$set": {"status": "abandoned"}})
     await _adjust(user["id"], body.coin, -body.stake)
