@@ -1,0 +1,555 @@
+from dotenv import load_dotenv
+from pathlib import Path
+import os
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, EmailStr, Field
+from typing import List, Optional
+from datetime import datetime, timezone, timedelta
+from bson import ObjectId
+import logging
+import uuid
+import jwt
+import bcrypt
+import httpx
+
+# ----------------------------------------------------------------------------
+# DB
+# ----------------------------------------------------------------------------
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
+JWT_ALGORITHM = "HS256"
+
+
+def get_jwt_secret() -> str:
+    return os.environ["JWT_SECRET"]
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def create_access_token(user_id: str, email: str) -> str:
+    payload = {"sub": user_id, "email": email,
+               "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "access"}
+    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+# ----------------------------------------------------------------------------
+# App
+# ----------------------------------------------------------------------------
+app = FastAPI()
+api_router = APIRouter(prefix="/api")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("apexodds")
+
+STARTING_BALANCES = {"BTC": 0.05, "ETH": 0.8, "USDT": 2500.0, "SOL": 15.0}
+COIN_USD = {"BTC": 64000.0, "ETH": 3400.0, "USDT": 1.0, "SOL": 150.0}
+
+# ----------------------------------------------------------------------------
+# Models
+# ----------------------------------------------------------------------------
+class RegisterInput(BaseModel):
+    name: str
+    email: EmailStr
+    password: str = Field(min_length=6)
+
+
+class LoginInput(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class Selection(BaseModel):
+    event_id: str
+    league: str
+    league_label: str
+    home: str
+    away: str
+    market: str          # moneyline | spread | total
+    pick: str            # label shown, e.g. "LAL ML", "Over 210.5"
+    side: str            # home | away | draw | over | under
+    line: Optional[float] = None
+    odds: float          # decimal odds
+
+
+class PlaceBetInput(BaseModel):
+    selections: List[Selection]
+    stake: float
+    coin: str
+    bet_type: str = "single"   # single | parlay
+
+
+class WalletTxInput(BaseModel):
+    coin: str
+    amount: float
+
+
+class PaymentConfigInput(BaseModel):
+    provider: str
+    api_base: str = ""
+    api_key: str = ""
+    mode: str = "mock"   # mock | live
+
+
+# ----------------------------------------------------------------------------
+# Auth helpers
+# ----------------------------------------------------------------------------
+async def get_current_user(request: Request) -> dict:
+    token = request.cookies.get("access_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        user["id"] = str(user.pop("_id"))
+        user.pop("password_hash", None)
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def set_auth_cookie(response: Response, token: str):
+    response.set_cookie(key="access_token", value=token, httponly=True,
+                        secure=True, samesite="none", max_age=604800, path="/")
+
+
+async def ensure_wallet(user_id: str):
+    existing = await db.wallets.find_one({"user_id": user_id})
+    if not existing:
+        await db.wallets.insert_one({"user_id": user_id, "balances": dict(STARTING_BALANCES)})
+
+
+async def user_public(user: dict) -> dict:
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"id": user["id"], "name": user.get("name"), "email": user["email"],
+            "role": user.get("role", "user"), "balances": wallet["balances"] if wallet else {}}
+
+
+# ----------------------------------------------------------------------------
+# Auth routes
+# ----------------------------------------------------------------------------
+@api_router.post("/auth/register")
+async def register(body: RegisterInput, response: Response):
+    email = body.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Email already registered")
+    doc = {"name": body.name, "email": email, "password_hash": hash_password(body.password),
+           "role": "user", "created_at": now_iso()}
+    res = await db.users.insert_one(doc)
+    uid = str(res.inserted_id)
+    await ensure_wallet(uid)
+    set_auth_cookie(response, create_access_token(uid, email))
+    user = {"id": uid, "name": body.name, "email": email, "role": "user"}
+    return await user_public(user)
+
+
+@api_router.post("/auth/login")
+async def login(body: LoginInput, response: Response):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    uid = str(user["_id"])
+    await ensure_wallet(uid)
+    set_auth_cookie(response, create_access_token(uid, email))
+    return await user_public({"id": uid, "name": user.get("name"), "email": email,
+                              "role": user.get("role", "user")})
+
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    return {"ok": True}
+
+
+@api_router.get("/auth/me")
+async def me(user: dict = Depends(get_current_user)):
+    await ensure_wallet(user["id"])
+    return await user_public(user)
+
+
+# ----------------------------------------------------------------------------
+# ESPN odds
+# ----------------------------------------------------------------------------
+SPORTS = [
+    {"key": "nba", "label": "NBA Basketball", "sport": "basketball", "league": "nba", "icon": "dribbble", "draw": False},
+    {"key": "wnba", "label": "WNBA", "sport": "basketball", "league": "wnba", "icon": "dribbble", "draw": False},
+    {"key": "mlb", "label": "MLB Baseball", "sport": "baseball", "league": "mlb", "icon": "circle-dot", "draw": False},
+    {"key": "nfl", "label": "NFL Football", "sport": "football", "league": "nfl", "icon": "shield", "draw": False},
+    {"key": "nhl", "label": "NHL Hockey", "sport": "hockey", "league": "nhl", "icon": "snowflake", "draw": False},
+    {"key": "epl", "label": "Premier League", "sport": "soccer", "league": "eng.1", "icon": "goal", "draw": True},
+    {"key": "mls", "label": "MLS Soccer", "sport": "soccer", "league": "usa.1", "icon": "goal", "draw": True},
+    {"key": "ucl", "label": "Champions League", "sport": "soccer", "league": "uefa.champions", "icon": "goal", "draw": True},
+]
+SPORTS_BY_KEY = {s["key"]: s for s in SPORTS}
+
+_ODDS_CACHE: dict = {}
+
+
+def american_to_decimal(ml) -> Optional[float]:
+    try:
+        ml = float(ml)
+    except (TypeError, ValueError):
+        return None
+    if ml == 0:
+        return None
+    return round(1 + (ml / 100.0 if ml > 0 else 100.0 / abs(ml)), 2)
+
+
+def mk_odds(dec):
+    return dec if dec and dec > 1.0 else None
+
+
+def build_markets(sport_meta, comp, odds_block):
+    """Return list of markets with selections."""
+    draw = sport_meta["draw"]
+    markets = []
+    home_dec = away_dec = None
+    spread = over_under = None
+    if odds_block:
+        spread = odds_block.get("spread")
+        over_under = odds_block.get("overUnder")
+        hto = odds_block.get("homeTeamOdds") or {}
+        ato = odds_block.get("awayTeamOdds") or {}
+        home_dec = american_to_decimal(hto.get("moneyLine"))
+        away_dec = american_to_decimal(ato.get("moneyLine"))
+
+    # fallback moneyline from spread heuristic
+    if home_dec is None or away_dec is None:
+        if spread is not None:
+            try:
+                s = abs(float(spread))
+                fav = max(1.25, round(1.9 - s * 0.05, 2))
+                dog = round(1.0 + (1.0 / (1 - 1.0 / fav)) - fav + 0.15 + s * 0.08, 2)
+                dog = max(1.6, min(dog, 6.0))
+                if float(spread) < 0:  # home favored
+                    home_dec, away_dec = fav, dog
+                else:
+                    home_dec, away_dec = dog, fav
+            except (TypeError, ValueError):
+                pass
+    if home_dec is None:
+        home_dec = 1.9
+    if away_dec is None:
+        away_dec = 1.9
+
+    ml_sel = [
+        {"side": "home", "pick": f"{sport_meta['label_home']} ML", "odds": home_dec, "line": None},
+    ]
+    if draw:
+        ml_sel.append({"side": "draw", "pick": "Draw", "odds": 3.3, "line": None})
+    ml_sel.append({"side": "away", "pick": f"{sport_meta['label_away']} ML", "odds": away_dec, "line": None})
+    markets.append({"market": "moneyline", "label": "Moneyline", "selections": ml_sel})
+
+    if spread is not None:
+        try:
+            sp = float(spread)
+            markets.append({"market": "spread", "label": "Spread", "selections": [
+                {"side": "home", "pick": f"{sport_meta['label_home']} {sp:+g}", "odds": 1.91, "line": sp},
+                {"side": "away", "pick": f"{sport_meta['label_away']} {-sp:+g}", "odds": 1.91, "line": -sp},
+            ]})
+        except (TypeError, ValueError):
+            pass
+    if over_under is not None:
+        try:
+            ou = float(over_under)
+            markets.append({"market": "total", "label": "Total", "selections": [
+                {"side": "over", "pick": f"Over {ou}", "odds": 1.91, "line": ou},
+                {"side": "under", "pick": f"Under {ou}", "odds": 1.91, "line": ou},
+            ]})
+        except (TypeError, ValueError):
+            pass
+    return markets
+
+
+async def fetch_league_events(sport_meta) -> List[dict]:
+    key = sport_meta["key"]
+    cached = _ODDS_CACHE.get(key)
+    if cached and (datetime.now(timezone.utc).timestamp() - cached["ts"]) < 45:
+        return cached["data"]
+    url = (f"https://site.api.espn.com/apis/site/v2/sports/"
+           f"{sport_meta['sport']}/{sport_meta['league']}/scoreboard")
+    events = []
+    try:
+        async with httpx.AsyncClient(timeout=10) as hc:
+            r = await hc.get(url)
+            data = r.json()
+        for ev in data.get("events", [])[:14]:
+            comp = (ev.get("competitions") or [{}])[0]
+            competitors = comp.get("competitors", [])
+            home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+            away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+            if not home or not away:
+                continue
+            h_team = home.get("team", {})
+            a_team = away.get("team", {})
+            status = ev.get("status", {}).get("type", {})
+            odds_block = (comp.get("odds") or [None])[0]
+            meta = dict(sport_meta)
+            meta["label_home"] = h_team.get("abbreviation") or h_team.get("shortDisplayName", "HOME")
+            meta["label_away"] = a_team.get("abbreviation") or a_team.get("shortDisplayName", "AWAY")
+            events.append({
+                "event_id": ev.get("id"),
+                "league": key,
+                "league_label": sport_meta["label"],
+                "name": ev.get("shortName") or ev.get("name"),
+                "start": ev.get("date"),
+                "state": status.get("state", "pre"),     # pre | in | post
+                "status_detail": status.get("shortDetail", ""),
+                "home": {"name": h_team.get("displayName"), "abbr": meta["label_home"],
+                         "logo": (h_team.get("logo") or ""), "score": home.get("score")},
+                "away": {"name": a_team.get("displayName"), "abbr": meta["label_away"],
+                         "logo": (a_team.get("logo") or ""), "score": away.get("score")},
+                "markets": build_markets(meta, comp, odds_block),
+            })
+    except Exception as e:
+        logger.warning(f"ESPN fetch failed for {key}: {e}")
+    _ODDS_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": events}
+    return events
+
+
+@api_router.get("/sports")
+async def list_sports():
+    return [{"key": s["key"], "label": s["label"], "icon": s["icon"]} for s in SPORTS]
+
+
+@api_router.get("/odds")
+async def get_odds(league: Optional[str] = None):
+    metas = [SPORTS_BY_KEY[league]] if league and league in SPORTS_BY_KEY else SPORTS
+    out = []
+    for m in metas:
+        out.extend(await fetch_league_events(m))
+    out.sort(key=lambda e: (0 if e["state"] == "in" else 1 if e["state"] == "pre" else 2))
+    return {"events": out}
+
+
+# ----------------------------------------------------------------------------
+# Wallet
+# ----------------------------------------------------------------------------
+@api_router.get("/payment/config")
+async def get_payment_config():
+    cfg = await db.payment_config.find_one({"_id": "default"}, {"_id": 0})
+    if not cfg:
+        cfg = {"provider": "Simulated Gateway", "api_base": "", "api_key": "", "mode": "mock"}
+    if cfg.get("api_key"):
+        cfg["api_key"] = "••••" + cfg["api_key"][-4:]
+    return cfg
+
+
+@api_router.put("/payment/config")
+async def set_payment_config(body: PaymentConfigInput, user: dict = Depends(get_current_user)):
+    await db.payment_config.update_one({"_id": "default"},
+                                       {"$set": body.model_dump()}, upsert=True)
+    return {"ok": True}
+
+
+@api_router.get("/wallet")
+async def get_wallet(user: dict = Depends(get_current_user)):
+    await ensure_wallet(user["id"])
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    txs = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"balances": wallet["balances"], "usd_rates": COIN_USD, "transactions": txs}
+
+
+@api_router.post("/wallet/deposit")
+async def deposit(body: WalletTxInput, user: dict = Depends(get_current_user)):
+    if body.coin not in STARTING_BALANCES or body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Invalid deposit")
+    await ensure_wallet(user["id"])
+    await db.wallets.update_one({"user_id": user["id"]},
+                                {"$inc": {f"balances.{body.coin}": body.amount}})
+    tx = {"id": str(uuid.uuid4()), "user_id": user["id"], "type": "deposit",
+          "coin": body.coin, "amount": body.amount, "created_at": now_iso(),
+          "hash": "0x" + uuid.uuid4().hex[:24]}
+    await db.transactions.insert_one(dict(tx))
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"balances": wallet["balances"], "transaction": tx}
+
+
+@api_router.post("/wallet/withdraw")
+async def withdraw(body: WalletTxInput, user: dict = Depends(get_current_user)):
+    await ensure_wallet(user["id"])
+    wallet = await db.wallets.find_one({"user_id": user["id"]})
+    if body.coin not in STARTING_BALANCES or body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Invalid withdrawal")
+    if wallet["balances"].get(body.coin, 0) < body.amount:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+    await db.wallets.update_one({"user_id": user["id"]},
+                                {"$inc": {f"balances.{body.coin}": -body.amount}})
+    tx = {"id": str(uuid.uuid4()), "user_id": user["id"], "type": "withdraw",
+          "coin": body.coin, "amount": body.amount, "created_at": now_iso(),
+          "hash": "0x" + uuid.uuid4().hex[:24]}
+    await db.transactions.insert_one(dict(tx))
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"balances": wallet["balances"], "transaction": tx}
+
+
+# ----------------------------------------------------------------------------
+# Bets
+# ----------------------------------------------------------------------------
+@api_router.post("/bets")
+async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user)):
+    if not body.selections:
+        raise HTTPException(status_code=400, detail="No selections")
+    if body.coin not in STARTING_BALANCES:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    await ensure_wallet(user["id"])
+    wallet = await db.wallets.find_one({"user_id": user["id"]})
+    if wallet["balances"].get(body.coin, 0) < body.stake:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+
+    combined = 1.0
+    for s in body.selections:
+        combined *= s.odds
+    is_parlay = body.bet_type == "parlay" and len(body.selections) > 1
+    total_odds = round(combined, 2) if is_parlay else round(body.selections[0].odds, 2)
+    potential = round(body.stake * total_odds, 6)
+
+    await db.wallets.update_one({"user_id": user["id"]},
+                                {"$inc": {f"balances.{body.coin}": -body.stake}})
+    bet = {"id": str(uuid.uuid4()), "user_id": user["id"],
+           "selections": [s.model_dump() for s in body.selections],
+           "bet_type": "parlay" if is_parlay else "single",
+           "stake": body.stake, "coin": body.coin, "total_odds": total_odds,
+           "potential_payout": potential, "status": "open",
+           "created_at": now_iso()}
+    await db.bets.insert_one(dict(bet))
+    await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"],
+                                      "type": "bet", "coin": body.coin, "amount": body.stake,
+                                      "created_at": now_iso(), "hash": "0x" + uuid.uuid4().hex[:24]})
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"bet": bet, "balances": wallet["balances"]}
+
+
+def settle_selection(sel, ev) -> Optional[bool]:
+    """Return True=win, False=loss, None=unknown/push for a finished event."""
+    try:
+        hs = int(ev["home"]["score"])
+        as_ = int(ev["away"]["score"])
+    except (TypeError, ValueError):
+        return None
+    m, side, line = sel["market"], sel["side"], sel.get("line")
+    if m == "moneyline":
+        if side == "home":
+            return hs > as_
+        if side == "away":
+            return as_ > hs
+        if side == "draw":
+            return hs == as_
+    if m == "spread" and line is not None:
+        if side == "home":
+            return (hs + line) > as_
+        if side == "away":
+            return (as_ + line) > hs
+    if m == "total" and line is not None:
+        total = hs + as_
+        if side == "over":
+            return total > line
+        if side == "under":
+            return total < line
+    return None
+
+
+async def auto_settle(user_id: str):
+    open_bets = await db.bets.find({"user_id": user_id, "status": "open"}).to_list(200)
+    if not open_bets:
+        return
+    # build finished event map
+    finished = {}
+    needed_leagues = set()
+    for b in open_bets:
+        for s in b["selections"]:
+            needed_leagues.add(s["league"])
+    for lk in needed_leagues:
+        if lk in SPORTS_BY_KEY:
+            for ev in await fetch_league_events(SPORTS_BY_KEY[lk]):
+                if ev["state"] == "post":
+                    finished[ev["event_id"]] = ev
+    for b in open_bets:
+        results = []
+        for s in b["selections"]:
+            ev = finished.get(s["event_id"])
+            results.append(settle_selection(s, ev) if ev else None)
+        if any(r is None for r in results):
+            continue  # not all legs decided
+        won = all(results)
+        new_status = "won" if won else "lost"
+        update = {"status": new_status, "settled_at": now_iso()}
+        await db.bets.update_one({"id": b["id"]}, {"$set": update})
+        if won:
+            await db.wallets.update_one({"user_id": user_id},
+                                        {"$inc": {f"balances.{b['coin']}": b["potential_payout"]}})
+            await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id,
+                                              "type": "payout", "coin": b["coin"],
+                                              "amount": b["potential_payout"], "created_at": now_iso(),
+                                              "hash": "0x" + uuid.uuid4().hex[:24]})
+
+
+@api_router.get("/bets")
+async def list_bets(user: dict = Depends(get_current_user)):
+    await auto_settle(user["id"])
+    bets = await db.bets.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"bets": bets, "balances": wallet["balances"] if wallet else {}}
+
+
+# ----------------------------------------------------------------------------
+# Startup
+# ----------------------------------------------------------------------------
+@api_router.get("/")
+async def root():
+    return {"message": "ApexOdds API"}
+
+
+@app.on_event("startup")
+async def startup():
+    await db.users.create_index("email", unique=True)
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@apexodds.io").lower()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+    existing = await db.users.find_one({"email": admin_email})
+    if existing is None:
+        res = await db.users.insert_one({"name": "Admin", "email": admin_email,
+                                         "password_hash": hash_password(admin_password),
+                                         "role": "admin", "created_at": now_iso()})
+        await ensure_wallet(str(res.inserted_id))
+    elif not verify_password(admin_password, existing["password_hash"]):
+        await db.users.update_one({"email": admin_email},
+                                  {"$set": {"password_hash": hash_password(admin_password)}})
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    client.close()
+
+
+app.include_router(api_router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000"), "http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
