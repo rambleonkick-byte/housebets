@@ -14,6 +14,7 @@ import { Limbo } from "@/pages/games/Limbo";
 import { Mines } from "@/pages/games/Mines";
 import { Plinko } from "@/pages/games/Plinko";
 import { Keno } from "@/pages/games/Keno";
+import { Dice } from "@/pages/games/Dice";
 
 function Shell() {
   const { user, setAuthOpen } = useAuth();
@@ -34,6 +35,7 @@ function Shell() {
           <Route path="/casino/mines" element={<Mines />} />
           <Route path="/casino/plinko" element={<Plinko />} />
           <Route path="/casino/keno" element={<Keno />} />
+          <Route path="/casino/dice" element={<Dice />} />
         </Routes>
       </div>
       <AuthModal />

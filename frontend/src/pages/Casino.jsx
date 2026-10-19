@@ -1,20 +1,35 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Rocket, Bomb, CircleDot, Grid3x3, ArrowRight } from "lucide-react";
+import { Rocket, Bomb, CircleDot, Grid3x3, Dices, ArrowRight, ShieldCheck } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { CasinoHistoryModal } from "@/components/CasinoHistoryModal";
 
 const GAMES = [
   { key: "limbo", name: "Limbo", desc: "Set a target multiplier and let it fly.", icon: Rocket, to: "/casino/limbo", glow: "#10B981" },
+  { key: "dice", name: "Dice", desc: "Roll over or under your chosen number.", icon: Dices, to: "/casino/dice", glow: "#627EEA" },
   { key: "mines", name: "Mines", desc: "Reveal gems, dodge the bombs, cash out.", icon: Bomb, to: "/casino/mines", glow: "#F59E0B" },
-  { key: "plinko", name: "Plinko", desc: "Drop the ball into high-multiplier slots.", icon: CircleDot, to: "/casino/plinko", glow: "#627EEA" },
+  { key: "plinko", name: "Plinko", desc: "Drop the ball into high-multiplier slots.", icon: CircleDot, to: "/casino/plinko", glow: "#8B5CF6" },
   { key: "keno", name: "Keno", desc: "Pick numbers and match the draw.", icon: Grid3x3, to: "/casino/keno", glow: "#22C55E" },
 ];
 
 export function Casino() {
+  const { user, setAuthOpen } = useAuth();
+  const [histOpen, setHistOpen] = useState(false);
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Originals · 1% house edge</p>
-      <h1 className="font-display text-4xl sm:text-5xl font-black tracking-tight">House Games</h1>
-      <p className="text-sm text-zinc-400 mt-2 max-w-md">Instant-win crypto games. Bet from your simulated balance, 1% house edge.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Originals · provably fair</p>
+          <h1 className="font-display text-4xl sm:text-5xl font-black tracking-tight">House Games</h1>
+          <p className="text-sm text-zinc-400 mt-2 max-w-md">Instant-win crypto games with a 1% house edge. Every result is cryptographically verifiable.</p>
+        </div>
+        <button data-testid="casino-history-open" onClick={() => (user ? setHistOpen(true) : setAuthOpen(true))}
+          className="flex items-center gap-1.5 text-sm font-medium text-zinc-300 border border-[#2A2F45] hover:border-emerald-500/50 rounded-lg px-3 py-2 shrink-0 transition-colors">
+          <ShieldCheck size={16} className="text-emerald-400" /> <span className="hidden sm:inline">History &amp; Fairness</span>
+        </button>
+      </div>
 
       <div className="grid sm:grid-cols-2 gap-4 mt-8" data-testid="casino-lobby">
         {GAMES.map((g, i) => {
@@ -40,6 +55,7 @@ export function Casino() {
           );
         })}
       </div>
+      <CasinoHistoryModal open={histOpen} onClose={() => setHistOpen(false)} />
     </div>
   );
 }

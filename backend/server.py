@@ -12,11 +12,15 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
+from pymongo import ReturnDocument
 import logging
 import uuid
 import asyncio
 import random
 import math
+import hmac
+import hashlib
+import secrets
 import jwt
 import bcrypt
 import httpx
@@ -632,12 +636,68 @@ async def _balances(user_id):
     return w["balances"]
 
 
-async def _record_game(user_id, game, coin, stake, multiplier, payout, won, detail):
-    await db.casino_games.insert_one({
+async def _record_game(user_id, game, coin, stake, multiplier, payout, won, detail, fair=None):
+    doc = {
         "id": str(uuid.uuid4()), "user_id": user_id, "game": game, "coin": coin,
         "stake": stake, "multiplier": round(multiplier, 2), "payout": round(payout, 6),
         "won": won, "detail": detail, "created_at": now_iso(),
-    })
+    }
+    if fair:
+        doc.update(fair)
+    await db.casino_games.insert_one(doc)
+
+
+# --- provably-fair seed engine ---
+def sha256_hex(s: str) -> str:
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
+def rfloat(server_seed: str, client_seed: str, nonce: int, cursor: int = 0) -> float:
+    msg = f"{client_seed}:{nonce}:{cursor}"
+    h = hmac.new(server_seed.encode(), msg.encode(), hashlib.sha256).hexdigest()
+    return int(h[:8], 16) / 0x100000000
+
+
+def limbo_result(u: float) -> float:
+    if u <= 0:
+        return 1000000.0
+    return max(1.0, math.floor(EDGE / u * 100) / 100)
+
+
+def pick_distinct(values, k, ss, cs, nonce):
+    pool = list(values)
+    out = []
+    for i in range(k):
+        f = rfloat(ss, cs, nonce, i)
+        idx = int(f * len(pool))
+        if idx >= len(pool):
+            idx = len(pool) - 1
+        out.append(pool.pop(idx))
+    return out
+
+
+async def ensure_seed(user_id):
+    doc = await db.fair_seeds.find_one({"user_id": user_id, "status": "active"})
+    if not doc:
+        ss = secrets.token_hex(32)
+        doc = {"user_id": user_id, "status": "active", "server_seed": ss,
+               "server_seed_hash": sha256_hex(ss), "client_seed": secrets.token_hex(8),
+               "nonce": 0, "created_at": now_iso()}
+        await db.fair_seeds.insert_one(dict(doc))
+    return doc
+
+
+async def next_fair(user_id):
+    """Consume one nonce; returns (server_seed, client_seed, nonce_used)."""
+    await ensure_seed(user_id)
+    doc = await db.fair_seeds.find_one_and_update(
+        {"user_id": user_id, "status": "active"},
+        {"$inc": {"nonce": 1}}, return_document=ReturnDocument.BEFORE)
+    return doc["server_seed"], doc["client_seed"], doc["nonce"]
+
+
+def fair_meta(ss, cs, nonce):
+    return {"nonce": nonce, "server_seed_hash": sha256_hex(ss), "client_seed": cs}
 
 
 @api_router.post("/casino/limbo")
@@ -646,15 +706,18 @@ async def play_limbo(body: LimboInput, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Target must be between 1.01 and 1,000,000")
     await _check_funds(user["id"], body.coin, body.stake)
     await _adjust(user["id"], body.coin, -body.stake)
-    u = random.random()
-    result = max(1.0, round(EDGE / u, 2)) if u > 0 else 1000000.0
+    ss, cs, nonce = await next_fair(user["id"])
+    u = rfloat(ss, cs, nonce, 0)
+    result = limbo_result(u)
     won = result >= body.target
     payout = round(body.stake * body.target, 6) if won else 0.0
     if won:
         await _adjust(user["id"], body.coin, payout)
+    fair = fair_meta(ss, cs, nonce)
     await _record_game(user["id"], "limbo", body.coin, body.stake, body.target if won else 0,
-                       payout, won, {"result": result, "target": body.target})
-    return {"result": result, "won": won, "payout": payout, "balances": await _balances(user["id"])}
+                       payout, won, {"result": result, "target": body.target}, fair)
+    return {"result": result, "won": won, "payout": payout, "fair": fair,
+            "balances": await _balances(user["id"])}
 
 
 @api_router.post("/casino/plinko")
@@ -663,15 +726,17 @@ async def play_plinko(body: PlinkoInput, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=400, detail="Invalid config")
     await _check_funds(user["id"], body.coin, body.stake)
     await _adjust(user["id"], body.coin, -body.stake)
-    path = [random.random() < 0.5 for _ in range(body.rows)]  # True=right
+    ss, cs, nonce = await next_fair(user["id"])
+    path = [rfloat(ss, cs, nonce, i) < 0.5 for i in range(body.rows)]  # True=right
     bucket = sum(1 for p in path if p)
     mult = PLINKO_MULT[body.rows][body.risk][bucket]
     payout = round(body.stake * mult, 6)
     await _adjust(user["id"], body.coin, payout)
+    fair = fair_meta(ss, cs, nonce)
     await _record_game(user["id"], "plinko", body.coin, body.stake, mult, payout, mult >= 1,
-                       {"bucket": bucket, "rows": body.rows, "risk": body.risk})
+                       {"bucket": bucket, "rows": body.rows, "risk": body.risk}, fair)
     return {"path": ["R" if p else "L" for p in path], "bucket": bucket, "multiplier": mult,
-            "payout": payout, "balances": await _balances(user["id"])}
+            "payout": payout, "fair": fair, "balances": await _balances(user["id"])}
 
 
 @api_router.post("/casino/keno")
@@ -681,16 +746,18 @@ async def play_keno(body: KenoInput, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Pick 1-10 numbers from 1-40")
     await _check_funds(user["id"], body.coin, body.stake)
     await _adjust(user["id"], body.coin, -body.stake)
-    drawn = random.sample(range(1, 41), 10)
+    ss, cs, nonce = await next_fair(user["id"])
+    drawn = pick_distinct(range(1, 41), 10, ss, cs, nonce)
     hits = len([n for n in picks if n in drawn])
     mult = KENO_TABLE[len(picks)][hits]
     payout = round(body.stake * mult, 6)
     if payout > 0:
         await _adjust(user["id"], body.coin, payout)
+    fair = fair_meta(ss, cs, nonce)
     await _record_game(user["id"], "keno", body.coin, body.stake, mult, payout, mult >= 1,
-                       {"picks": picks, "drawn": sorted(drawn), "hits": hits})
+                       {"picks": picks, "drawn": sorted(drawn), "hits": hits}, fair)
     return {"drawn": sorted(drawn), "hits": hits, "multiplier": mult, "payout": payout,
-            "balances": await _balances(user["id"])}
+            "fair": fair, "balances": await _balances(user["id"])}
 
 
 def mines_multiplier(mines: int, revealed: int) -> float:
@@ -713,14 +780,17 @@ async def mines_start(body: MinesStartInput, user: dict = Depends(get_current_us
     await db.mine_games.update_many({"user_id": user["id"], "status": "active"},
                                     {"$set": {"status": "abandoned"}})
     await _adjust(user["id"], body.coin, -body.stake)
-    positions = random.sample(range(25), body.mines)
+    ss, cs, nonce = await next_fair(user["id"])
+    positions = pick_distinct(range(25), body.mines, ss, cs, nonce)
     gid = str(uuid.uuid4())
     await db.mine_games.insert_one({
         "id": gid, "user_id": user["id"], "coin": body.coin, "stake": body.stake,
         "mines": positions, "mine_count": body.mines, "revealed": [], "status": "active",
+        "nonce": nonce, "server_seed_hash": sha256_hex(ss), "client_seed": cs,
         "created_at": now_iso(),
     })
-    return {"game_id": gid, "mine_count": body.mines, "balances": await _balances(user["id"])}
+    return {"game_id": gid, "mine_count": body.mines, "fair": fair_meta(ss, cs, nonce),
+            "balances": await _balances(user["id"])}
 
 
 @api_router.post("/casino/mines/reveal")
@@ -733,7 +803,8 @@ async def mines_reveal(body: MinesActionInput, user: dict = Depends(get_current_
     if body.tile in g["mines"]:
         await db.mine_games.update_one({"id": g["id"]}, {"$set": {"status": "lost"}})
         await _record_game(user["id"], "mines", g["coin"], g["stake"], 0, 0.0, False,
-                           {"mines": g["mine_count"], "revealed": len(g["revealed"]), "hit": True})
+                           {"mines": g["mine_count"], "revealed": len(g["revealed"]), "hit": True},
+                           {"nonce": g.get("nonce"), "server_seed_hash": g.get("server_seed_hash"), "client_seed": g.get("client_seed")})
         return {"hit": True, "mines": g["mines"], "done": True, "balances": await _balances(user["id"])}
     revealed = g["revealed"] + [body.tile]
     await db.mine_games.update_one({"id": g["id"]}, {"$set": {"revealed": revealed}})
@@ -755,7 +826,8 @@ async def mines_cashout(body: MinesActionInput, user: dict = Depends(get_current
     await _adjust(user["id"], g["coin"], payout)
     await db.mine_games.update_one({"id": g["id"]}, {"$set": {"status": "won"}})
     await _record_game(user["id"], "mines", g["coin"], g["stake"], mult, payout, True,
-                       {"mines": g["mine_count"], "revealed": len(g["revealed"]), "hit": False})
+                       {"mines": g["mine_count"], "revealed": len(g["revealed"]), "hit": False},
+                       {"nonce": g.get("nonce"), "server_seed_hash": g.get("server_seed_hash"), "client_seed": g.get("client_seed")})
     return {"payout": payout, "multiplier": mult, "mines": g["mines"],
             "balances": await _balances(user["id"])}
 
@@ -764,6 +836,78 @@ async def mines_cashout(body: MinesActionInput, user: dict = Depends(get_current
 async def casino_history(user: dict = Depends(get_current_user)):
     rows = await db.casino_games.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(40)
     return {"games": rows}
+
+
+class DiceInput(BaseModel):
+    coin: str
+    stake: float
+    target: float
+    direction: str = "over"   # over | under
+
+
+@api_router.post("/casino/dice")
+async def play_dice(body: DiceInput, user: dict = Depends(get_current_user)):
+    if body.direction not in ("over", "under"):
+        raise HTTPException(status_code=400, detail="Invalid direction")
+    if not (0.01 <= body.target <= 99.99):
+        raise HTTPException(status_code=400, detail="Target must be between 0.01 and 99.99")
+    await _check_funds(user["id"], body.coin, body.stake)
+    await _adjust(user["id"], body.coin, -body.stake)
+    ss, cs, nonce = await next_fair(user["id"])
+    roll = math.floor(rfloat(ss, cs, nonce, 0) * 10000) / 100   # 0.00 - 99.99
+    if body.direction == "over":
+        won = roll > body.target
+        chance = 100 - body.target
+    else:
+        won = roll < body.target
+        chance = body.target
+    mult = round(EDGE * 100 / chance, 4) if chance > 0 else 0.0
+    payout = round(body.stake * mult, 6) if won else 0.0
+    if won:
+        await _adjust(user["id"], body.coin, payout)
+    fair = fair_meta(ss, cs, nonce)
+    await _record_game(user["id"], "dice", body.coin, body.stake, mult if won else 0, payout, won,
+                       {"roll": roll, "target": body.target, "direction": body.direction}, fair)
+    return {"roll": roll, "won": won, "multiplier": mult, "payout": payout, "fair": fair,
+            "balances": await _balances(user["id"])}
+
+
+class ClientSeedInput(BaseModel):
+    client_seed: str
+
+
+@api_router.get("/casino/seed")
+async def get_seed(user: dict = Depends(get_current_user)):
+    doc = await ensure_seed(user["id"])
+    revealed = await db.fair_seeds.find(
+        {"user_id": user["id"], "status": "revealed"},
+        {"_id": 0, "server_seed": 1, "server_seed_hash": 1}).sort("revealed_at", -1).to_list(50)
+    return {"server_seed_hash": doc["server_seed_hash"], "client_seed": doc["client_seed"],
+            "nonce": doc["nonce"], "revealed": revealed}
+
+
+@api_router.post("/casino/seed/client")
+async def set_client_seed(body: ClientSeedInput, user: dict = Depends(get_current_user)):
+    await ensure_seed(user["id"])
+    cs = (body.client_seed or "").strip()[:64] or secrets.token_hex(8)
+    await db.fair_seeds.update_one({"user_id": user["id"], "status": "active"},
+                                   {"$set": {"client_seed": cs}})
+    return {"client_seed": cs}
+
+
+@api_router.post("/casino/seed/rotate")
+async def rotate_seed(user: dict = Depends(get_current_user)):
+    old = await ensure_seed(user["id"])
+    await db.fair_seeds.update_one({"user_id": user["id"], "status": "active"},
+                                   {"$set": {"status": "revealed", "revealed_at": now_iso()}})
+    new_ss = secrets.token_hex(32)
+    await db.fair_seeds.insert_one({
+        "user_id": user["id"], "status": "active", "server_seed": new_ss,
+        "server_seed_hash": sha256_hex(new_ss), "client_seed": old["client_seed"],
+        "nonce": 0, "created_at": now_iso()})
+    return {"revealed_server_seed": old["server_seed"],
+            "revealed_server_seed_hash": old["server_seed_hash"],
+            "new_server_seed_hash": sha256_hex(new_ss)}
 
 
 @api_router.get("/")
