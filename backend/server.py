@@ -596,11 +596,11 @@ async def oxapay_invoice(body: WalletTxInput, user: dict = Depends(get_current_u
     order_id = f"{user['id']}:{uuid.uuid4().hex[:12]}"
     base = os.environ.get("FRONTEND_URL", "")
     payload = {
-        "amount": body.amount, "currency": body.coin, "pay_currency": body.coin,
+        "amount": body.amount, "currency": "USD", "pay_currency": body.coin,
         "network": COIN_NETWORK.get(body.coin), "lifetime": 120, "fee_paid_by_payer": 1,
         "under_paid_coverage": 2.5,
         "callback_url": f"{base}/api/oxapay/webhook",
-        "order_id": order_id, "description": f"ApexOdds deposit ({body.coin})",
+        "order_id": order_id, "description": f"ApexOdds deposit (${body.amount} in {body.coin})",
     }
     try:
         async with httpx.AsyncClient(timeout=20) as hc:

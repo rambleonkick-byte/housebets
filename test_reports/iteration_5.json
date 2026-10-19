@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 5 testing: standalone in-app crypto deposit (OxaPay white-label) + demo deposit removal. All 19 backend tests pass (19/19). Verified: POST /api/wallet/deposit returns 404 (demo removed); fresh users start with BTC/ETH/USDT/SOL = 0; /api/wallet/oxapay/invoice returns real address+qr_code+pay_amount for USDT (Tron Network) and BTC (Bitcoin Network) with distinct addresses; /api/wallet/oxapay/status/{track_id} returns {status,credited,balances} and 404 for other-user/unknown; HMAC-sha512 webhook credits exactly pay_amount, is idempotent on replay, and rejects invalid HMAC with 401 (no credit); withdraw works and insufficient balance rejected; odds feed (ESPN+oddsapi) merged, bet placement works, casino games (limbo/dice/mines/plinko/keno) and history endpoint pass. Frontend smoke on external URL: admin login, wallet modal (header-wallet-button) opens with no 'Instant/demo' option, deposit-address-panel renders QR img, pay_amount, address and 'Waiting for payment…' status for both USDT (Tron) and BTC (Bitcoin); BTC and USDT addresses differ; withdraw tab works.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_oxapay_odds.py",
+    "/app/test_reports/pytest/iter5_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 1165 lines — still above the 700-line guideline; splitting into odds/wallet/oxapay/casino/auth modules would improve maintainability.",
+    "WalletModal.jsx uses `WalletModal._pollRef` as a static holder for the polling interval; this is a React anti-pattern that will break if the component is mounted twice. Prefer useRef.",
+    "oxapay_invoice does not persist `qr_code` as a sanitized URL — relies on OxaPay's returned src which the client blindly puts into an <img>. Safe today but tie to allow-listed origin would be safer.",
+    "oxapay_webhook: if OXAPAY_MERCHANT_API_KEY were unset the HMAC check is silently skipped (open-credit path). It IS set in current .env, but consider failing closed when missing.",
+    "WalletModal deposit polling fires every 5s for up to 60 tries (~5 min) then silently stops with no user-visible toast or 'expired' CTA — expired_at is returned by backend but not shown as a countdown.",
+    "StartingBalances now all 0 — new users cannot explore the UI without a real crypto deposit; consider an explicit welcome state or a one-time testnet credit for QA builds."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_oxapay_odds.py"
+  ],
+  "success_rate": { "backend": "100% (19/19)", "frontend": "100% smoke" },
+  "test_credentials": "admin@apexodds.io / admin123 (from /app/backend/.env)",
+  "seed_data_creation": "Created TEST_oxapay_other@apexodds.io and a TEST_fresh_<uuid>@apexodds.io per run for zero-balance assertion. Each run also creates ~3 real OxaPay invoices against pay.oxapay.com and credits the admin USDT balance by one invoice's pay_amount via signed webhook (no on-chain settlement).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live in /app/backend/tests/test_oxapay_odds.py (pytest). Run with `pytest backend/tests/test_oxapay_odds.py -v -o addopts=\"\"` — xdist in pytest.ini can split classes across workers which breaks class-level `_created` state used by TestOxaPayWhiteLabel; running single-worker (via -o addopts=\"\") is the stable path. OxaPay white-label returns `network` as a human string ('Tron Network', 'Bitcoin Network') not a code — tests already use substring matches. Credit delta equals the invoice's returned pay_amount (fee_paid_by_payer=1 adds ~2% fee), not the requested amount. The in-app QR src comes from OxaPay (external image URL) so network must be allowed from the browser.",
+  "rca of the issue": "No issues found. All iteration-5 features (demo deposit removal, zero-balance new users, OxaPay white-label address+QR, signed webhook crediting, idempotency, status endpoint ownership, withdraw, odds/bet/casino regression) verified working on backend and in the UI."
+}

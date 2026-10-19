@@ -145,11 +145,23 @@ export function WalletModal({ open, onClose }) {
                   <>
                     <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-start gap-2">
                       <ShieldCheck size={15} className="text-emerald-400 mt-0.5 shrink-0" />
-                      <p className="text-[11px] text-zinc-400">Enter an amount to generate a live {coin} deposit address. Scan the QR or copy the address to pay — your balance credits automatically once the payment confirms on-chain.</p>
+                      <p className="text-[11px] text-zinc-400">Enter the amount in <span className="text-zinc-200">USD</span> — we'll generate a live {coin} address for the exact crypto equivalent. Scan the QR or copy the address to pay; your balance credits automatically once confirmed on-chain.</p>
                     </div>
-                    <input data-testid="wallet-amount-input" type="number" min="0" value={amount}
-                      onChange={(e) => setAmount(e.target.value)} placeholder={`Amount in ${coin}`}
-                      className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">$</span>
+                      <input data-testid="wallet-amount-input" type="number" min="0" value={amount}
+                        onChange={(e) => setAmount(e.target.value)} placeholder="Amount in USD"
+                        className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg pl-7 pr-20 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-zinc-500">USD → {coin}</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {[25, 50, 100, 250].map((v) => (
+                        <button key={v} data-testid={`deposit-usd-${v}`} onClick={() => setAmount(String(v))}
+                          className="flex-1 text-[11px] font-mono text-zinc-400 border border-[#2A2F45] rounded py-1.5 hover:border-emerald-500/60">
+                          ${v}
+                        </button>
+                      ))}
+                    </div>
                     <button data-testid="wallet-generate-address" onClick={generateAddress} disabled={loading}
                       className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-60">
                       {loading && <Loader2 size={16} className="animate-spin" />} Generate Deposit Address
