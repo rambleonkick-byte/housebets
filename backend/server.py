@@ -6,6 +6,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
+from fastapi.responses import PlainTextResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -245,7 +246,29 @@ GROUPS = [
     {"key": "baseball", "label": "Baseball", "icon": "circle-dot"},
     {"key": "hockey", "label": "Ice Hockey", "icon": "snowflake"},
     {"key": "tennis", "label": "Tennis", "icon": "circle"},
+    {"key": "mma", "label": "UFC / MMA", "icon": "swords"},
 ]
+
+# The Odds API (real bookmaker odds). Curated keys; cached long to respect quota.
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
+OA_SPORTS = [
+    {"key": "soccer_epl", "group": "soccer", "label": "Premier League", "draw": True},
+    {"key": "soccer_uefa_champs_league", "group": "soccer", "label": "Champions League", "draw": True},
+    {"key": "basketball_nba", "group": "basketball", "label": "NBA", "draw": False},
+    {"key": "americanfootball_nfl", "group": "football", "label": "NFL", "draw": False},
+    {"key": "baseball_mlb", "group": "baseball", "label": "MLB", "draw": False},
+    {"key": "icehockey_nhl", "group": "hockey", "label": "NHL", "draw": False},
+    {"key": "mma_mixed_martial_arts", "group": "mma", "label": "UFC / MMA", "draw": False},
+]
+_OA_CACHE = {}
+
+
+def _abbr(name):
+    name = (name or "").strip()
+    parts = [p for p in name.split() if p]
+    if len(parts) >= 2:
+        return "".join(p[0] for p in parts[:3]).upper()
+    return name[:3].upper() or "TBD"
 
 _ODDS_CACHE: dict = {}
 
@@ -373,6 +396,105 @@ async def fetch_league_events(sport_meta) -> List[dict]:
     return events
 
 
+def _oa_markets(bk, meta):
+    """Build our market format from one Odds-API bookmaker block."""
+    by_key = {m["key"]: m for m in bk.get("markets", [])}
+    home_name, away_name = meta["_home"], meta["_away"]
+    ha, aa = _abbr(home_name), _abbr(away_name)
+    markets = []
+    h2h = by_key.get("h2h")
+    if h2h:
+        sel = []
+        for o in h2h.get("outcomes", []):
+            price = o.get("price")
+            if not price or price <= 1:
+                continue
+            if o["name"] == home_name:
+                sel.append({"side": "home", "pick": f"{ha} ML", "odds": round(price, 2), "line": None})
+            elif o["name"] == away_name:
+                sel.append({"side": "away", "pick": f"{aa} ML", "odds": round(price, 2), "line": None})
+            else:
+                sel.append({"side": "draw", "pick": "Draw", "odds": round(price, 2), "line": None})
+        order = {"home": 0, "draw": 1, "away": 2}
+        sel.sort(key=lambda s: order.get(s["side"], 9))
+        if sel:
+            markets.append({"market": "moneyline", "label": "Moneyline", "selections": sel})
+    sp = by_key.get("spreads")
+    if sp:
+        sel = []
+        for o in sp.get("outcomes", []):
+            price, pt = o.get("price"), o.get("point")
+            if not price or pt is None:
+                continue
+            if o["name"] == home_name:
+                sel.append({"side": "home", "pick": f"{ha} {pt:+g}", "odds": round(price, 2), "line": pt})
+            elif o["name"] == away_name:
+                sel.append({"side": "away", "pick": f"{aa} {pt:+g}", "odds": round(price, 2), "line": pt})
+        if len(sel) == 2:
+            markets.append({"market": "spread", "label": "Spread", "selections": sel})
+    tot = by_key.get("totals")
+    if tot:
+        sel = []
+        for o in tot.get("outcomes", []):
+            price, pt = o.get("price"), o.get("point")
+            if not price or pt is None:
+                continue
+            side = "over" if o["name"].lower() == "over" else "under"
+            sel.append({"side": side, "pick": f"{o['name']} {pt}", "odds": round(price, 2), "line": pt})
+        if len(sel) == 2:
+            markets.append({"market": "total", "label": "Total", "selections": sel})
+    return markets
+
+
+async def fetch_oddsapi_sport(meta):
+    if not ODDS_API_KEY:
+        return []
+    key = meta["key"]
+    cached = _OA_CACHE.get(key)
+    if cached and (datetime.now(timezone.utc).timestamp() - cached["ts"]) < 900:
+        return cached["data"]
+    url = f"https://api.the-odds-api.com/v4/sports/{key}/odds"
+    params = {"apiKey": ODDS_API_KEY, "regions": "us", "markets": "h2h,spreads,totals",
+              "oddsFormat": "decimal", "dateFormat": "iso"}
+    events = []
+    try:
+        async with httpx.AsyncClient(timeout=12) as hc:
+            r = await hc.get(url, params=params)
+        if r.status_code != 200:
+            logger.warning(f"OddsAPI {key} -> {r.status_code}: {r.text[:120]}")
+            _OA_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": []}
+            return []
+        logger.info(f"OddsAPI {key} remaining={r.headers.get('x-requests-remaining')}")
+        now = datetime.now(timezone.utc)
+        for ev in r.json()[:12]:
+            bks = ev.get("bookmakers") or []
+            if not bks:
+                continue
+            bk = next((b for b in bks if any(m["key"] == "h2h" for m in b.get("markets", []))), bks[0])
+            m2 = dict(meta); m2["_home"] = ev["home_team"]; m2["_away"] = ev["away_team"]
+            markets = _oa_markets(bk, m2)
+            if not markets:
+                continue
+            try:
+                ct = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00"))
+                state = "in" if ct <= now else "pre"
+                detail = "Live" if state == "in" else ct.strftime("%b %d, %H:%M UTC")
+            except Exception:
+                state, detail = "pre", ""
+            events.append({
+                "event_id": f"oa_{ev['id']}", "league": meta["group"], "league_key": key,
+                "league_label": meta["label"], "name": f"{_abbr(ev['away_team'])} @ {_abbr(ev['home_team'])}",
+                "start": ev.get("commence_time"), "state": state, "status_detail": detail,
+                "home": {"name": ev["home_team"], "abbr": _abbr(ev["home_team"]), "logo": "", "score": None},
+                "away": {"name": ev["away_team"], "abbr": _abbr(ev["away_team"]), "logo": "", "score": None},
+                "markets": markets, "source": "oddsapi", "book": bk.get("title", "Sportsbook"),
+            })
+    except Exception as e:
+        logger.warning(f"OddsAPI fetch failed for {key}: {e}")
+    _OA_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": events}
+    return events
+
+
 @api_router.get("/sports")
 async def list_sports():
     return GROUPS
@@ -381,7 +503,9 @@ async def list_sports():
 @api_router.get("/odds")
 async def get_odds(league: Optional[str] = None):
     metas = [s for s in SPORTS if s["group"] == league] if league else SPORTS
-    results = await asyncio.gather(*[fetch_league_events(m) for m in metas], return_exceptions=True)
+    oa_metas = [s for s in OA_SPORTS if s["group"] == league] if league else OA_SPORTS
+    tasks = [fetch_league_events(m) for m in metas] + [fetch_oddsapi_sport(m) for m in oa_metas]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     out = []
     for r in results:
         if isinstance(r, list):
@@ -449,6 +573,104 @@ async def withdraw(body: WalletTxInput, user: dict = Depends(get_current_user)):
     await db.transactions.insert_one(dict(tx))
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"balances": wallet["balances"], "transaction": tx}
+
+
+# ----------------------------------------------------------------------------
+# OxaPay — real crypto deposits
+# ----------------------------------------------------------------------------
+OXAPAY_KEY = os.environ.get("OXAPAY_MERCHANT_API_KEY")
+OXAPAY_API = "https://api.oxapay.com/v1"
+
+
+async def _credit_oxa_invoice(track_id, status):
+    """Idempotently credit a paid OxaPay invoice. Returns True if credited now."""
+    if str(status).lower() != "paid":
+        await db.oxa_invoices.update_one({"track_id": track_id}, {"$set": {"status": status}})
+        return False
+    inv = await db.oxa_invoices.find_one_and_update(
+        {"track_id": track_id, "credited": {"$ne": True}},
+        {"$set": {"credited": True, "status": "paid", "credited_at": now_iso()}})
+    if not inv:
+        return False
+    await _adjust(inv["user_id"], inv["coin"], inv["amount"])
+    await db.transactions.insert_one({
+        "id": str(uuid.uuid4()), "user_id": inv["user_id"], "type": "deposit",
+        "coin": inv["coin"], "amount": inv["amount"], "created_at": now_iso(),
+        "hash": "oxapay:" + str(track_id)})
+    return True
+
+
+@api_router.post("/wallet/oxapay/invoice")
+async def oxapay_invoice(body: WalletTxInput, user: dict = Depends(get_current_user)):
+    if not OXAPAY_KEY:
+        raise HTTPException(status_code=503, detail="Payment gateway not configured")
+    if body.coin not in STARTING_BALANCES or body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Invalid amount")
+    await ensure_wallet(user["id"])
+    order_id = f"{user['id']}:{uuid.uuid4().hex[:12]}"
+    base = os.environ.get("FRONTEND_URL", "")
+    payload = {
+        "amount": body.amount, "currency": body.coin, "lifetime": 60, "fee_paid_by_payer": 1,
+        "callback_url": f"{base}/api/oxapay/webhook", "return_url": f"{base}/casino",
+        "order_id": order_id, "description": f"ApexOdds deposit ({body.coin})",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20) as hc:
+            r = await hc.post(f"{OXAPAY_API}/payment/invoice", json=payload,
+                              headers={"merchant_api_key": OXAPAY_KEY, "Content-Type": "application/json"})
+        result = r.json()
+    except Exception as e:
+        logger.warning(f"OxaPay invoice error: {e}")
+        raise HTTPException(status_code=502, detail="Payment gateway unreachable")
+    if r.status_code >= 400 or result.get("status") != 200:
+        logger.warning(f"OxaPay invoice rejected: {r.status_code} {result}")
+        raise HTTPException(status_code=502, detail=result.get("message") or "Gateway error creating invoice")
+    data = result["data"]
+    await db.oxa_invoices.insert_one({
+        "order_id": order_id, "user_id": user["id"], "coin": body.coin, "amount": body.amount,
+        "status": "pending", "credited": False, "track_id": str(data["track_id"]),
+        "payment_url": data["payment_url"], "created_at": now_iso()})
+    return {"order_id": order_id, "track_id": str(data["track_id"]), "payment_url": data["payment_url"]}
+
+
+@api_router.get("/wallet/oxapay/status/{track_id}")
+async def oxapay_status(track_id: str, user: dict = Depends(get_current_user)):
+    inv = await db.oxa_invoices.find_one({"track_id": track_id, "user_id": user["id"]})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    status = inv.get("status", "pending")
+    if not inv.get("credited") and OXAPAY_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=15) as hc:
+                r = await hc.get(f"{OXAPAY_API}/payment/{track_id}",
+                                 headers={"merchant_api_key": OXAPAY_KEY})
+            data = r.json().get("data", {})
+            status = data.get("status", status)
+            await _credit_oxa_invoice(track_id, status)
+        except Exception as e:
+            logger.warning(f"OxaPay status poll error: {e}")
+    inv = await db.oxa_invoices.find_one({"track_id": track_id}, {"_id": 0})
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"status": inv.get("status"), "credited": inv.get("credited", False),
+            "balances": wallet["balances"] if wallet else {}}
+
+
+@api_router.post("/oxapay/webhook", response_class=PlainTextResponse)
+async def oxapay_webhook(request: Request):
+    raw = await request.body()
+    received = request.headers.get("HMAC", "")
+    if OXAPAY_KEY:
+        expected = hmac.new(OXAPAY_KEY.encode(), raw, hashlib.sha512).hexdigest()
+        if not hmac.compare_digest(expected, received.strip()):
+            raise HTTPException(status_code=401, detail="invalid signature")
+    try:
+        event = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON")
+    track_id = event.get("track_id")
+    if track_id:
+        await _credit_oxa_invoice(str(track_id), event.get("status", ""))
+    return "ok"
 
 
 # ----------------------------------------------------------------------------

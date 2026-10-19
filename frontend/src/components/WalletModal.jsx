@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Settings, Copy } from "lucide-react";
+import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Settings, Copy, ExternalLink, ShieldCheck } from "lucide-react";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto, usdValue } from "@/lib/format";
@@ -17,6 +17,8 @@ export function WalletModal({ open, onClose }) {
   const [loading, setLoading] = useState(false);
   const [cfg, setCfg] = useState(null);
   const [showCfg, setShowCfg] = useState(false);
+  const [method, setMethod] = useState("instant");   // instant | oxapay
+  const [oxaPolling, setOxaPolling] = useState(false);
 
   const load = async () => {
     const [{ data: w }, { data: c }] = await Promise.all([api.get("/wallet"), api.get("/payment/config")]);
@@ -25,7 +27,42 @@ export function WalletModal({ open, onClose }) {
   };
   useEffect(() => { if (open) load(); }, [open]);
 
+  const payWithOxaPay = async () => {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) { toast.error("Enter an amount"); return; }
+    setLoading(true);
+    try {
+      const { data } = await api.post("/wallet/oxapay/invoice", { coin, amount: amt });
+      window.open(data.payment_url, "_blank", "noopener");
+      toast.success("Invoice created — complete payment in the new tab");
+      // poll for payment confirmation
+      setOxaPolling(true);
+      const trackId = data.track_id;
+      let tries = 0;
+      const timer = setInterval(async () => {
+        tries += 1;
+        try {
+          const { data: st } = await api.get(`/wallet/oxapay/status/${trackId}`);
+          if (st.credited) {
+            clearInterval(timer);
+            setOxaPolling(false);
+            setBalances(st.balances);
+            toast.success(`Deposit confirmed — ${amt} ${coin} credited`);
+            setAmount("");
+            load();
+          }
+        } catch { /* keep polling */ }
+        if (tries >= 40) { clearInterval(timer); setOxaPolling(false); }
+      }, 4000);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const act = async () => {
+    if (tab === "deposit" && method === "oxapay") { payWithOxaPay(); return; }
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { toast.error("Enter an amount"); return; }
     setLoading(true);
@@ -96,22 +133,32 @@ export function WalletModal({ open, onClose }) {
                   ))}
                 </div>
                 {tab === "deposit" && (
-                  <div className="bg-[#0E1017] border border-dashed border-[#2A2F45] rounded-lg p-3 flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-zinc-500">Deposit address ({coin})</p>
-                      <p className="font-mono text-xs truncate text-zinc-300">0x{coin.toLowerCase()}7f3c9a1e8b4d2f60a5c7</p>
-                    </div>
-                    <button onClick={() => { navigator.clipboard?.writeText("0x" + coin + "demo"); toast("Address copied"); }}
-                      className="text-zinc-500 hover:text-emerald-400"><Copy size={15} /></button>
+                  <div className="flex gap-1.5">
+                    <button data-testid="deposit-method-instant" onClick={() => setMethod("instant")}
+                      className={`flex-1 text-xs font-medium py-2 rounded-md border transition-colors ${
+                        method === "instant" ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#2A2F45] text-zinc-400"
+                      }`}>Instant (demo)</button>
+                    <button data-testid="deposit-method-oxapay" onClick={() => setMethod("oxapay")}
+                      className={`flex-1 text-xs font-medium py-2 rounded-md border transition-colors ${
+                        method === "oxapay" ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#2A2F45] text-zinc-400"
+                      }`}>Pay with OxaPay</button>
+                  </div>
+                )}
+                {tab === "deposit" && method === "oxapay" && (
+                  <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-start gap-2">
+                    <ShieldCheck size={15} className="text-emerald-400 mt-0.5 shrink-0" />
+                    <p className="text-[11px] text-zinc-400">Real crypto deposit via OxaPay. You'll be sent to a secure checkout; your balance credits automatically once the payment confirms on-chain.</p>
                   </div>
                 )}
                 <input data-testid="wallet-amount-input" type="number" min="0" value={amount}
                   onChange={(e) => setAmount(e.target.value)} placeholder={`Amount in ${coin}`}
                   className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
-                <button data-testid="wallet-submit-button" onClick={act} disabled={loading}
+                <button data-testid="wallet-submit-button" onClick={act} disabled={loading || oxaPolling}
                   className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-60">
-                  {loading && <Loader2 size={16} className="animate-spin" />}
-                  {tab === "deposit" ? "Simulate Deposit" : "Withdraw"}
+                  {(loading || oxaPolling) && <Loader2 size={16} className="animate-spin" />}
+                  {tab === "withdraw" ? "Withdraw"
+                    : method === "oxapay" ? (oxaPolling ? "Awaiting payment…" : <><ExternalLink size={15} /> Pay with OxaPay</>)
+                    : "Simulate Deposit"}
                 </button>
               </div>
 

@@ -63,6 +63,14 @@ export function MatchCard({ ev }) {
         )}
       </div>
 
+      {ev.source === "oddsapi" && ev.book && (
+        <div className="flex items-center gap-1.5 px-4 pt-2">
+          <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">
+            Live Odds · {ev.book}
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3">
         <div className="space-y-2 min-w-0">
           {[ev.away, ev.home].map((t, i) => (

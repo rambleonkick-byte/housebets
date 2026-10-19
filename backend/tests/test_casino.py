@@ -98,13 +98,17 @@ def test_keno_invalid_picks(client):
 
 # ---------- MINES ----------
 def test_mines_start_reveal_cashout(client, bal):
+    # Clean any prior active game first (new start now refunds+closes them).
+    client.post(f"{API}/casino/mines/start",
+                json={"coin": "USDT", "stake": 1, "mines": 3})
     before = bal()["USDT"]
     r = client.post(f"{API}/casino/mines/start",
                     json={"coin": "USDT", "stake": 4, "mines": 3})
     assert r.status_code == 200, r.text
     start = r.json()
     gid = start["game_id"]
-    assert abs(start["balances"]["USDT"] - (before - 4)) < 1e-6
+    # New start refunded prior stake (+1) and deducted new stake (-4) => net -3
+    assert abs(start["balances"]["USDT"] - (before - 4 + 1)) < 1e-4
 
     # Try reveals until we get a safe one, up to a few attempts (new games on bomb)
     safe_tile = None

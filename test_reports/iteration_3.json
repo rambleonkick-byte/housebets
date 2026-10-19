@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 3 validates the new Dice game, Casino Game History, and the Provably-Fair commit/reveal/verify flow. Backend: 24/24 pytest cases pass (12 regression + 12 new in test_fairness.py) — Dice mechanics (over/under + exact multipliers 1.98/3.96), bad target/direction/insufficient 400s, auth 401, /casino/seed GET returns 64-char hash + client_seed + nonce + revealed[], /casino/seed/client persists via GET round-trip, /casino/seed/rotate reveals a seed whose sha256 matches the committed hash and resets nonce to 0, history rows include fair fields (nonce/server_seed_hash/client_seed) and never leak Mongo _id, and we independently recompute Dice and Limbo results from the revealed seed and prove exact bit-match. Frontend (Playwright, admin logged in): /casino/dice renders defaults (target 50, over, chance 50%, mult 1.9800×); switching to target 25 over -> chance 75%/mult 1.32×; under -> 25%/3.96×; dice-play-button rolls (e.g. 91.53 WIN 19.8 USDT, 2.23 LOSS), dice-roll-marker and dice-result both render. Casino lobby -> casino-history-open -> casino-history-modal: history tab lists 40 rows with per-row casino-verify-<id>. Fairness tab shows fairness-server-hash (64 chars), fairness-client-seed-input accepts & persists a custom seed after fairness-save-client-seed, fairness-rotate-button rotates (hash changes, fairness-revealed-list grows to 11 revealed seeds). Verify BEFORE rotate renders no verify-result and the UI surfaces the 'rotate first' toast; after rotate casino-verify-result-<id> renders '✓ Verified · roll 70.42 · hash ok'. Regression: limbo-play-button, plinko-play-button, keno-play-button, mines-start-button -> mines-tile -> mines-cashout-button all deduct stake and credit payout (Mines cashed out 11.25 USDT @ 1.125×).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_fairness.py",
+    "/app/backend/tests/test_casino.py",
+    "/app/test_reports/pytest/all.xml",
+    "/app/test_reports/pytest/fairness.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~947 lines — casino + fairness logic (next_fair/rfloat/pick_distinct/limbo_result/mines_multiplier/dice/seed endpoints) should be extracted into /app/backend/routers/casino.py and /app/backend/services/fairness.py for maintainability.",
+    "fair_meta() returns {'nonce','server_seed_hash','client_seed'} and is stored on every casino_games doc, which is correct for independent verification. Consider also storing the game's input params explicitly at top level (target, direction) for Dice — currently they live only inside 'detail', which is fine but mines-cashout omits the fair meta's 'nonce' key check (uses g.get('nonce'), safe but worth typing).",
+    "pre-rotate verify UX: clicking casino-verify-<id> on a game whose server seed hasn't been revealed yet does nothing visible except a transient toast — consider rendering a persistent amber state in casino-verify-result-<id> like 'Awaiting reveal (rotate seed to verify)' so the UI is self-explanatory.",
+    "Dice slider range is 2..98 (step 1) in Dice.jsx but backend allows 0.01..99.99 — the extra precision isn't reachable from the UI. Either widen the slider or tighten the backend validator so docs/UI/API agree.",
+    "mines/start now refunds the prior active game's stake (good — addresses iteration_2 comment). The old regression test asserted the old no-refund behavior; updated test_casino.py accordingly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_fairness.py (new)",
+    "/app/backend/tests/test_casino.py (mines-start regression updated for the new refund behavior)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100%"},
+  "test_credentials": "admin@apexodds.io / admin123; test_fairness.py creates TEST_fairness_user@apexodds.io / pw12345",
+  "seed_data_creation": "test_fairness.py registers a dedicated TEST_fairness_user to avoid cross-worker seed/nonce races under pytest-xdist loadscope.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fairness verification depends on the admin's active seed/nonce; because xdist loadscope pins by module, fairness tests run in a dedicated user so they don't collide with test_casino.py gameplay on admin. If adding more fairness tests, keep them in test_fairness.py or create a new per-user fixture. The frontend login modal auto-opens on protected routes; however the test session reused an already-authenticated cookie — rely on /api/auth/me to confirm login state before asserting gameplay.",
+  "rca of the issue": "N/A — no bugs found."
+}
