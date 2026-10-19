@@ -65,8 +65,9 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("apexodds")
 
-STARTING_BALANCES = {"BTC": 0.05, "ETH": 0.8, "USDT": 2500.0, "SOL": 15.0}
+STARTING_BALANCES = {"BTC": 0.0, "ETH": 0.0, "USDT": 0.0, "SOL": 0.0}
 COIN_USD = {"BTC": 64000.0, "ETH": 3400.0, "USDT": 1.0, "SOL": 150.0}
+COIN_NETWORK = {"BTC": "BTC", "ETH": "ERC20", "USDT": "TRC20", "SOL": "SOL"}
 
 # ----------------------------------------------------------------------------
 # Models
@@ -542,21 +543,6 @@ async def get_wallet(user: dict = Depends(get_current_user)):
     return {"balances": wallet["balances"], "usd_rates": COIN_USD, "transactions": txs}
 
 
-@api_router.post("/wallet/deposit")
-async def deposit(body: WalletTxInput, user: dict = Depends(get_current_user)):
-    if body.coin not in STARTING_BALANCES or body.amount <= 0:
-        raise HTTPException(status_code=400, detail="Invalid deposit")
-    await ensure_wallet(user["id"])
-    await db.wallets.update_one({"user_id": user["id"]},
-                                {"$inc": {f"balances.{body.coin}": body.amount}})
-    tx = {"id": str(uuid.uuid4()), "user_id": user["id"], "type": "deposit",
-          "coin": body.coin, "amount": body.amount, "created_at": now_iso(),
-          "hash": "0x" + uuid.uuid4().hex[:24]}
-    await db.transactions.insert_one(dict(tx))
-    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
-    return {"balances": wallet["balances"], "transaction": tx}
-
-
 @api_router.post("/wallet/withdraw")
 async def withdraw(body: WalletTxInput, user: dict = Depends(get_current_user)):
     await ensure_wallet(user["id"])
@@ -610,27 +596,37 @@ async def oxapay_invoice(body: WalletTxInput, user: dict = Depends(get_current_u
     order_id = f"{user['id']}:{uuid.uuid4().hex[:12]}"
     base = os.environ.get("FRONTEND_URL", "")
     payload = {
-        "amount": body.amount, "currency": body.coin, "lifetime": 60, "fee_paid_by_payer": 1,
-        "callback_url": f"{base}/api/oxapay/webhook", "return_url": f"{base}/casino",
+        "amount": body.amount, "currency": body.coin, "pay_currency": body.coin,
+        "network": COIN_NETWORK.get(body.coin), "lifetime": 120, "fee_paid_by_payer": 1,
+        "under_paid_coverage": 2.5,
+        "callback_url": f"{base}/api/oxapay/webhook",
         "order_id": order_id, "description": f"ApexOdds deposit ({body.coin})",
     }
     try:
         async with httpx.AsyncClient(timeout=20) as hc:
-            r = await hc.post(f"{OXAPAY_API}/payment/invoice", json=payload,
+            r = await hc.post(f"{OXAPAY_API}/payment/white-label", json=payload,
                               headers={"merchant_api_key": OXAPAY_KEY, "Content-Type": "application/json"})
         result = r.json()
     except Exception as e:
-        logger.warning(f"OxaPay invoice error: {e}")
+        logger.warning(f"OxaPay white-label error: {e}")
         raise HTTPException(status_code=502, detail="Payment gateway unreachable")
     if r.status_code >= 400 or result.get("status") != 200:
-        logger.warning(f"OxaPay invoice rejected: {r.status_code} {result}")
-        raise HTTPException(status_code=502, detail=result.get("message") or "Gateway error creating invoice")
+        logger.warning(f"OxaPay white-label rejected: {r.status_code} {result}")
+        raise HTTPException(status_code=502, detail=(result.get("message") or "Gateway error creating deposit"))
     data = result["data"]
+    pay_amount = float(data.get("pay_amount") or body.amount)
     await db.oxa_invoices.insert_one({
-        "order_id": order_id, "user_id": user["id"], "coin": body.coin, "amount": body.amount,
-        "status": "pending", "credited": False, "track_id": str(data["track_id"]),
-        "payment_url": data["payment_url"], "created_at": now_iso()})
-    return {"order_id": order_id, "track_id": str(data["track_id"]), "payment_url": data["payment_url"]}
+        "order_id": order_id, "user_id": user["id"], "coin": body.coin, "amount": pay_amount,
+        "status": "waiting", "credited": False, "track_id": str(data["track_id"]),
+        "address": data.get("address"), "network": data.get("network"),
+        "memo": data.get("memo") or "", "qr_code": data.get("qr_code"),
+        "pay_amount": pay_amount, "pay_currency": (data.get("pay_currency") or body.coin).upper(),
+        "expired_at": data.get("expired_at"), "created_at": now_iso()})
+    return {"order_id": order_id, "track_id": str(data["track_id"]),
+            "address": data.get("address"), "network": data.get("network"),
+            "memo": data.get("memo") or "", "qr_code": data.get("qr_code"),
+            "pay_amount": pay_amount, "pay_currency": (data.get("pay_currency") or body.coin).upper(),
+            "expired_at": data.get("expired_at")}
 
 
 @api_router.get("/wallet/oxapay/status/{track_id}")

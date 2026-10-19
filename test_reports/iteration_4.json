@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 4 testing: The Odds API source + OxaPay crypto deposits. All 16 backend tests pass (16/16) covering OxaPay invoice/status/webhook (idempotent credit, HMAC rejection), merged ESPN+oddsapi /api/odds with mma group, bet placement from oddsapi event, simulated wallet, casino regression (limbo/dice/mines/plinko/keno, history). Frontend smoke: admin login works; sidebar shows UFC/MMA; 67 'Live Odds · <book>' badges render; WalletModal exposes deposit-method-instant and deposit-method-oxapay; selecting OxaPay + amount opens a real https://pay.oxapay.com/... URL in a new tab and button shows 'Awaiting payment…'.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_oxapay_odds.py",
+    "/app/test_reports/pytest/iter4_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 1169 lines — consider splitting (odds, wallet/oxapay, casino, auth) into modules per the file-size guideline (>700 lines).",
+    "OxaPay HMAC check is skipped silently when OXAPAY_MERCHANT_API_KEY is unset — in that mode /api/oxapay/webhook accepts any signed/unsigned body and credits. Consider rejecting webhook when key is missing to avoid accidental open credit path in misconfigured deploys.",
+    "OxaPay invoice `lifetime: 60` (minutes? seconds?) — verify against OxaPay v1 docs; short lifetime may cause UX issues if user takes >1 min to pay.",
+    "_credit_oxa_invoice's $set to status happens before credit flag check; harmless but could race. Current find_one_and_update with credited:$ne True handles idempotency correctly.",
+    "WalletModal polling: tries up to 40 x 4s = ~2.7 min then silently stops; no user-facing timeout toast."
+  ],
+  "updated_files": ["/app/backend/tests/test_oxapay_odds.py"],
+  "success_rate": { "backend": "100% (16/16)", "frontend": "100% smoke" },
+  "test_credentials": "admin@apexodds.io / admin123 (from /app/memory/test_credentials.md and /app/backend/.env)",
+  "seed_data_creation": "Registered TEST_oxapay_other@apexodds.io for 404 ownership check on OxaPay status.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_oxapay_odds.py contains full regression + oxapay webhook signing (hmac_sha512 of raw body). The Odds API is cached 900s server-side so odds-list tests are stable. OxaPay invoices are REAL calls — each test run creates live invoices against pay.oxapay.com (no on-chain settlement). The webhook test credits the admin USDT balance by 7.5 per full run; subsequent runs reuse a fresh invoice/track_id, so credits accumulate across runs.",
+  "rca of the issue": "No issues found. All iteration-4 features working as specified."
+}

@@ -54,7 +54,7 @@ export function Sportsbook() {
               Bet smarter with <span className="text-emerald-400">real-time</span> crypto.
             </h1>
             <p className="text-sm text-zinc-400 mt-3 max-w-md">
-              Browse live markets across NBA, soccer, MLB & more. Stake simulated BTC, ETH, SOL or USDT.
+              Browse live markets across NBA, soccer, MLB & more. Stake BTC, ETH, SOL or USDT.
             </p>
             <div className="flex items-center gap-4 mt-5">
               <div className="flex items-center gap-2">
