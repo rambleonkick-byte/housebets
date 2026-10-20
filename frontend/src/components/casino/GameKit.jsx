@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { COIN_META } from "@/lib/api";
 import { fmtCrypto } from "@/lib/format";
+import { Usd } from "@/components/Usd";
 import { useAuth } from "@/context/AuthContext";
 
 const COINS = ["USDT", "BTC", "ETH", "SOL"];
@@ -23,7 +24,7 @@ export function BetControls({ coin, setCoin, stake, setStake, balance, disabled,
         <div className="flex items-center justify-between mb-1.5">
           <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">Bet amount</p>
           <span className="text-[11px] font-mono text-zinc-500">
-            Bal: <span style={{ color: COIN_META[coin].color }}>{fmtCrypto(balance, coin)} {coin}</span>
+            Bal: <span style={{ color: COIN_META[coin].color }}>{fmtCrypto(balance, coin)} {coin}</span> <Usd amount={balance} coin={coin} prefix="(" />{")"}
           </span>
         </div>
         <input data-testid="game-stake-input" type="number" min="0" value={stake} disabled={disabled}

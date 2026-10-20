@@ -2,11 +2,13 @@ import { Zap, Wallet, History, LogOut, User as UserIcon, ShieldCheck } from "luc
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { usdValue } from "@/lib/format";
+import { usePrices } from "@/lib/prices";
 
 export function Header({ onWallet, onHistory, onAdmin }) {
   const { user, logout, setAuthOpen } = useAuth();
   const { pathname } = useLocation();
-  const total = user && user.balances ? usdValue(user.balances) : 0;
+  const { rates } = usePrices();
+  const total = user && user.balances ? usdValue(user.balances, rates) : 0;
   const onCasino = pathname.startsWith("/casino");
 
   return (
@@ -47,7 +49,7 @@ export function Header({ onWallet, onHistory, onAdmin }) {
               <button data-testid="header-wallet-button" onClick={onWallet}
                 className="flex items-center gap-2 bg-[#12141C] border border-[#2A2F45] hover:border-emerald-500/60 rounded-lg px-3 py-2 transition-colors">
                 <Wallet size={16} className="text-emerald-400" />
-                <span className="font-mono text-sm font-semibold">${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                <span data-testid="header-usd-balance" className="font-mono text-sm font-semibold">${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </button>
               <button data-testid="header-history-button" onClick={onHistory}
                 className="hidden sm:flex items-center gap-2 text-zinc-300 hover:text-white px-2 py-2 transition-colors">

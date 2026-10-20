@@ -4,6 +4,8 @@ import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Settings, Copy, ExternalL
 import { api, formatApiErrorDetail, COIN_META, COIN_NETWORK } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto, usdValue } from "@/lib/format";
+import { Usd } from "@/components/Usd";
+import { usePrices } from "@/lib/prices";
 import { toast } from "sonner";
 
 const COINS = ["BTC", "ETH", "USDT", "SOL"];
@@ -127,7 +129,8 @@ export function WalletModal({ open, onClose }) {
     }
   };
 
-  const total = wallet ? usdValue(wallet.balances, wallet.usd_rates) : 0;
+  const { rates, live } = usePrices();
+  const total = wallet ? usdValue(wallet.balances, rates) : 0;
 
   return (
     <AnimatePresence>
@@ -140,7 +143,8 @@ export function WalletModal({ open, onClose }) {
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A2F45]">
               <div>
                 <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">Crypto Wallet</p>
-                <p className="font-mono text-2xl font-bold">${total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                <p data-testid="wallet-total-usd" className="font-mono text-2xl font-bold">${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                <p data-testid="wallet-price-status" className="text-[10px] font-mono text-zinc-500 flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />{live ? "Live market prices" : "Estimated prices"}</p>
               </div>
               <button data-testid="wallet-close" onClick={onClose} className="text-zinc-500 hover:text-white"><X size={20} /></button>
             </div>
@@ -154,6 +158,8 @@ export function WalletModal({ open, onClose }) {
                       <span className="text-xs font-mono text-zinc-400">{c}</span>
                     </div>
                     <p className="font-mono text-sm font-bold">{fmtCrypto(wallet.balances[c], c)}</p>
+                    <Usd amount={wallet.balances[c]} coin={c} prefix="" className="text-[11px] text-zinc-500" testId={`wallet-balance-usd-${c}`} />
+                    <p className="text-[10px] font-mono text-zinc-600">@ ${Number(rates[c] || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
                   </div>
                 ))}
               </div>
@@ -288,6 +294,7 @@ export function WalletModal({ open, onClose }) {
                             <span className="capitalize text-zinc-300">{t.type}</span>
                             <span className={`font-mono text-xs ${positive ? "text-emerald-400" : "text-zinc-400"}`}>
                               {positive ? "+" : "-"}{fmtCrypto(t.amount, t.coin)} {t.coin}
+                              <Usd amount={t.amount} coin={t.coin} className="text-zinc-500 ml-1.5" />
                             </span>
                           </div>
                           {po && (() => {

@@ -25,6 +25,11 @@ import secrets
 import jwt
 import bcrypt
 import httpx
+import re
+import ipaddress
+from html import escape
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 
 # ----------------------------------------------------------------------------
 # DB
@@ -279,6 +284,16 @@ def _sgo_long(team):
     return n.get("long") or n.get("medium") or _sgo_abbr(team)
 
 
+ESPN_LOGO_SPORT = {"NFL": "nfl", "NBA": "nba", "MLB": "mlb", "NHL": "nhl"}
+
+
+def _team_logo(league_id, abbr):
+    slug = ESPN_LOGO_SPORT.get(league_id)
+    if not slug or not abbr:
+        return ""
+    return f"https://a.espncdn.com/i/teamlogos/{slug}/500/{abbr.lower()}.png"
+
+
 STAT_LABELS = {
     "points": "Points", "assists": "Assists", "rebounds": "Rebounds", "steals": "Steals",
     "blocks": "Blocks", "threePointersMade": "3PT Made", "receptions": "Receptions",
@@ -425,8 +440,8 @@ async def fetch_sgo_league(meta):
                 "league_label": meta["label"], "name": f"{aa} @ {ha}",
                 "start": st.get("startsAt"), "state": state,
                 "status_detail": st.get("displayLong") or ("Live" if state == "in" else "Upcoming"),
-                "home": {"name": _sgo_long(home), "abbr": ha, "logo": "", "score": _sgo_score(ev, "home")},
-                "away": {"name": _sgo_long(away), "abbr": aa, "logo": "", "score": _sgo_score(ev, "away")},
+                "home": {"name": _sgo_long(home), "abbr": ha, "logo": _team_logo(meta["id"], ha), "score": _sgo_score(ev, "home")},
+                "away": {"name": _sgo_long(away), "abbr": aa, "logo": _team_logo(meta["id"], aa), "score": _sgo_score(ev, "away")},
                 "markets": markets, "source": "sportsgameodds", "book": "Top books",
                 "props": _sgo_props(ev),
                 "player_results": _sgo_player_results(ev) if state in ("in", "post") else {},
@@ -493,7 +508,170 @@ async def get_wallet(user: dict = Depends(get_current_user)):
                 t["payout"] = {"track_id": w.get("track_id"), "status": w.get("status"),
                                "tx_hash": w.get("tx_hash"), "refunded": w.get("refunded", False),
                                "network": w.get("network"), "address": w.get("address")}
-    return {"balances": wallet["balances"], "usd_rates": COIN_USD, "transactions": txs}
+    return {"balances": wallet["balances"], "usd_rates": await get_live_rates(), "transactions": txs}
+
+
+_PRICE_CACHE = {"ts": 0.0, "rates": dict(COIN_USD), "live": False}
+_CG_IDS = {"bitcoin": "BTC", "ethereum": "ETH", "tether": "USDT", "solana": "SOL"}
+
+
+async def get_live_rates() -> dict:
+    now = datetime.now(timezone.utc).timestamp()
+    if now - _PRICE_CACHE["ts"] < 60:
+        return _PRICE_CACHE["rates"]
+    _PRICE_CACHE["ts"] = now
+    try:
+        async with httpx.AsyncClient(timeout=8) as hc:
+            r = await hc.get("https://api.coingecko.com/api/v3/simple/price",
+                             params={"ids": ",".join(_CG_IDS), "vs_currencies": "usd"})
+        r.raise_for_status()
+        data = r.json()
+        rates = {coin: float(data[cid]["usd"]) for cid, coin in _CG_IDS.items() if cid in data}
+        if len(rates) == len(_CG_IDS):
+            _PRICE_CACHE.update(rates=rates, live=True)
+    except Exception as e:
+        logger.warning(f"price fetch failed: {e}")
+    return _PRICE_CACHE["rates"]
+
+
+@api_router.get("/prices")
+async def get_prices():
+    rates = await get_live_rates()
+    return {"rates": rates, "live": _PRICE_CACHE["live"],
+            "updated_at": datetime.fromtimestamp(_PRICE_CACHE["ts"], timezone.utc).isoformat()}
+
+
+# ----------------------------------------------------------------------------
+# Email alerts (Emergent managed, via Resend)
+# ----------------------------------------------------------------------------
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "ApexOdds")
+ADMIN_ALERT_EMAIL = os.environ.get("ADMIN_ALERT_EMAIL")
+
+_SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
+_CRED_ASK = ("reply with your password", "reply with the code", "send your password", "cvv",
+             "send us your password", "enter your password below", "confirm your card number",
+             "your full card number", "seed phrase", "recovery phrase", "verify your card",
+             "social security number", "confirm your bank details")
+_HOSTISH = re.compile(r"\b(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})", re.I)
+
+
+def _host_ok(host: str) -> bool:
+    if not host or "xn--" in host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    return not any(host == s or host.endswith("." + s) for s in _SHORTENERS)
+
+
+def _same_site(shown: str, real: str) -> bool:
+    return shown == real or real.endswith("." + shown) or shown.endswith("." + real)
+
+
+class _EmailScan(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tags, self.urls, self.anchors = set(), [], []
+        self._href, self._text = None, []
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.add(tag.lower())
+        self.urls += [v for k, v in attrs if k.lower() in ("href", "src") and v]
+        if tag.lower() == "a":
+            self._href = dict((k.lower(), v) for k, v in attrs).get("href")
+            self._text = []
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "a" and self._href is not None:
+            self.anchors.append((self._href, "".join(self._text)))
+            self._href, self._text = None, []
+
+
+def _assert_safe_email(subject: str, html: str) -> None:
+    scan = _EmailScan(); scan.feed(html)
+    if scan.tags & {"form", "input", "textarea", "select"}:
+        raise ValueError("No forms or input fields in email (G2)")
+    body = f"{subject}\n{html}".lower()
+    for p in _CRED_ASK:
+        if p in body:
+            raise ValueError(f"Email asks the recipient for credentials: {p!r} (G2)")
+    for url in scan.urls:
+        low = url.strip().lower()
+        if low.startswith(("mailto:", "tel:", "cid:", "#")):
+            continue
+        if not low.startswith("https://"):
+            raise ValueError(f"Email links/assets must be absolute https: {url!r} (G3)")
+        host = urlparse(low).hostname or ""
+        if not _host_ok(host) or urlparse(low).username is not None:
+            raise ValueError(f"Shortened, numeric-host or credential-bearing URL: {url!r} (G3)")
+    for href, text in scan.anchors:
+        real = urlparse(href.strip().lower()).hostname or ""
+        if not real:
+            continue
+        for m in _HOSTISH.finditer(text):
+            if not _same_site(m.group(1).lower(), real):
+                raise ValueError(f"Anchor text {m.group(1)!r} != real link host {real!r} (G3)")
+
+
+async def send_email(*, to: str, subject: str, html: str) -> Optional[str]:
+    _assert_safe_email(subject, html)
+    if not EMAIL_KEY:
+        logger.warning("Email not configured — skipping send")
+        return None
+    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    async with httpx.AsyncClient(timeout=30) as hc:
+        resp = await hc.post(f"{EMAIL_BASE_URL}/api/v1/email/send",
+                             headers={"X-Email-Key": EMAIL_KEY}, json=payload)
+    resp.raise_for_status()
+    return resp.json().get("id")
+
+
+async def send_withdrawal_alert(wid: str):
+    """Fire-and-forget email to the admin when a withdrawal is awaiting approval."""
+    try:
+        if not ADMIN_ALERT_EMAIL:
+            return
+        w = await db.withdrawals.find_one({"id": wid}, {"_id": 0})
+        if not w:
+            return
+        origin = os.environ.get("FRONTEND_URL", "").rstrip("/")
+        btn = ""
+        if origin.startswith("https://"):
+            btn = (f'<tr><td style="padding:8px 0 4px"><a href="{escape(origin)}" '
+                   f'style="display:inline-block;background:#10b981;color:#000;font-weight:bold;'
+                   f'text-decoration:none;padding:10px 20px;border-radius:8px">Review in the Admin panel</a></td></tr>')
+        subject = f"New withdrawal awaiting approval — {w['amount']} {w['coin']}"
+        html = (
+            f'<table role="presentation" width="100%" style="max-width:520px;margin:0 auto;'
+            f'font-family:Arial,sans-serif;color:#111"><tr><td style="padding:24px">'
+            f'<p style="font-size:12px;letter-spacing:2px;color:#10b981;margin:0 0 4px">APEXODDS · ADMIN</p>'
+            f'<h2 style="margin:0 0 16px">A withdrawal needs your approval</h2>'
+            f'<table role="presentation" width="100%" style="border:1px solid #e5e7eb;border-radius:10px">'
+            f'<tr><td style="padding:14px 16px">'
+            f'<p style="margin:0 0 6px"><strong>Player:</strong> {escape(w.get("user_email", ""))}</p>'
+            f'<p style="margin:0 0 6px;font-size:20px;font-weight:bold;color:#059669">'
+            f'{escape(str(w["amount"]))} {escape(w["coin"])} '
+            f'<span style="font-size:12px;color:#6b7280;font-weight:normal">· {escape(str(w.get("network", "")))}</span></p>'
+            f'<p style="margin:0;font-family:monospace;font-size:12px;color:#374151;word-break:break-all">'
+            f'{escape(w.get("address", ""))}</p>'
+            f'</td></tr></table>'
+            f'<table role="presentation" style="margin-top:16px">{btn}</table>'
+            f'<p style="font-size:12px;color:#888;margin-top:20px">The amount is already held from the player\'s balance '
+            f'and nothing is sent until you approve it. Sent by {escape(EMAIL_FROM_NAME)}. '
+            f'We never ask for your password or card details by email.</p>'
+            f'</td></tr></table>')
+        await send_email(to=ADMIN_ALERT_EMAIL, subject=subject, html=html)
+        logger.info(f"Withdrawal alert emailed for {wid}")
+    except Exception as e:
+        logger.warning(f"Withdrawal alert email failed: {e}")
 
 
 @api_router.post("/wallet/withdraw")
@@ -521,6 +699,7 @@ async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
         "id": str(uuid.uuid4()), "user_id": user["id"], "type": "withdraw",
         "coin": body.coin, "amount": body.amount, "created_at": now_iso(),
         "hash": "withdraw:" + wid})
+    asyncio.create_task(send_withdrawal_alert(wid))
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"balances": wallet["balances"], "withdrawal_id": wid, "status": "pending_approval"}
 

@@ -48,3 +48,11 @@
 ## Credentials
 - Admin: admin@apexodds.io / admin123
 - Test user: player@apexodds.io / player123
+
+## Live USD Values (2026-06)
+- Backend `GET /api/prices` pulls live BTC/ETH/USDT/SOL USD prices from CoinGecko (free, no key), cached 60s, falls back to static rates if unreachable (`live:false`). `/api/wallet` usd_rates now live.
+- Frontend `usePrices()` hook (lib/prices.js, polls 60s) + `<Usd>` component. USD shown in header balance, wallet total (with "Live market prices" indicator), per-coin balances + unit price, recent activity, bet slip (balance/stake/payout), bet history, casino bet panel + history, admin withdrawal queue.
+
+## Pending
+- Withdrawal alert email recipient still not set (user to provide later).
+- Next: Crash game (solo rounds default), Prop search & filters, Deposit countdown.

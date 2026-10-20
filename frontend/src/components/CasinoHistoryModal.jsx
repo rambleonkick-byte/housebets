@@ -4,6 +4,7 @@ import { X, ShieldCheck, RefreshCw, Copy, Check, Loader2 } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { fmtCrypto } from "@/lib/format";
 import { verifyGame, sha256Hex } from "@/lib/fairness";
+import { Usd } from "@/components/Usd";
 import { toast } from "sonner";
 
 const GAME_COLORS = { limbo: "#10B981", dice: "#627EEA", plinko: "#8B5CF6", keno: "#22C55E", mines: "#F59E0B" };
@@ -119,6 +120,7 @@ export function CasinoHistoryModal({ open, onClose }) {
                               <p className={`font-mono text-xs ${gme.won ? "text-emerald-400" : "text-zinc-500"}`}>
                                 {gme.won ? "+" : ""}{fmtCrypto(gme.payout, gme.coin)}
                               </p>
+                              <Usd amount={gme.won ? gme.payout : gme.stake} coin={gme.coin} prefix={gme.won ? "+" : "-"} className="text-[10px] text-zinc-500" />
                             </div>
                           </div>
                           <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#1E2234]">

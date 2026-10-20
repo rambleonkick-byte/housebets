@@ -5,6 +5,7 @@ import { useBetSlip } from "@/context/BetSlipContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
 import { fmtOdds, fmtCrypto } from "@/lib/format";
+import { Usd } from "@/components/Usd";
 import { toast } from "sonner";
 
 const COINS = ["USDT", "BTC", "ETH", "SOL"];
@@ -171,7 +172,7 @@ export function BetSlip() {
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] text-zinc-500">Stake {isParlay ? "" : "(per bet)"}</span>
               <span className="text-[11px] font-mono text-zinc-500">
-                Bal: <span style={{ color: COIN_META[coin].color }}>{fmtCrypto(bal, coin)} {coin}</span>
+                Bal: <span style={{ color: COIN_META[coin].color }}>{fmtCrypto(bal, coin)} {coin}</span> <Usd amount={bal} coin={coin} prefix="(" className="text-zinc-500" />{")"}
               </span>
             </div>
             <input data-testid="bet-slip-stake-input" type="number" min="0" value={stake}
@@ -194,11 +195,13 @@ export function BetSlip() {
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-zinc-400">Total stake</span>
-            <span className="font-mono font-semibold" data-testid="bet-slip-total-stake">{fmtCrypto(totalStake, coin)} {coin}</span>
+            <span className="text-right"><span className="font-mono font-semibold" data-testid="bet-slip-total-stake">{fmtCrypto(totalStake, coin)} {coin}</span>
+              <Usd amount={totalStake} coin={coin} className="block text-[11px] text-zinc-500" testId="bet-slip-total-stake-usd" /></span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-zinc-400">Potential payout</span>
-            <span className="font-mono font-bold text-emerald-400" data-testid="bet-slip-payout">{fmtCrypto(payout, coin)} {coin}</span>
+            <span className="text-right"><span className="font-mono font-bold text-emerald-400" data-testid="bet-slip-payout">{fmtCrypto(payout, coin)} {coin}</span>
+              <Usd amount={payout} coin={coin} className="block text-[11px] text-emerald-400/60" testId="bet-slip-payout-usd" /></span>
           </div>
           {isParlay && hasSgp && (
             <p data-testid="bet-slip-sgp-note" className="text-[10px] text-amber-300/80 leading-snug">

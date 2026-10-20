@@ -3,6 +3,18 @@ import { ChevronDown } from "lucide-react";
 import { useBetSlip } from "@/context/BetSlipContext";
 import { fmtOdds } from "@/lib/format";
 
+function TeamLogo({ team }) {
+  const [err, setErr] = useState(false);
+  if (team.logo && !err) {
+    return <img src={team.logo} alt="" className="w-6 h-6 object-contain" onError={() => setErr(true)} />;
+  }
+  return (
+    <div className="w-6 h-6 rounded-md bg-[#222636] flex items-center justify-center text-[9px] font-bold text-zinc-300 shrink-0">
+      {(team.abbr || "").slice(0, 3)}
+    </div>
+  );
+}
+
 function OddsButton({ sel, meta }) {
   const { addSelection, has } = useBetSlip();
   const active = has(sel);
@@ -76,11 +88,7 @@ export function MatchCard({ ev }) {
         <div className="space-y-2 min-w-0">
           {[ev.away, ev.home].map((t, i) => (
             <div key={i} className="flex items-center gap-2.5">
-              {t.logo ? (
-                <img src={t.logo} alt="" className="w-6 h-6 object-contain" />
-              ) : (
-                <div className="w-6 h-6 rounded bg-[#222636]" />
-              )}
+              <TeamLogo team={t} />
               <span className="text-sm font-semibold truncate">{t.name}</span>
               {(live || ev.state === "post") && t.score != null && (
                 <span className="ml-auto font-mono text-sm font-bold text-emerald-400">{t.score}</span>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, History, Trophy, XCircle, Clock } from "lucide-react";
 import { api } from "@/lib/api";
+import { Usd } from "@/components/Usd";
 import { fmtCrypto, fmtOdds } from "@/lib/format";
 
 const STATUS = {
@@ -76,12 +77,12 @@ export function BetHistoryModal({ open, onClose }) {
                         ))}
                       </div>
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-[#1E2234]">
-                        <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtCrypto(b.stake, b.coin)} {b.coin}</span></span>
+                        <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtCrypto(b.stake, b.coin)} {b.coin}</span> <Usd amount={b.stake} coin={b.coin} prefix="(" />{")"}</span>
                         <span className="text-zinc-500">
                           {b.status === "won" ? "Payout" : "To win"}{" "}
                           <span className={`font-mono ${b.status === "won" ? "text-emerald-400" : "text-zinc-300"}`}>
                             {fmtCrypto(b.potential_payout, b.coin)} {b.coin}
-                          </span>
+                          </span> <Usd amount={b.potential_payout} coin={b.coin} prefix="(" />{")"}
                         </span>
                       </div>
                     </div>
