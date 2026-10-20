@@ -140,3 +140,7 @@
 - Cache persisted in Mongo `feed_cache` (soccer 60 min TTL, others 45 min; failures back off 10 min) so restarts don't burn quota. `_fetch_sgo_sequential` now returns API-Sports events (+merges); no-market events are `hidden` from /api/odds but used for settlement. Event ids `as-<sport>-<id>`; bets on old SGO ids won't auto-settle.
 - Blackjack: lock-token + guarded save + post-save settle (race fixed, iteration_9 PASS); bj_one_open_hand partial unique index. Wallet "Payment API (pluggable) MOCK" UI removed. Sidebar redesigned (pill tabs, Top Sports card, icons, LIVE badges). House games strip scrollbar hidden.
 - Follow-ups (iteration_10): API-Sports prices close at kick-off (markets dropped when state != pre or start passed → bets rejected, no past-posting); upstream errors raise so the last good cache is kept; MatchCard selected state fixed (has() with event_id) and FINAL cards' odds disabled.
+
+## Reverted to SportsGameOdds (2026-06)
+- User asked to revert the API-Sports switch. Removed backend/apisports.py, APISPORTS_KEY, and the merge/cache layer; `_fetch_sgo_sequential`, `_find_event` and `/api/odds` are back to the original SGO-only code. Labels back to "SportsGameOdds". Kept unrelated fixes (blackjack race fix, wallet MOCK removal, sidebar redesign, scrollbar, MatchCard selected/FINAL fixes). Mongo `feed_cache` collection is now unused.
+- SGO free tier currently returns 429 for most leagues, so /api/odds may be empty until the rate limit resets or the plan is upgraded.

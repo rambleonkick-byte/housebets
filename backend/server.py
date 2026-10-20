@@ -27,8 +27,6 @@ import bcrypt
 import httpx
 import re
 import ipaddress
-import copy
-import apisports
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
@@ -456,70 +454,11 @@ async def fetch_sgo_league(meta):
     return events
 
 
-_APS_LOCKS = {}
-
-
-def _norm_team(n):
-    return re.sub(r"[^a-z ]", "", (n or "").lower()).split()
-
-
-def _same_team(a, b):
-    wa, wb = _norm_team(a), _norm_team(b)
-    return bool(wa and wb) and (wa[-1] == wb[-1] or " ".join(wa) == " ".join(wb))
-
-
-async def _aps_sport(sport):
-    key = f"aps:{sport['group']}"
-    lock = _APS_LOCKS.setdefault(key, asyncio.Lock())
-    async with lock:
-        now = datetime.now(timezone.utc).timestamp()
-        doc = await db.feed_cache.find_one({"key": key})
-        if doc and now - doc["ts"] < sport["ttl"]:
-            return doc["data"]
-        try:
-            data = await apisports.fetch_sport(sport)
-        except Exception as e:
-            logger.warning(f"API-Sports {sport['group']} fetch failed: {e}")
-            if doc:
-                await db.feed_cache.update_one({"key": key}, {"$set": {"ts": now - sport["ttl"] + 600}})
-                return doc["data"]
-            await db.feed_cache.update_one({"key": key}, {"$set": {"ts": now - sport["ttl"] + 600, "data": []}}, upsert=True)
-            return []
-        await db.feed_cache.update_one({"key": key}, {"$set": {"ts": now, "data": data}}, upsert=True)
-        return data
-
-
 async def _fetch_sgo_sequential(metas):
-    """All events for the given league groups: API-Sports games/odds, with SportsGameOdds player props merged in."""
-    groups = {m["group"] for m in metas}
     out = []
-    for sport in apisports.SPORTS:
-        if sport["group"] in groups:
-            out.extend(await _aps_sport(sport))
-    sgo = []
     for m in metas:
-        sgo.extend(await fetch_sgo_league(m))
-    for ev in out:
-        match = next((x for x in sgo if x["league"] == ev["league"] and _same_team(x["home"]["name"], ev["home"]["name"])
-                      and _same_team(x["away"]["name"], ev["away"]["name"])), None)
-        if match:
-            ev["props"], ev["player_results"] = match.get("props") or [], match.get("player_results") or {}
-            # free API-Sports plans lack current-season odds for US sports; price those from SportsGameOdds
-            if not ev["markets"] and match.get("markets"):
-                ev["markets"], ev["book"], ev["hidden"] = match["markets"], "Top books", False
-    now = datetime.now(timezone.utc)
-    for ev in out:
-        # cached API-Sports prices are pre-match only: close them at kick-off to prevent past-posting
-        if ev["book"] == "API-Sports" and ev["markets"] and (ev["state"] != "pre" or _after(ev.get("start"), now)):
-            ev["markets"], ev["hidden"] = [], True
-    return [copy.deepcopy(e) for e in out]
-
-
-def _after(iso, now):
-    try:
-        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")) <= now
-    except (TypeError, ValueError):
-        return False
+        out.extend(await fetch_sgo_league(m))
+    return out
 
 
 @api_router.get("/sports")
@@ -530,7 +469,7 @@ async def list_sports():
 @api_router.get("/odds")
 async def get_odds(league: Optional[str] = None):
     metas = [m for m in SGO_LEAGUES if m["group"] == league] if league else SGO_LEAGUES
-    out = [e for e in await _fetch_sgo_sequential(metas) if not e.get("hidden")]
+    out = await _fetch_sgo_sequential(metas)
     _kick_auto_cashouts()
     out.sort(key=lambda e: (0 if e["state"] == "in" else 1 if e["state"] == "pre" else 2, e.get("start") or ""))
     return {"events": out}
@@ -1267,7 +1206,11 @@ def _market_key(sel) -> str:
 
 async def _find_event(event_id, league):
     metas = [m for m in SGO_LEAGUES if m["group"] == league] or SGO_LEAGUES
-    return next((ev for ev in await _fetch_sgo_sequential(metas) if ev["event_id"] == event_id), None)
+    for m in metas:
+        for ev in await fetch_sgo_league(m):
+            if ev["event_id"] == event_id:
+                return ev
+    return None
 
 
 def _live_price(sel, ev):
