@@ -266,6 +266,51 @@ def _sgo_long(team):
     return n.get("long") or n.get("medium") or _sgo_abbr(team)
 
 
+STAT_LABELS = {
+    "points": "Points", "assists": "Assists", "rebounds": "Rebounds", "steals": "Steals",
+    "blocks": "Blocks", "threePointersMade": "3PT Made", "receptions": "Receptions",
+    "passing_yards": "Pass Yds", "rushing_yards": "Rush Yds", "receiving_yards": "Rec Yds",
+    "passing_touchdowns": "Pass TDs", "touchdowns": "TDs", "goals": "Goals",
+    "shots": "Shots", "shots_on_goal": "Shots on Goal", "saves": "Saves",
+    "hits": "Hits", "strikeouts": "Strikeouts",
+}
+
+
+def _sgo_props(ev):
+    odds = ev.get("odds", {}) or {}
+    players = ev.get("players", {}) or {}
+    groups = {}
+    for o in odds.values():
+        if not isinstance(o, dict):
+            continue
+        if o.get("betTypeID") != "ou" or o.get("periodID") != "game":
+            continue
+        ent = o.get("statEntityID")
+        if ent in ("home", "away", "all") or not ent:
+            continue
+        side = o.get("sideID")
+        if side not in ("over", "under"):
+            continue
+        dec = american_to_decimal(o.get("bookOdds"))
+        line = _num(o.get("bookOverUnder"))
+        if dec is None or line is None:
+            continue
+        g = groups.setdefault((ent, o.get("statID")), {"player_id": ent, "stat": o.get("statID")})
+        g[side] = dec
+        g["line"] = line
+    out = []
+    for (ent, statID), g in groups.items():
+        if "over" not in g and "under" not in g:
+            continue
+        p = players.get(ent, {})
+        name = p.get("name") or p.get("nickname") or ent.replace("_", " ").title()
+        out.append({"player": name, "player_id": ent, "stat": statID,
+                    "label": STAT_LABELS.get(statID, (statID or "").replace("_", " ").title()),
+                    "line": g.get("line"), "over": g.get("over"), "under": g.get("under")})
+    out.sort(key=lambda x: (x["player"], x["label"]))
+    return out[:24]
+
+
 def _sgo_markets(ev, draw):
     odds = ev.get("odds", {})
     ha = _sgo_abbr(ev["teams"]["home"])
@@ -345,6 +390,7 @@ async def fetch_sgo_league(meta):
                 "home": {"name": _sgo_long(home), "abbr": ha, "logo": "", "score": _sgo_score(ev, "home")},
                 "away": {"name": _sgo_long(away), "abbr": aa, "logo": "", "score": _sgo_score(ev, "away")},
                 "markets": markets, "source": "sportsgameodds", "book": "Top books",
+                "props": _sgo_props(ev),
             })
     except Exception as e:
         logger.warning(f"SGO fetch failed for {key}: {e}")
@@ -354,7 +400,6 @@ async def fetch_sgo_league(meta):
 
 
 async def _fetch_sgo_sequential(metas):
-    """Sequential (not parallel) to respect free-tier rate limits."""
     out = []
     for m in metas:
         out.extend(await fetch_sgo_league(m))

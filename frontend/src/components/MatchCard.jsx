@@ -1,4 +1,5 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useBetSlip } from "@/context/BetSlipContext";
 import { fmtOdds } from "@/lib/format";
 
@@ -30,7 +31,7 @@ function OddsButton({ sel, meta }) {
           : "bg-[#0E1017] border-[#2A2F45] hover:border-emerald-500/60 hover:bg-[#161922] text-zinc-200"
       }`}>
       <span className={`text-[10px] font-medium truncate max-w-full px-1 ${active ? "text-black/70" : "text-zinc-500"}`}>
-        {sel.pick}
+        {sel.label || sel.pick}
       </span>
       <span className="font-mono text-sm font-bold tracking-wide">{fmtOdds(sel.odds)}</span>
     </button>
@@ -114,6 +115,40 @@ export function MatchCard({ ev }) {
           )}
         </div>
       </div>
+      {ev.props && ev.props.length > 0 && <PropsSection ev={ev} meta={meta} />}
+    </div>
+  );
+}
+
+function PropsSection({ ev, meta }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="px-4 pb-4 border-t border-[#1E2234] pt-3">
+      <button data-testid={`props-toggle-${ev.event_id}`} onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-zinc-400 hover:text-emerald-300 transition-colors">
+        <span>Player Props ({ev.props.length})</span>
+        <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-3 space-y-1.5 max-h-72 overflow-y-auto scrollbar-thin pr-1" data-testid={`props-list-${ev.event_id}`}>
+          {ev.props.map((p, i) => (
+            <div key={i} className="grid gap-1.5 items-center" style={{ gridTemplateColumns: "1fr 4.25rem 4.25rem" }}>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold truncate">{p.player}</p>
+                <p className="text-[10px] text-zinc-500">{p.label} · {p.line}</p>
+              </div>
+              {p.over != null ? (
+                <OddsButton meta={meta} sel={{ market: "prop", side: `${p.stat}:${p.player_id}:over`, label: "Over",
+                  pick: `${p.player} O${p.line} ${p.label}`, line: p.line, odds: p.over }} />
+              ) : <div />}
+              {p.under != null ? (
+                <OddsButton meta={meta} sel={{ market: "prop", side: `${p.stat}:${p.player_id}:under`, label: "Under",
+                  pick: `${p.player} U${p.line} ${p.label}`, line: p.line, odds: p.under }} />
+              ) : <div />}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
