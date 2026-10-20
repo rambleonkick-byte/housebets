@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only test of new HeroCarousel + LiveScoresTicker on Sportsbook (desktop 1920 + mobile 390, signed out). Welcome slide (headline, Join now CTA, 0 live / 186 markets), 4 featured match slides (NFL NE@CHI, NBA BOS@DET, UFC Volkanovski vs Evloev w/ headshots + records 28-4-0/20-0-0, EPL NFO vs IPS with abbr fallback + Draw) all render from real event data. Auto-rotation (welcome->match after ~6.5s), hover pause (8s no change), prev/next (incl. wrap welcome->SOCCER), dots and active-dot progress bar all work. Countdown shows D/H/M or H/M/S. Odds are ordered away/draw/home to match the sides. Clicking a hero odd adds it to the bet slip (count 1, toast). Ticker scrolls (transform changes), pauses on hover (animationPlayState=paused), 48 items (24 doubled). Regression: boosts-strip, casino-strip, odds-grid (171 match cards) all present. No page errors. ONE real bug: a selected hero odds button becomes invisible.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HeroCarousel MatchSlide hero-odds", "issue": "After you click a hero odds button (selected state), its label and price can't be seen. The wrapper's arbitrary variant [&>button]:bg-black/50 overrides OddsButton's selected bg-emerald-500, while text-black still applies. Computed: bg rgba(0,0,0,0.5), color rgb(0,0,0), so black text sits on a dark background. Reproduced on desktop and mobile. Fix: use [&>button:not(.bg-emerald-500)]:bg-black/50 (or pass a variant/className prop to OddsButton so the selected style wins).", "selector": "[data-testid='hero-odds'] button", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Hero welcome slide, mobile 390px", "issues": ["The stats row wraps, so '186 markets' drops to its own line at about y=397 and almost touches the slide dots at y=403. Consider a smaller gap, hiding markets on xs, or extra bottom padding."]},
+      {"screen": "Hero carousel, mobile", "issues": ["Prev/next arrows are hidden below sm and there is no swipe gesture, so the only way to change slides is the 32x4px dots. That is a very small tap target."]},
+      {"screen": "Hero, desktop", "issues": ["Odds buttons end about 8px above the dots, which is tight but acceptable."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "HIGH: Fix the invisible selected state on hero odds buttons in HeroCarousel.jsx line ~90 ([&>button]:bg-black/50 overrides selected bg-emerald-500)",
+    "Minor: Mobile welcome slide stats row wraps and crowds the dots",
+    "Minor: Add swipe support or larger dot tap targets on mobile",
+    "Minor: Hero odds buttons reuse the same data-testid as the event-list OddsButton (odds-button-{id}-moneyline-{side}), so there are 2 elements per id. Consider a hero- prefix for testability."
+  ],
+  "critical_code_review_comments": [
+    "HeroCarousel: Tailwind arbitrary child variant styling of a shared component (OddsButton) breaks its state classes. Prefer a prop.",
+    "Countdown runs a 1s interval per mounted slide. Fine, since only one is mounted at a time.",
+    "LiveScoresTicker: a time string from toTimeString() is in local time, which is fine. Animation duration is items*4s (about 96s for 24 items), so the scroll is slow but readable."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "93%"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Hero testids: hero-carousel, hero-slide-welcome, hero-slide-match-{event_id}, hero-dot-{welcome|NFL|NBA|UFC|SOCCER}, hero-carousel-prev/next (hidden on mobile), hero-countdown, hero-odds, hero-cta-signup, live-scores-ticker (.ticker-track). At test time there were 0 live events, so the LIVE badge and hero-live-score paths were NOT exercised. Retest them when games are live. Verify that the selected hero odds button is visible after the fix."
+}

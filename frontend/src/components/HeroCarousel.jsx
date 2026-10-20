@@ -67,7 +67,7 @@ function MatchSlide({ ev, label }) {
   const ml = ev.markets.find((m) => m.market === "moneyline");
   const meta = buildMeta(ev);
   return (
-    <div className="relative h-full flex flex-col justify-between px-5 sm:px-8 py-6" data-testid={`hero-slide-match-${ev.event_id}`}>
+    <div className="relative h-full flex flex-col justify-between px-5 sm:px-8 pt-6 pb-9" data-testid={`hero-slide-match-${ev.event_id}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="shrink-0 whitespace-nowrap text-[10px] font-mono font-bold uppercase tracking-[0.2em] bg-emerald-500 text-black rounded px-2 py-0.5">Featured {label}</span>
@@ -87,7 +87,7 @@ function MatchSlide({ ev, label }) {
         <Side t={ev.home} ufc={ufc} align="justify-self-start" />
       </div>
       {ml && (
-        <div className={`grid gap-2 max-w-md mx-auto w-full ${ml.selections.length === 3 ? "grid-cols-3" : "grid-cols-2"} [&>button]:bg-black/50 [&>button]:backdrop-blur`} data-testid="hero-odds">
+        <div className={`grid gap-2 max-w-md mx-auto w-full ${ml.selections.length === 3 ? "grid-cols-3" : "grid-cols-2"} [&>button:not(.bg-emerald-500)]:bg-black/50 [&>button]:backdrop-blur`} data-testid="hero-odds">
           {[...ml.selections].sort((a, b) => ["away", "draw", "home"].indexOf(a.side) - ["away", "draw", "home"].indexOf(b.side)).map((s) => <OddsButton key={s.side} sel={{ ...s, market: "moneyline" }} meta={meta} />)}
         </div>
       )}
@@ -98,13 +98,13 @@ function MatchSlide({ ev, label }) {
 function WelcomeSlide({ live, markets }) {
   const { user, setAuthOpen } = useAuth();
   return (
-    <div className="relative h-full flex flex-col justify-center px-5 sm:px-8 py-6" data-testid="hero-slide-welcome">
+    <div className="relative h-full flex flex-col justify-center px-5 sm:px-8 pt-6 pb-10" data-testid="hero-slide-welcome">
       <p className="text-xs font-mono uppercase tracking-[0.25em] text-emerald-400 mb-3 flex items-center gap-2"><Zap size={12} fill="currentColor" /> ApexOdds Sportsbook</p>
       <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[0.95] uppercase max-w-xl">
         Under the lights.<br /><span className="text-emerald-400 drop-shadow-[0_0_24px_rgba(16,185,129,0.55)]">On the line.</span>
       </h1>
       <p className="text-sm sm:text-base text-zinc-300 mt-4 max-w-md">Live odds on NFL, NBA, UFC and football. Bet with BTC, ETH, SOL or USDT and get paid instantly.</p>
-      <div className="flex flex-wrap items-center gap-4 mt-6">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-5 sm:mt-6">
         {!user && (
           <button data-testid="hero-cta-signup" onClick={() => setAuthOpen(true)}
             className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-6 py-3 rounded-full shadow-[0_0_30px_-5px_rgba(16,185,129,0.7)] transition-colors active:scale-95">
@@ -132,9 +132,17 @@ export function HeroCarousel({ events, liveCount }) {
     return () => clearTimeout(t);
   }, [idx, paused, n, go]);
   const s = slides[Math.min(idx, n - 1)];
+  const [touchX, setTouchX] = useState(null);
+  const onTouchEnd = (e) => {
+    if (touchX == null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+    setTouchX(null);
+  };
 
   return (
     <div data-testid="hero-carousel" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
+      onTouchStart={(e) => setTouchX(e.touches[0].clientX)} onTouchEnd={onTouchEnd}
       className="relative m-4 mb-0 h-[340px] sm:h-[360px] rounded-2xl overflow-hidden border border-[#2A2F45] bg-[#090A0F] shadow-[0_20px_60px_-25px_rgba(16,185,129,0.35)]">
       <AnimatePresence mode="sync">
         <motion.div key={s.id} className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.7 }}>
@@ -154,12 +162,14 @@ export function HeroCarousel({ events, liveCount }) {
             className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 backdrop-blur border border-white/10 hidden sm:flex items-center justify-center hover:bg-emerald-500 hover:text-black transition-colors"><ChevronLeft size={18} /></button>
           <button data-testid="hero-carousel-next" onClick={() => go(1)} aria-label="Next"
             className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 backdrop-blur border border-white/10 hidden sm:flex items-center justify-center hover:bg-emerald-500 hover:text-black transition-colors"><ChevronRight size={18} /></button>
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex">
             {slides.map((sl, i) => (
               <button key={sl.id} data-testid={`hero-dot-${sl.id}`} onClick={() => setIdx(i)} aria-label={`Slide ${i + 1}`}
-                className="relative h-1 w-8 rounded-full bg-white/20 overflow-hidden">
+                className="px-1 py-2.5">
+                <span className="relative block h-1 w-8 rounded-full bg-white/20 overflow-hidden">
                 {i === idx && <span key={`${idx}-${paused}`} className={`absolute inset-y-0 left-0 bg-emerald-400 ${paused ? "w-full" : "hero-progress"}`} style={{ animationDuration: `${DURATION}ms` }} />}
                 {i < idx && <span className="absolute inset-0 bg-white/50" />}
+                </span>
               </button>
             ))}
           </div>
