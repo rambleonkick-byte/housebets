@@ -54,7 +54,7 @@ export function AuthModal() {
               {mode === "login" ? "Sign in" : "Create account"}
             </h2>
             <p className="text-sm text-zinc-400 mb-6">
-              {mode === "login" ? "Access your crypto balance & bets." : "Start with simulated crypto to bet."}
+              {mode === "login" ? "Access your crypto balance & bets." : "Create your account to start betting."}
             </p>
 
             <form onSubmit={submit} className="space-y-3">
