@@ -576,6 +576,26 @@ async def oxapay_webhook(request: Request):
 # ----------------------------------------------------------------------------
 # Bets
 # ----------------------------------------------------------------------------
+# Same-game parlay correlation: picks from the same game are related, so the
+# extra odds from stacking legs in one game are trimmed by this factor per
+# additional leg. Legs across different games compound normally.
+SGP_CORRELATION = 0.80
+
+
+def compute_parlay_odds(selections) -> float:
+    groups: dict = {}
+    for s in selections:
+        groups.setdefault(s.event_id, []).append(s.odds)
+    total = 1.0
+    for odds_list in groups.values():
+        prod = 1.0
+        for o in odds_list:
+            prod *= o
+        corr = SGP_CORRELATION ** (len(odds_list) - 1)
+        total *= 1 + (prod - 1) * corr
+    return total
+
+
 @api_router.post("/bets")
 async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user)):
     if not body.selections:
@@ -587,11 +607,8 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
     if wallet["balances"].get(body.coin, 0) < body.stake:
         raise HTTPException(status_code=400, detail="Insufficient balance")
 
-    combined = 1.0
-    for s in body.selections:
-        combined *= s.odds
     is_parlay = body.bet_type == "parlay" and len(body.selections) > 1
-    total_odds = round(combined, 2) if is_parlay else round(body.selections[0].odds, 2)
+    total_odds = round(compute_parlay_odds(body.selections), 2) if is_parlay else round(body.selections[0].odds, 2)
     potential = round(body.stake * total_odds, 6)
 
     await db.wallets.update_one({"user_id": user["id"]},

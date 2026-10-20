@@ -25,8 +25,15 @@
 ## Backlog (P1/P2)
 - Live score auto-refresh/websocket ticker
 - Cashout on open bets
+- Prop settlement (props currently stay open; needs player box-score data)
+- Crash game (still "SOON" in casino lobby)
 - Real payment provider wiring (NOWPayments/Coinbase) when keys provided
 - Admin settlement panel
+
+## Same-Game Parlay (2026-06)
+- Bet slip now allows multiple props/markets from one game. Context blocks conflicting sides of the same underlying market (e.g. Over+Under on one prop line).
+- Slip groups legs by game with a "SAME GAME ×N" badge.
+- SGP odds use a correlation discount (0.80 per extra same-game leg): adj = 1 + (product − 1) × 0.80^(legs−1). Cross-game legs compound normally. Implemented in both frontend (`BetSlip.jsx` computeParlayOdds) and backend (`server.py` compute_parlay_odds, authoritative). Verified: 2.0×1.8 same-game → 3.08, cross-game → 3.60.
 
 ## Credentials
 - Admin: admin@apexodds.io / admin123

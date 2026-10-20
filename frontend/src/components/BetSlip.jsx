@@ -8,6 +8,26 @@ import { fmtOdds, fmtCrypto } from "@/lib/format";
 import { toast } from "sonner";
 
 const COINS = ["USDT", "BTC", "ETH", "SOL"];
+const SGP_CORRELATION = 0.8;
+
+function groupByGame(items) {
+  const map = new Map();
+  for (const s of items) {
+    if (!map.has(s.event_id)) map.set(s.event_id, []);
+    map.get(s.event_id).push(s);
+  }
+  return [...map.values()];
+}
+
+function computeParlayOdds(items) {
+  let total = 1;
+  for (const legs of groupByGame(items)) {
+    const prod = legs.reduce((a, s) => a * s.odds, 1);
+    const corr = Math.pow(SGP_CORRELATION, legs.length - 1);
+    total *= 1 + (prod - 1) * corr;
+  }
+  return total;
+}
 
 export function BetSlip() {
   const { items, removeSelection, clear, selId, open, setOpen } = useBetSlip();
@@ -18,7 +38,9 @@ export function BetSlip() {
   const [loading, setLoading] = useState(false);
 
   const isParlay = mode === "parlay" && items.length > 1;
-  const parlayOdds = useMemo(() => items.reduce((a, s) => a * s.odds, 1), [items]);
+  const parlayOdds = useMemo(() => computeParlayOdds(items), [items]);
+  const groups = useMemo(() => groupByGame(items), [items]);
+  const hasSgp = useMemo(() => groups.some((g) => g.length > 1), [groups]);
   const stakeNum = parseFloat(stake) || 0;
 
   const singlePayout = useMemo(
@@ -95,29 +117,43 @@ export function BetSlip() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3">
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center h-full py-16 text-zinc-600">
             <Ticket size={32} className="mb-3 opacity-40" />
             <p className="text-sm">Tap any odds to build your slip.</p>
           </div>
         ) : (
-          items.map((s) => (
-            <motion.div key={selId(s)} layout initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
-              className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3" data-testid={`slip-item-${selId(s)}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{s.pick}</p>
-                  <p className="text-[11px] text-zinc-500 truncate">{s.away} @ {s.home} · {s.league_label}</p>
+          groups.map((legs) => {
+            const sgp = legs.length > 1;
+            const head = legs[0];
+            return (
+              <div key={head.event_id} data-testid={`slip-game-${head.event_id}`} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2 px-0.5">
+                  <p className="text-[11px] text-zinc-500 truncate">{head.away} @ {head.home} · {head.league_label}</p>
+                  {sgp && (
+                    <span data-testid={`slip-sgp-badge-${head.event_id}`}
+                      className="shrink-0 text-[9px] font-mono font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/40 rounded px-1.5 py-0.5">
+                      Same Game ×{legs.length}
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="font-mono text-sm font-bold text-emerald-400">{fmtOdds(s.odds)}</span>
-                  <button data-testid={`slip-remove-${selId(s)}`} onClick={() => removeSelection(selId(s))}
-                    className="text-zinc-600 hover:text-red-400"><X size={14} /></button>
-                </div>
+                {legs.map((s) => (
+                  <motion.div key={selId(s)} layout initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
+                    className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3" data-testid={`slip-item-${selId(s)}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold truncate min-w-0">{s.pick}</p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-sm font-bold text-emerald-400">{fmtOdds(s.odds)}</span>
+                        <button data-testid={`slip-remove-${selId(s)}`} onClick={() => removeSelection(selId(s))}
+                          className="text-zinc-600 hover:text-red-400"><X size={14} /></button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
-            </motion.div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -164,6 +200,11 @@ export function BetSlip() {
             <span className="text-zinc-400">Potential payout</span>
             <span className="font-mono font-bold text-emerald-400" data-testid="bet-slip-payout">{fmtCrypto(payout, coin)} {coin}</span>
           </div>
+          {isParlay && hasSgp && (
+            <p data-testid="bet-slip-sgp-note" className="text-[10px] text-amber-300/80 leading-snug">
+              Same-game legs are correlated, so their combined odds are trimmed.
+            </p>
+          )}
 
           <button data-testid="bet-slip-place-button" onClick={place} disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-lg transition-colors disabled:opacity-60">
