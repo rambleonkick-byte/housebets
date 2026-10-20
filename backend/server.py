@@ -572,6 +572,7 @@ async def _enrich_ufc(events):
 
 
 _SGO_REFRESHING = set()
+ODDS_CACHE_VERSION = 2  # bump when the odds data shape changes so old saved copies are ignored after a deploy
 
 
 async def fetch_sgo_league(meta, max_age=None):
@@ -581,7 +582,7 @@ async def fetch_sgo_league(meta, max_age=None):
     key = meta["id"]
     cached = _SGO_CACHE.get(key)
     if not cached:
-        doc = await db.odds_cache.find_one({"_id": key})
+        doc = await db.odds_cache.find_one({"_id": key, "v": ODDS_CACHE_VERSION})
         if doc:
             cached = _SGO_CACHE[key] = {"ts": doc["ts"], "ttl": doc["ttl"], "data": doc["data"]}
     if not cached:
@@ -652,7 +653,7 @@ async def _do_refresh_sgo_league(meta):
         await _enrich_ufc(events)
         if not any(e.get("card_name") for e in events):
             ttl = 60
-    entry = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": ttl, "data": events}
+    entry = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": ttl, "data": events, "v": ODDS_CACHE_VERSION}
     _SGO_CACHE[key] = entry
     try:
         await db.odds_cache.replace_one({"_id": key}, dict(entry), upsert=True)

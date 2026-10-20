@@ -210,3 +210,4 @@
 ## Tawk.to Live Chat (2026-06)
 - The Tawk.to embed script was added before </body> in frontend/index.html, so it loads on every page of the SPA.
 - Tawk.to was shrunk to a small headphone button (2026-06). Tawk's default bubble and greeting are hidden via Tawk_API.onLoad/onChatMinimized → hideWidget(). `SupportButton.jsx` is a 44px headphone button (bottom-right; on mobile it sits above the bet slip button) that opens the chat with maximize() and shows the unread count.
+- Odds cache versioning (2026-06): saved odds now carry `v: ODDS_CACHE_VERSION` (currently 2). Saved copies with an older version are ignored on load, so they're fetched fresh. After this deploy, odds with a new shape (e.g. alt lines) appear right away instead of after the 5-minute refresh. Bump the version whenever the shape of the odds data changes. Root cause from the deployer RCA: saved copies from before the update were served until they expired.
