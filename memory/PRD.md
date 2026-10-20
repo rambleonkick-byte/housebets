@@ -28,6 +28,12 @@
 - Crash game (still "SOON" in casino lobby)
 - Admin settlement panel
 
+## Admin Withdrawal Approval Queue (2026-06)
+- All withdrawals now require manual admin approval before any crypto is sent (user chose in-app approval; OxaPay has no API flag to force dashboard approval).
+- Flow: user requests withdrawal → balance reserved, withdrawal saved as `pending_approval`, NO OxaPay call. Admin reviews queue → Approve submits to OxaPay (`_submit_payout`) and moves to processing→confirmed, or Reject refunds immediately. If OxaPay rejects on approve, it's marked `failed` and auto-refunded.
+- Admin endpoints (role=admin only, 403 otherwise): `GET /api/admin/withdrawals[?status=]` (+counts), `POST /api/admin/withdrawals/{id}/approve`, `.../reject`. Admin UI = header "Admin" button → AdminWithdrawalsModal (tabs: Pending/Confirmed/Rejected/All, Approve & send / Reject actions, 15s auto-refresh).
+- Withdrawals stored in `withdrawals` collection; wallet activity enrichment + payout tracker now join on `withdraw:<id>`. Status/webhook (`_settle_withdrawal`) refund on failed/rejected/canceled. Verified end-to-end: request→pending, non-admin 403, reject→refund (balance restored), approve→OxaPay submit→fail+refund, admin UI renders queue.
+
 ## Prop Settlement + Real Payouts (2026-06)
 - Prop bets now settle: `fetch_sgo_league` attaches `player_results` (final per-player stat from each market's `score` field and `results.game`), and `settle_selection` resolves `prop` legs (over/under vs line). Missing stats leave the leg open (best-effort on free tier). Verified via unit test (over/under/missing).
 - Same-game parlays can therefore pay out once all legs settle.

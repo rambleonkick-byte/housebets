@@ -21,6 +21,8 @@ function payoutBadge(status, refunded) {
   if (refunded || ["failed", "rejected", "canceled", "cancelled"].includes(s))
     return { label: refunded ? "Refunded" : s, cls: "text-red-300 bg-red-500/10 border-red-500/30" };
   if (s === "confirmed") return { label: "Confirmed", cls: "text-emerald-300 bg-emerald-500/10 border-emerald-500/30" };
+  if (s === "pending_approval") return { label: "Pending approval", cls: "text-sky-300 bg-sky-500/10 border-sky-500/30" };
+  if (s === "approving") return { label: "Approving", cls: "text-sky-300 bg-sky-500/10 border-sky-500/30" };
   return { label: s || "processing", cls: "text-amber-300 bg-amber-500/10 border-amber-500/30" };
 }
 
@@ -49,25 +51,20 @@ export function WalletModal({ open, onClose }) {
   // reset generated address when switching coin/tab
   useEffect(() => { setDeposit(null); setOxaPolling(false); if (pollRef.t) clearInterval(pollRef.t); }, [coin, tab]);
 
-  // keep pending withdrawal payouts up to date (status + tx hash)
+  // keep pending withdrawals up to date (admin approval, on-chain status, tx hash)
   useEffect(() => {
     if (payoutRef.t) { clearInterval(payoutRef.t); payoutRef.t = null; }
     if (!open || !wallet) return;
     const pending = (wallet.transactions || [])
-      .filter((t) => t.payout && !t.payout.refunded && !PAYOUT_TERMINAL.includes((t.payout.status || "").toLowerCase()))
-      .map((t) => t.payout.track_id);
+      .filter((t) => t.payout && !t.payout.refunded && !PAYOUT_TERMINAL.includes((t.payout.status || "").toLowerCase()));
     if (pending.length === 0) return;
     const poll = async () => {
-      let changed = false;
-      for (const id of pending) {
-        try {
-          const { data } = await api.get(`/wallet/payout/status/${id}`);
-          if (PAYOUT_TERMINAL.includes((data.status || "").toLowerCase()) || data.refunded) changed = true;
-        } catch { /* keep polling */ }
+      const trackIds = pending.map((t) => t.payout.track_id).filter(Boolean);
+      for (const id of trackIds) {
+        try { await api.get(`/wallet/payout/status/${id}`); } catch { /* keep polling */ }
       }
-      if (changed) load();
+      load(); // refresh to reflect admin approvals + on-chain updates
     };
-    poll();
     payoutRef.t = setInterval(poll, 12000);
     return () => { if (payoutRef.t) clearInterval(payoutRef.t); };
   }, [open, wallet]);
@@ -119,7 +116,7 @@ export function WalletModal({ open, onClose }) {
     try {
       const { data } = await api.post(`/wallet/withdraw`, { coin, amount: amt, address: address.trim() });
       setBalances(data.balances);
-      toast.success(`Withdrawal submitted — sending ${amt} ${coin} on-chain`);
+      toast.success(`Withdrawal requested — pending admin approval`);
       setAmount("");
       setAddress("");
       load();

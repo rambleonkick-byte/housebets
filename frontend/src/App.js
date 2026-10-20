@@ -7,6 +7,7 @@ import { BetSlipProvider } from "@/context/BetSlipContext";
 import { Header } from "@/components/Header";
 import { AuthModal } from "@/components/AuthModal";
 import { WalletModal } from "@/components/WalletModal";
+import { AdminWithdrawalsModal } from "@/components/AdminWithdrawalsModal";
 import { BetHistoryModal } from "@/components/BetHistoryModal";
 import { Sportsbook } from "@/pages/Sportsbook";
 import { Casino } from "@/pages/Casino";
@@ -20,13 +21,14 @@ function Shell() {
   const { user, setAuthOpen } = useAuth();
   const [walletOpen, setWalletOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const openWallet = () => (user ? setWalletOpen(true) : setAuthOpen(true));
   const openHistory = () => (user ? setHistoryOpen(true) : setAuthOpen(true));
 
   return (
     <div className="min-h-screen bg-background text-foreground grain">
-      <Header onWallet={openWallet} onHistory={openHistory} />
+      <Header onWallet={openWallet} onHistory={openHistory} onAdmin={() => setAdminOpen(true)} />
       <div className="pt-16">
         <Routes>
           <Route path="/" element={<Sportsbook />} />
@@ -40,6 +42,7 @@ function Shell() {
       </div>
       <AuthModal />
       <WalletModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+      <AdminWithdrawalsModal open={adminOpen} onClose={() => setAdminOpen(false)} />
       <BetHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
       <Toaster theme="dark" position="top-center" richColors
         toastOptions={{ style: { background: "#12141C", border: "1px solid #2A2F45", color: "#F4F4F5" } }} />

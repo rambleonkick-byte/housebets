@@ -1,9 +1,9 @@
-import { Zap, Wallet, History, LogOut, User as UserIcon } from "lucide-react";
+import { Zap, Wallet, History, LogOut, User as UserIcon, ShieldCheck } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { usdValue } from "@/lib/format";
 
-export function Header({ onWallet, onHistory }) {
+export function Header({ onWallet, onHistory, onAdmin }) {
   const { user, logout, setAuthOpen } = useAuth();
   const { pathname } = useLocation();
   const total = user && user.balances ? usdValue(user.balances) : 0;
@@ -37,6 +37,13 @@ export function Header({ onWallet, onHistory }) {
         <div className="flex items-center gap-2 md:gap-3">
           {user ? (
             <>
+              {user.role === "admin" && (
+                <button data-testid="header-admin-button" onClick={onAdmin}
+                  className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20 rounded-lg px-3 py-2 transition-colors">
+                  <ShieldCheck size={16} />
+                  <span className="hidden sm:inline text-sm font-semibold">Admin</span>
+                </button>
+              )}
               <button data-testid="header-wallet-button" onClick={onWallet}
                 className="flex items-center gap-2 bg-[#12141C] border border-[#2A2F45] hover:border-emerald-500/60 rounded-lg px-3 py-2 transition-colors">
                 <Wallet size={16} className="text-emerald-400" />

@@ -164,6 +164,12 @@ async def user_public(user: dict) -> dict:
             "role": user.get("role", "user"), "balances": wallet["balances"] if wallet else {}}
 
 
+async def get_admin_user(user: dict = Depends(get_current_user)) -> dict:
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
 # ----------------------------------------------------------------------------
 # Auth routes
 # ----------------------------------------------------------------------------
@@ -477,15 +483,16 @@ async def get_wallet(user: dict = Depends(get_current_user)):
     await ensure_wallet(user["id"])
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     txs = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    payouts = await db.oxa_payouts.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
-    pmap = {p["track_id"]: p for p in payouts}
+    wds = await db.withdrawals.find({"user_id": user["id"]}, {"_id": 0}).to_list(300)
+    wmap = {w["id"]: w for w in wds}
     for t in txs:
         h = t.get("hash", "")
-        tid = h.split(":", 1)[1] if (h.startswith("oxapay:") or h.startswith("oxapay-refund:")) else None
-        p = pmap.get(tid) if tid else None
-        if p:
-            t["payout"] = {"track_id": tid, "status": p.get("status"), "tx_hash": p.get("tx_hash"),
-                           "refunded": p.get("refunded", False), "network": p.get("network")}
+        if h.startswith("withdraw:"):
+            w = wmap.get(h.split(":", 1)[1])
+            if w:
+                t["payout"] = {"track_id": w.get("track_id"), "status": w.get("status"),
+                               "tx_hash": w.get("tx_hash"), "refunded": w.get("refunded", False),
+                               "network": w.get("network"), "address": w.get("address")}
     return {"balances": wallet["balances"], "usd_rates": COIN_USD, "transactions": txs}
 
 
@@ -500,48 +507,22 @@ async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Enter a valid wallet address")
     if wallet["balances"].get(body.coin, 0) < body.amount:
         raise HTTPException(status_code=400, detail="Insufficient balance")
-    if not OXAPAY_PAYOUT_KEY:
-        raise HTTPException(status_code=503, detail="Payouts not configured — add an OxaPay payout key")
 
-    # Reserve funds first so a mid-flight failure cannot double-spend.
+    # Reserve funds and queue for admin approval — no crypto is sent until approved.
     await db.wallets.update_one({"user_id": user["id"]},
                                 {"$inc": {f"balances.{body.coin}": -body.amount}})
-    payload = {
-        "address": address, "currency": body.coin, "amount": body.amount,
-        "network": COIN_NETWORK.get(body.coin),
-        "callback_url": f"{os.environ.get('FRONTEND_URL', '')}/api/oxapay/payout/webhook",
-        "description": f"ApexOdds withdrawal ({body.coin})",
-    }
-    if body.memo:
-        payload["memo"] = body.memo
-    try:
-        async with httpx.AsyncClient(timeout=20) as hc:
-            r = await hc.post(f"{OXAPAY_API}/payout", json=payload,
-                              headers={"payout_api_key": OXAPAY_PAYOUT_KEY, "Content-Type": "application/json"})
-        result = r.json()
-    except Exception as e:
-        await db.wallets.update_one({"user_id": user["id"]}, {"$inc": {f"balances.{body.coin}": body.amount}})
-        logger.warning(f"OxaPay payout error: {e}")
-        raise HTTPException(status_code=502, detail="Payout gateway unreachable — balance restored")
-    data = result.get("data") or {}
-    if r.status_code >= 400 or result.get("status") != 200 or not data.get("track_id"):
-        await db.wallets.update_one({"user_id": user["id"]}, {"$inc": {f"balances.{body.coin}": body.amount}})
-        logger.warning(f"OxaPay payout rejected: {r.status_code} {result}")
-        err = (result.get("error") or {}).get("message") or result.get("message") or "Payout rejected"
-        raise HTTPException(status_code=502, detail=f"{err} (balance restored)")
-
-    track_id = str(data["track_id"])
-    status = str(data.get("status", "processing")).lower()
-    await db.oxa_payouts.insert_one({
-        "track_id": track_id, "user_id": user["id"], "coin": body.coin, "amount": body.amount,
-        "address": address, "network": COIN_NETWORK.get(body.coin), "memo": body.memo or "",
-        "status": status, "refunded": False, "tx_hash": None, "created_at": now_iso()})
-    tx = {"id": str(uuid.uuid4()), "user_id": user["id"], "type": "withdraw",
-          "coin": body.coin, "amount": body.amount, "created_at": now_iso(),
-          "hash": "oxapay:" + track_id}
-    await db.transactions.insert_one(dict(tx))
+    wid = str(uuid.uuid4())
+    await db.withdrawals.insert_one({
+        "id": wid, "user_id": user["id"], "user_email": user["email"], "user_name": user.get("name"),
+        "coin": body.coin, "amount": body.amount, "address": address, "memo": body.memo or "",
+        "network": COIN_NETWORK.get(body.coin), "status": "pending_approval", "track_id": None,
+        "tx_hash": None, "refunded": False, "created_at": now_iso()})
+    await db.transactions.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user["id"], "type": "withdraw",
+        "coin": body.coin, "amount": body.amount, "created_at": now_iso(),
+        "hash": "withdraw:" + wid})
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
-    return {"balances": wallet["balances"], "track_id": track_id, "status": status}
+    return {"balances": wallet["balances"], "withdrawal_id": wid, "status": "pending_approval"}
 
 
 # ----------------------------------------------------------------------------
@@ -657,48 +638,122 @@ async def oxapay_webhook(request: Request):
 # OxaPay — real crypto payouts (withdrawals)
 # ----------------------------------------------------------------------------
 PAYOUT_FAILED = {"failed", "rejected", "canceled", "cancelled"}
+PAYOUT_TERMINAL = PAYOUT_FAILED | {"confirmed"}
 
 
-async def _refund_payout(track_id: str, status: str):
-    """Idempotently refund a payout that OxaPay reports as failed/rejected/canceled."""
-    status = str(status).lower()
-    if status not in PAYOUT_FAILED:
-        await db.oxa_payouts.update_one({"track_id": track_id}, {"$set": {"status": status}})
-        return
-    po = await db.oxa_payouts.find_one_and_update(
-        {"track_id": track_id, "refunded": {"$ne": True}},
-        {"$set": {"refunded": True, "status": status, "refunded_at": now_iso()}})
-    if not po:
-        return
-    await _adjust(po["user_id"], po["coin"], po["amount"])
+async def _do_refund(wd):
+    """Credit a reserved withdrawal amount back to the user's wallet + ledger."""
+    await _adjust(wd["user_id"], wd["coin"], wd["amount"])
     await db.transactions.insert_one({
-        "id": str(uuid.uuid4()), "user_id": po["user_id"], "type": "refund",
-        "coin": po["coin"], "amount": po["amount"], "created_at": now_iso(),
-        "hash": "oxapay-refund:" + track_id})
+        "id": str(uuid.uuid4()), "user_id": wd["user_id"], "type": "refund",
+        "coin": wd["coin"], "amount": wd["amount"], "created_at": now_iso(),
+        "hash": "withdraw-refund:" + wd["id"]})
+
+
+async def _submit_payout(wd):
+    """Send an approved withdrawal to OxaPay. Returns (ok, dict|error_message)."""
+    payload = {
+        "address": wd["address"], "currency": wd["coin"], "amount": wd["amount"],
+        "network": wd.get("network"),
+        "callback_url": f"{os.environ.get('FRONTEND_URL', '')}/api/oxapay/payout/webhook",
+        "description": f"ApexOdds withdrawal ({wd['coin']})",
+    }
+    if wd.get("memo"):
+        payload["memo"] = wd["memo"]
+    try:
+        async with httpx.AsyncClient(timeout=20) as hc:
+            r = await hc.post(f"{OXAPAY_API}/payout", json=payload,
+                              headers={"payout_api_key": OXAPAY_PAYOUT_KEY, "Content-Type": "application/json"})
+        result = r.json()
+    except Exception as e:
+        logger.warning(f"OxaPay payout error: {e}")
+        return False, "Payout gateway unreachable"
+    data = result.get("data") or {}
+    if r.status_code >= 400 or result.get("status") != 200 or not data.get("track_id"):
+        logger.warning(f"OxaPay payout rejected: {r.status_code} {result}")
+        return False, ((result.get("error") or {}).get("message") or result.get("message") or "Payout rejected")
+    return True, {"track_id": str(data["track_id"]), "status": str(data.get("status", "processing")).lower()}
+
+
+async def _settle_withdrawal(track_id: str, status: str, tx_hash=None):
+    """Idempotently apply an OxaPay payout status to a withdrawal; refund on failure."""
+    status = str(status).lower()
+    base = {"status": status}
+    if tx_hash:
+        base["tx_hash"] = tx_hash
+    if status in PAYOUT_FAILED:
+        wd = await db.withdrawals.find_one_and_update(
+            {"track_id": track_id, "refunded": {"$ne": True}},
+            {"$set": {**base, "refunded": True, "refunded_at": now_iso()}})
+        if wd:
+            await _do_refund(wd)
+    else:
+        await db.withdrawals.update_one({"track_id": track_id}, {"$set": base})
+
+
+# --- Admin withdrawal approval queue ---
+@api_router.get("/admin/withdrawals")
+async def admin_list_withdrawals(status: Optional[str] = None, admin: dict = Depends(get_admin_user)):
+    q = {"status": status} if status else {}
+    items = await db.withdrawals.find(q, {"_id": 0}).sort("created_at", -1).to_list(300)
+    counts = {}
+    for s in ["pending_approval", "processing", "confirming", "confirmed", "rejected", "failed"]:
+        counts[s] = await db.withdrawals.count_documents({"status": s})
+    return {"withdrawals": items, "counts": counts}
+
+
+@api_router.post("/admin/withdrawals/{wid}/approve")
+async def admin_approve_withdrawal(wid: str, admin: dict = Depends(get_admin_user)):
+    if not OXAPAY_PAYOUT_KEY:
+        raise HTTPException(status_code=503, detail="Payouts not configured — add an OxaPay payout key")
+    wd = await db.withdrawals.find_one_and_update(
+        {"id": wid, "status": "pending_approval"},
+        {"$set": {"status": "approving", "decided_by": admin["email"], "decided_at": now_iso()}})
+    if not wd:
+        raise HTTPException(status_code=404, detail="Withdrawal not found or already decided")
+    ok, res = await _submit_payout(wd)
+    if not ok:
+        await db.withdrawals.find_one_and_update(
+            {"id": wid, "refunded": {"$ne": True}},
+            {"$set": {"status": "failed", "refunded": True, "refunded_at": now_iso()}})
+        await _do_refund(wd)
+        raise HTTPException(status_code=502, detail=f"{res} — amount refunded to the player")
+    await db.withdrawals.update_one({"id": wid},
+                                    {"$set": {"track_id": res["track_id"], "status": res["status"]}})
+    out = await db.withdrawals.find_one({"id": wid}, {"_id": 0})
+    return out
+
+
+@api_router.post("/admin/withdrawals/{wid}/reject")
+async def admin_reject_withdrawal(wid: str, admin: dict = Depends(get_admin_user)):
+    wd = await db.withdrawals.find_one_and_update(
+        {"id": wid, "status": "pending_approval"},
+        {"$set": {"status": "rejected", "refunded": True, "decided_by": admin["email"], "decided_at": now_iso()}})
+    if not wd:
+        raise HTTPException(status_code=404, detail="Withdrawal not found or already decided")
+    await _do_refund(wd)
+    out = await db.withdrawals.find_one({"id": wid}, {"_id": 0})
+    return out
 
 
 @api_router.get("/wallet/payout/status/{track_id}")
 async def payout_status(track_id: str, user: dict = Depends(get_current_user)):
-    po = await db.oxa_payouts.find_one({"track_id": track_id, "user_id": user["id"]})
-    if not po:
+    wd = await db.withdrawals.find_one({"track_id": track_id, "user_id": user["id"]})
+    if not wd:
         raise HTTPException(status_code=404, detail="Payout not found")
-    status = po.get("status", "processing")
-    if not po.get("refunded") and OXAPAY_PAYOUT_KEY:
+    if not wd.get("refunded") and (wd.get("status") or "") not in PAYOUT_TERMINAL and OXAPAY_PAYOUT_KEY:
         try:
             async with httpx.AsyncClient(timeout=15) as hc:
                 r = await hc.get(f"{OXAPAY_API}/payout/{track_id}",
                                  headers={"payout_api_key": OXAPAY_PAYOUT_KEY})
             data = r.json().get("data", {})
-            status = data.get("status", status)
-            if data.get("tx_hash"):
-                await db.oxa_payouts.update_one({"track_id": track_id}, {"$set": {"tx_hash": data["tx_hash"]}})
-            await _refund_payout(track_id, status)
+            await _settle_withdrawal(track_id, data.get("status", wd.get("status")), data.get("tx_hash"))
         except Exception as e:
             logger.warning(f"OxaPay payout poll error: {e}")
-    po = await db.oxa_payouts.find_one({"track_id": track_id}, {"_id": 0})
+    wd = await db.withdrawals.find_one({"track_id": track_id}, {"_id": 0})
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
-    return {"status": po.get("status"), "refunded": po.get("refunded", False),
-            "tx_hash": po.get("tx_hash"), "balances": wallet["balances"] if wallet else {}}
+    return {"status": wd.get("status"), "refunded": wd.get("refunded", False),
+            "tx_hash": wd.get("tx_hash"), "balances": wallet["balances"] if wallet else {}}
 
 
 @api_router.post("/oxapay/payout/webhook", response_class=PlainTextResponse)
@@ -715,9 +770,7 @@ async def oxapay_payout_webhook(request: Request):
         raise HTTPException(status_code=400, detail="invalid JSON")
     track_id = event.get("track_id")
     if track_id:
-        if event.get("tx_hash"):
-            await db.oxa_payouts.update_one({"track_id": str(track_id)}, {"$set": {"tx_hash": event["tx_hash"]}})
-        await _refund_payout(str(track_id), event.get("status", ""))
+        await _settle_withdrawal(str(track_id), event.get("status", ""), event.get("tx_hash"))
     return "ok"
 
 
