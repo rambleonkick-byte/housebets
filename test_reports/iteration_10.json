@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 10: tested the API-Sports feed switch (backend and frontend). Backend pytest test_apisports_feed.py passed 9/9. GET /api/odds returns 20 'as-soccer-<id>' events, all with book 'API-Sports', media.api-sports.io logos, moneyline home/draw/away and total Over/Under 2.5. Events without markets are hidden (414 cached, 20 shown). ?league=soccer filters correctly. Single bet and 2-leg parlay placed (0.5 USDT each). The server re-prices them: tampered odds -> 409 'changed', an unknown event -> 409 'unavailable', a FINAL event -> 409. Cash-out quotes return numbers for the new bets. Quota: 5 /api/odds calls over ~40s did not change any feed_cache ts (aps:soccer/basketball/hockey/baseball/football all present). US sports show 0 events, as expected (SGO returns 429). Frontend: 20 soccer cards, all 40 logos load, sidebar Soccer count 20 matches the cards. Clicking odds adds the pick to the slip. Placing a bet shows a 'Bet placed!' toast and the bet appears in My Bets with a Cash out value. Mobile 390px has no horizontal overflow.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/bets (_verify_selections / _aps_sport)", "issue": "Past-posting risk: soccer data is cached for up to 3600s, and _verify_selections only rejects state=='post'. A match that kicked off (or even finished) within the last hour is still 'pre' in the cache, with pre-match odds, and it accepts bets. After the cache refresh, the API-Sports /odds pre-match prices for in-play fixtures are still served as 'in' events, so live bets are taken at stale pre-match prices. Fix: reject any selection where now >= ev.start (or allow only pre-match for API-Sports events), and drop markets for state 'in'.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "_aps_sport / apisports._get", "issue": "If the upstream returns errors (quota exhausted, bad key), _get returns [], and _aps_sport caches data=[] as a SUCCESS with ts=now. This wipes the previous events for a full TTL: the board goes empty, open bets cannot be settled, and cash-out is suspended. Raise on data['errors'] so the existing 'keep old doc and retry in 10 min' branch is used."},
+      {"endpoint": "Quota math", "issue": "Soccer uses 4 calls per refresh (2 fixtures + 2 odds pages), which is about 96/day at a 3600s TTL. That is almost the 100/day limit, and failure retries every 10 min can exceed it. Odds are only fetched for today's date, 2 pages (about 20 fixtures), so most fixtures stay hidden."},
+      {"endpoint": "GET /api/odds", "issue": "Finished (state=post) events are returned with markets: 3 'Match Finished' cards show on the board with clickable odds that always get a 409. Filter out post events, or strip their markets."},
+      {"endpoint": "Legacy open bets", "issue": "15 of the 18 open bets in the DB have legs on old SportsGameOdds/ESPN event ids that are no longer in the feed. They can never settle or cash out ('Cash out unavailable' forever). They need a void/refund migration."},
+      {"endpoint": "fetch_sgo_league", "issue": "Every 30s, each /api/odds call makes about 10 SGO requests one after another, which return 429 (about 1.6s added latency, and keeps the rate limit hot). Use a longer back-off on 429."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MatchCard OddsButton", "issue": "The selected state never shows. has(sel) is called with {...s, market}, which has no event_id, so selId is 'undefined:market:side'. The button never turns emerald after a click. Fix: has({...sel, event_id: meta.event_id}). This bug existed before this change.", "selector": "[data-testid^=odds-button-]", "priority": "MEDIUM"},
+      {"component": "MatchCard (FINAL)", "issue": "Odds buttons on FINAL cards can still be clicked. Disable them, or hide the markets when state==='post'.", "selector": "[data-testid^=match-card-as-soccer-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sportsbook hero/sidebar", "issues": ["The hero label still says 'LIVE ODDS · SPORTSGAMEODDS' and the sidebar footer says 'Live odds from SportsGameOdds · 85+ bookmakers'. The copy mentions NBA/MLB, but only soccer is shown.", "The card lists away above home, but the moneyline buttons are in home/draw/away order (NOR ML first while ORE is the top row). This is confusing."]},
+      {"screen": "My Bets", "issues": ["Legs show only the pick ('Draw', 'Over 2.5') with no match name. For soccer this is ambiguous. Show home vs away under each leg."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_apisports_feed.py", "/app/test_reports/pytest/pytest_apisports_it10.xml"],
+  "action_items": [
+    "HIGH: block bets on events whose start time has passed (and on cached 'in' events with pre-match odds) in _verify_selections",
+    "Treat API-Sports 'errors' responses as failures so the cache keeps the last good data",
+    "Hide finished events (or their markets) from /api/odds and disable their odds buttons",
+    "Fix the OddsButton active state (pass event_id to has())",
+    "Update the SportsGameOdds branding text in the hero/sidebar; show the match name in My Bets legs",
+    "Void/refund the orphaned open bets on legacy event ids"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2246 lines; move the feed/merge logic (_aps_sport, _fetch_sgo_sequential) and betting into separate modules",
+    "_fetch_sgo_sequential still has its old name but now merges API-Sports and SGO; rename it for clarity",
+    "Selection model requires league_label/home/away but the server never checks them against the event (client-supplied display data stored on the bet)"
+  ],
+  "updated_files": ["/app/backend/tests/test_apisports_feed.py"],
+  "success_rate": {"backend": "100% (9/9 tests); 1 high-risk logic gap found in code review", "frontend": "90%"},
+  "seed_data_creation": "Placed 3 bets of 0.5 USDT on player@apexodds.io: a single on home ML for as-soccer-1497724, a single on Draw for as-soccer-1556863 (UI), and a parlay of Over 2.5 + Draw. feed_cache was not cleared.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app && python -m pytest backend/tests/test_apisports_feed.py -v. The pytest.ini uses xdist, so do not pass -p no:xdist. Selections need league_label/home/away fields. Do not clear feed_cache (quota). At test time it was 12:36 UTC; matches ran 17:00-23:30 UTC, so the past-posting issue was found by code review and not reproduced live."
+}

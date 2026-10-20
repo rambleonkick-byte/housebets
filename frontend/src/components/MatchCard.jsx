@@ -17,7 +17,8 @@ function TeamLogo({ team }) {
 
 function OddsButton({ sel, meta }) {
   const { addSelection, has } = useBetSlip();
-  const active = has(sel);
+  const active = has({ ...sel, event_id: meta.event_id });
+  const closed = meta.state === "post";
   const ref = useRef(null);
   const prev = useRef(sel.odds);
 
@@ -36,6 +37,7 @@ function OddsButton({ sel, meta }) {
     <button
       ref={ref}
       data-testid={`odds-button-${meta.event_id}-${sel.market}-${sel.side}`}
+      disabled={closed}
       onClick={() => addSelection({ ...meta, market: sel.market, side: sel.side, pick: sel.pick, line: sel.line, odds: sel.odds })}
       className={`flex flex-col items-center justify-center py-2 rounded-md border transition-all ${
         active
@@ -55,7 +57,7 @@ export function MatchCard({ ev }) {
   const meta = {
     event_id: ev.event_id, league: ev.league, league_label: ev.league_label,
     home: ev.home.abbr, away: ev.away.abbr,
-    home_name: ev.home.name, away_name: ev.away.name, status_detail: ev.status_detail, live,
+    home_name: ev.home.name, away_name: ev.away.name, status_detail: ev.status_detail, live, state: ev.state,
   };
   const moneyline = ev.markets.find((m) => m.market === "moneyline");
   const spread = ev.markets.find((m) => m.market === "spread");

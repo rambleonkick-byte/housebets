@@ -24,7 +24,8 @@ async def _get(hc, sport, path, params):
     r = await hc.get(f"{sport['base']}/{path}", params=params, headers={"x-apisports-key": KEY})
     data = r.json()
     if data.get("errors"):
-        logger.warning(f"API-Sports {sport['group']} {path} errors: {data['errors']}")
+        # raise so the caller keeps the last good cache instead of storing an empty feed
+        raise RuntimeError(f"API-Sports {sport['group']} {path} errors: {data['errors']}")
     return data.get("response") or []
 
 
@@ -116,7 +117,7 @@ def _event(sport, g, bets):
         "status_detail": "Upcoming" if state == "pre" else detail,
         "home": {"name": teams["home"]["name"], "abbr": ha, "logo": teams["home"].get("logo"), "score": sc_home},
         "away": {"name": teams["away"]["name"], "abbr": aa, "logo": teams["away"].get("logo"), "score": sc_away},
-        "markets": _markets(bets, ha, aa, sport["draw"]) if bets else [], "source": "api-sports",
+        "markets": _markets(bets, ha, aa, sport["draw"]) if bets and state == "pre" else [], "source": "api-sports",
         "book": "API-Sports", "props": [], "player_results": {},
     }
 

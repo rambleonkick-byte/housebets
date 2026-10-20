@@ -60,7 +60,7 @@ export function Sportsbook() {
           <img src={HERO} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#090A0F] via-[#090A0F]/85 to-transparent" />
           <div className="relative px-6 py-8 md:py-10">
-            <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Live odds · SportsGameOdds</p>
+            <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Live odds · API-Sports</p>
             <h1 className="font-display text-4xl sm:text-5xl font-black tracking-tight max-w-xl leading-[1.05]">
               Bet smarter with <span className="text-emerald-400">real-time</span> crypto.
             </h1>

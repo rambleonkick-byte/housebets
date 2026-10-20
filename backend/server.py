@@ -507,7 +507,19 @@ async def _fetch_sgo_sequential(metas):
             # free API-Sports plans lack current-season odds for US sports; price those from SportsGameOdds
             if not ev["markets"] and match.get("markets"):
                 ev["markets"], ev["book"], ev["hidden"] = match["markets"], "Top books", False
+    now = datetime.now(timezone.utc)
+    for ev in out:
+        # cached API-Sports prices are pre-match only: close them at kick-off to prevent past-posting
+        if ev["book"] == "API-Sports" and ev["markets"] and (ev["state"] != "pre" or _after(ev.get("start"), now)):
+            ev["markets"], ev["hidden"] = [], True
     return [copy.deepcopy(e) for e in out]
+
+
+def _after(iso, now):
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")) <= now
+    except (TypeError, ValueError):
+        return False
 
 
 @api_router.get("/sports")

@@ -41,7 +41,7 @@ export function Sidebar({ sports, active, onSelect, counts, live = {} }) {
         </nav>
       </div>
       <p className="mt-auto px-2 text-[11px] text-zinc-500 leading-relaxed">
-        Live odds from <span className="text-zinc-300">SportsGameOdds</span> · 85+ bookmakers.
+        Live odds from <span className="text-zinc-300">API-Sports</span> · top bookmakers.
       </p>
     </aside>
   );
