@@ -94,7 +94,7 @@ function GameCard({ legs, selId, onRemove }) {
 }
 
 export function BetSlip() {
-  const { items, removeSelection, clear, selId, open, setOpen } = useBetSlip();
+  const { items, removeSelection, clear, selId, open, setOpen, applyServerPrices } = useBetSlip();
   const { user, setAuthOpen, setBalances } = useAuth();
   const [stake, setStake] = useState("");
   const [coin, setCoin] = useState("USDT");
@@ -145,6 +145,8 @@ export function BetSlip() {
         for (const s of items) {
           const { data } = await api.post("/bets", { selections: [stripSel(s)], stake: stakeNum, coin, bet_type: "single" });
           lastBal = data.balances;
+          setBalances(data.balances);
+          removeSelection(selId(s));
         }
         if (lastBal) setBalances(lastBal);
       }
@@ -152,7 +154,13 @@ export function BetSlip() {
       clear();
       setStake("");
     } catch (e) {
-      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+      const d = e.response?.data?.detail;
+      if (e.response?.status === 409 && d) {
+        applyServerPrices(d);
+        toast.warning(d.msg, { description: "Your slip has been updated to the latest odds." });
+      } else {
+        toast.error(formatApiErrorDetail(d));
+      }
     } finally {
       setLoading(false);
     }

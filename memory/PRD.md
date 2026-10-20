@@ -93,3 +93,10 @@
 - Bet slip "Share" button → ShareSlipModal: ApexOdds-branded slip card, copy link (`/?slip=CODE`), Save image (PNG via html-to-image), native Share (mobile, attaches image when supported).
 - Opening a link loads picks into the viewer's slip, re-priced from the live feed (`lib/slips.js` refreshLeg); finished/missing legs dropped with a toast. URL param cleaned after load.
 - Known gap: `/api/bets` still trusts client-sent odds — should validate against live feed server-side.
+
+## Server-side Odds Verification (2026-06)
+- `/api/bets` no longer trusts client odds. `_verify_selections` looks up each leg in the cached SGO feed (`_find_event`/`_live_price`): market + side + exact line (props: stat+player+line) must exist and the event must not be final. Bet is priced at the server's current odds.
+- If live odds are worse than what the player saw → 409 `{msg, changed:[{event_id,market,side,odds}], unavailable:[]}`; missing/finished/line-moved legs → 409 with `unavailable`. Better-or-equal odds are accepted at live price.
+- Also: stake must be >0 and finite, ≤20 legs, singles exactly 1 leg, duplicate/conflicting same-market legs rejected, balance deduction is atomic (`$gte` filter) to stop double-spend.
+- Frontend: on 409 the slip auto-updates odds / drops unavailable legs (`applyServerPrices`) and warns; singles remove each placed leg as they succeed.
+- Verified with in-process test (tampered 50.0 → 409, lower → accepted @1.80, wrong line/fake event → 409, prop ok, conflict/neg/huge stake rejected) + UI 409 flow.

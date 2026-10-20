@@ -121,8 +121,8 @@ class Selection(BaseModel):
 
 
 class PlaceBetInput(BaseModel):
-    selections: List[Selection]
-    stake: float
+    selections: List[Selection] = Field(min_length=1, max_length=20)
+    stake: float = Field(gt=0, allow_inf_nan=False)
     coin: str
     bet_type: str = "single"
 
@@ -1190,23 +1190,79 @@ def compute_parlay_odds(selections) -> float:
     return total
 
 
+def _market_key(sel) -> str:
+    if sel.market == "prop":
+        parts = str(sel.side).split(":")
+        return f"{sel.event_id}:prop:{':'.join(parts[:2])}"
+    return f"{sel.event_id}:{sel.market}"
+
+
+async def _find_event(event_id, league):
+    metas = [m for m in SGO_LEAGUES if m["group"] == league] or SGO_LEAGUES
+    for m in metas:
+        for ev in await fetch_sgo_league(m):
+            if ev["event_id"] == event_id:
+                return ev
+    return None
+
+
+def _live_price(sel, ev):
+    """Current server-side odds for a selection, or None if the market/line is gone."""
+    if sel.market == "prop":
+        parts = str(sel.side).split(":")
+        if len(parts) != 3 or parts[2] not in ("over", "under"):
+            return None
+        stat, pid, ou = parts
+        for p in ev.get("props") or []:
+            if p.get("stat") == stat and str(p.get("player_id")) == pid and p.get("line") == sel.line:
+                return p.get(ou)
+        return None
+    m = next((x for x in ev.get("markets", []) if x.get("market") == sel.market), None)
+    for s in (m or {}).get("selections", []):
+        if s.get("side") == sel.side and s.get("line") == sel.line:
+            return s.get("odds")
+    return None
+
+
+async def _verify_selections(selections):
+    seen, changed, gone = set(), [], []
+    for sel in selections:
+        k = _market_key(sel)
+        if k in seen:
+            raise HTTPException(status_code=400, detail="Conflicting or duplicate picks on the same market")
+        seen.add(k)
+        ev = await _find_event(sel.event_id, sel.league)
+        price = _live_price(sel, ev) if ev and ev.get("state") != "post" else None
+        if not price or price <= 1:
+            gone.append({"event_id": sel.event_id, "market": sel.market, "side": sel.side, "pick": sel.pick})
+            continue
+        price = float(price)
+        if round(price, 2) < round(sel.odds, 2):
+            changed.append({"event_id": sel.event_id, "market": sel.market, "side": sel.side, "odds": price})
+        sel.odds = price
+    if gone or changed:
+        raise HTTPException(status_code=409, detail={
+            "msg": "Some picks are no longer available" if gone else "Odds changed — review your slip and place again",
+            "changed": changed, "unavailable": gone})
+
+
 @api_router.post("/bets")
 async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user)):
-    if not body.selections:
-        raise HTTPException(status_code=400, detail="No selections")
     if body.coin not in STARTING_BALANCES:
         raise HTTPException(status_code=400, detail="Invalid coin")
     await ensure_wallet(user["id"])
-    wallet = await db.wallets.find_one({"user_id": user["id"]})
-    if wallet["balances"].get(body.coin, 0) < body.stake:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+    await _verify_selections(body.selections)
 
     is_parlay = body.bet_type == "parlay" and len(body.selections) > 1
+    if not is_parlay and len(body.selections) != 1:
+        raise HTTPException(status_code=400, detail="Single bets take exactly one selection")
     total_odds = round(compute_parlay_odds(body.selections), 2) if is_parlay else round(body.selections[0].odds, 2)
     potential = round(body.stake * total_odds, 6)
 
-    await db.wallets.update_one({"user_id": user["id"]},
-                                {"$inc": {f"balances.{body.coin}": -body.stake}})
+    res = await db.wallets.update_one({"user_id": user["id"], f"balances.{body.coin}": {"$gte": body.stake}},
+                                      {"$inc": {f"balances.{body.coin}": -body.stake}})
+    if res.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
     bet = {"id": str(uuid.uuid4()), "user_id": user["id"],
            "selections": [s.model_dump() for s in body.selections],
            "bet_type": "parlay" if is_parlay else "single",

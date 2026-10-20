@@ -45,6 +45,12 @@ export function BetSlipProvider({ children }) {
     setItems((prev) => prev.filter((p) => selId(p) !== id));
   }, []);
   const clear = useCallback(() => setItems([]), []);
+  const applyServerPrices = useCallback(({ changed = [], unavailable = [] }) => {
+    const key = (x) => `${x.event_id}:${x.market}:${x.side}`;
+    const gone = new Set(unavailable.map(key));
+    const upd = new Map(changed.map((c) => [key(c), c.odds]));
+    setItems((prev) => prev.filter((p) => !gone.has(selId(p))).map((p) => (upd.has(selId(p)) ? { ...p, odds: upd.get(selId(p)) } : p)));
+  }, []);
   const loadSlip = useCallback((sels) => {
     setItems(sels.map((s) => ({ ...s, _id: selId(s) })));
     setOpen(true);
@@ -52,7 +58,7 @@ export function BetSlipProvider({ children }) {
   const has = useCallback((sel) => items.some((p) => selId(p) === selId(sel)), [items]);
 
   return (
-    <BetSlipContext.Provider value={{ items, addSelection, removeSelection, clear, has, open, setOpen, selId, loadSlip }}>
+    <BetSlipContext.Provider value={{ items, addSelection, removeSelection, clear, has, open, setOpen, selId, loadSlip, applyServerPrices }}>
       {children}
     </BetSlipContext.Provider>
   );
