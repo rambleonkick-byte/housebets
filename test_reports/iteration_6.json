@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 6 — SportsGameOdds integration end-to-end verified. Backend 7/7 pytest cases pass (sports groups, odds feed structure/leagues/decimal values, place single bet with balance debit, parlay-odds multiplication, fresh-user insufficient-balance 400, bet history). Frontend smoke on external REACT_APP_BACKEND_URL: admin login, 61 SGO events render, 'LIVE ODDS · Top books' badge present, sidebar sport filter (basketball) reduces to 15 events, moneyline odds-button adds to BetSlip (count=1), stake=1 USDT -> POST /api/bets succeeds, 'Bet placed!' toast, header wallet badge $11,465 -> $11,464 (debited), header-history-button opens history-modal showing filter tabs (all/open/won/lost) and 11+ history-bet-<uuid> rows, nav-casino -> /casino lobby, dice game page renders with full testids and dice-play-button clickable, casino strip visible on sportsbook home, wallet-generate-address button present in wallet modal.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sgo_integration.py",
+    "/app/test_reports/pytest/iter6_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1002 lines — still above the 700-line guideline. Odds/SGO parsing (_sgo_markets, fetch_sgo_league, american_to_decimal) could move to backend/odds_provider.py; wallet/oxapay has similar footprint. Keeps regressions isolated and tests focused.",
+    "Sportsbook.jsx: loadOdds() reads data.events without defaulting to [] — if /api/odds ever returns {events: null} on provider failure the sportsbook will crash. Add `setEvents(data.events || [])` for resilience.",
+    "BetSlip.place() in single-mode fires one POST per selection serially — on a 3-leg slip this is 3 round trips and partial-failure in the middle leaves user with debited but unreported bets. Prefer sending an array to a batch endpoint or at minimum catching per-leg errors.",
+    "GET /api/odds caching is 120s via SGO cache but Sportsbook polls every 45s — the client refresh is faster than cache invalidation, so refresh clicks between the 45s/120s window return stale data without any 'cached' indicator.",
+    "Backend PlaceBetInput Pydantic model requires full league/home/away/side strings from client — mismatched clients that send only {event_id,market,pick,odds} will 422. Consider server-side enrichment from the cached event payload so bet schema is 'thin' from the client.",
+    "MatchCard shows the SGO 'Top books' badge for every event with ev.book set — if SGO ever returns a per-event book name (e.g. 'DraftKings'), the UI already handles it, but there is no graceful fallback when ev.book is undefined (no badge). Minor UX nit, not a bug."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sgo_integration.py"
+  ],
+  "success_rate": { "backend": "100% (7/7 SGO suite)", "frontend": "100% smoke" },
+  "test_credentials": "admin@apexodds.io / admin123 (from /app/backend/.env)",
+  "seed_data_creation": "Creates one TEST_fresh_<uuid>@apexodds.io user per run (zero-balance assertion). Places 1-2 real $1 USDT bets per run against admin account (balance remains ample).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run SGO backend suite with `pytest backend/tests/test_sgo_integration.py -v -o addopts=\"\"`. /api/odds returns {events:[...]} (dict, not plain list). PlaceBetInput requires full selection fields: {event_id, league, league_label, home, away, market, pick, side, line, odds} + top-level {coin, stake, bet_type}. POST /api/bets response is {bet:{...}, balances:{...}} not a flat bet. SGO decimal odds are > 1.0 (e.g. 1.56, 2.00). Admin starts the suite with ~$11.4k USDT balance from prior iteration deposits so placement does not run into insufficient-balance; fresh registered users have 0 balance (used for the 400 case).",
+  "rca of the issue": "No defects found. SportsGameOdds replacement is correctly wired end-to-end: SGO oddIDs (points-home-game-ml-home, points-home-game-sp-home with bookSpread, points-all-game-ou-over with bookOverUnder) are parsed into moneyline/spread/total markets with american_to_decimal conversion, exposed as /api/odds, consumed by Sportsbook/MatchCard/BetSlip, and bets persist + debit balance + appear in /api/bets history."
+}

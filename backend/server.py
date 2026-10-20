@@ -256,10 +256,20 @@ def _sgo_score(ev, side):
     return None
 
 
+def _sgo_abbr(team):
+    n = team.get("names", {}) or {}
+    return n.get("short") or n.get("medium") or n.get("long") or team.get("teamID", "TBD")
+
+
+def _sgo_long(team):
+    n = team.get("names", {}) or {}
+    return n.get("long") or n.get("medium") or _sgo_abbr(team)
+
+
 def _sgo_markets(ev, draw):
     odds = ev.get("odds", {})
-    ha = ev["teams"]["home"]["names"]["short"]
-    aa = ev["teams"]["away"]["names"]["short"]
+    ha = _sgo_abbr(ev["teams"]["home"])
+    aa = _sgo_abbr(ev["teams"]["away"])
     markets = []
     if draw:
         pairs = [("home", f"{ha} ML", odds.get("points-home-reg-ml3way-home")),
@@ -301,41 +311,54 @@ async def fetch_sgo_league(meta):
         return []
     key = meta["id"]
     cached = _SGO_CACHE.get(key)
-    if cached and (datetime.now(timezone.utc).timestamp() - cached["ts"]) < 120:
+    if cached and (datetime.now(timezone.utc).timestamp() - cached["ts"]) < cached["ttl"]:
         return cached["data"]
     params = {"apiKey": SGO_KEY, "leagueID": key, "oddsAvailable": "true", "limit": 15}
     events = []
+    ttl = 300
     try:
         async with httpx.AsyncClient(timeout=15) as hc:
             r = await hc.get(f"{SGO_API}/events", params=params)
         if r.status_code != 200:
             logger.warning(f"SGO {key} -> {r.status_code}")
-            _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": []}
+            _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": 30, "data": []}
             return []
         for ev in (r.json().get("data") or [])[:15]:
             teams = ev.get("teams") or {}
             home, away = teams.get("home"), teams.get("away")
             if not home or not away:
                 continue
-            markets = _sgo_markets(ev, meta["draw"])
+            try:
+                markets = _sgo_markets(ev, meta["draw"])
+            except Exception:
+                continue
             if not markets:
                 continue
             st = ev.get("status", {})
             state = "in" if st.get("live") else "post" if (st.get("completed") or st.get("ended")) else "pre"
-            ha, aa = home["names"]["short"], away["names"]["short"]
+            ha, aa = _sgo_abbr(home), _sgo_abbr(away)
             events.append({
                 "event_id": ev["eventID"], "league": meta["group"], "league_key": key,
                 "league_label": meta["label"], "name": f"{aa} @ {ha}",
                 "start": st.get("startsAt"), "state": state,
                 "status_detail": st.get("displayLong") or ("Live" if state == "in" else "Upcoming"),
-                "home": {"name": home["names"].get("long", ha), "abbr": ha, "logo": "", "score": _sgo_score(ev, "home")},
-                "away": {"name": away["names"].get("long", aa), "abbr": aa, "logo": "", "score": _sgo_score(ev, "away")},
+                "home": {"name": _sgo_long(home), "abbr": ha, "logo": "", "score": _sgo_score(ev, "home")},
+                "away": {"name": _sgo_long(away), "abbr": aa, "logo": "", "score": _sgo_score(ev, "away")},
                 "markets": markets, "source": "sportsgameodds", "book": "Top books",
             })
     except Exception as e:
         logger.warning(f"SGO fetch failed for {key}: {e}")
-    _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": events}
+        ttl = 30
+    _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": ttl, "data": events}
     return events
+
+
+async def _fetch_sgo_sequential(metas):
+    """Sequential (not parallel) to respect free-tier rate limits."""
+    out = []
+    for m in metas:
+        out.extend(await fetch_sgo_league(m))
+    return out
 
 
 @api_router.get("/sports")
@@ -346,11 +369,7 @@ async def list_sports():
 @api_router.get("/odds")
 async def get_odds(league: Optional[str] = None):
     metas = [m for m in SGO_LEAGUES if m["group"] == league] if league else SGO_LEAGUES
-    results = await asyncio.gather(*[fetch_sgo_league(m) for m in metas], return_exceptions=True)
-    out = []
-    for r in results:
-        if isinstance(r, list):
-            out.extend(r)
+    out = await _fetch_sgo_sequential(metas)
     out.sort(key=lambda e: (0 if e["state"] == "in" else 1 if e["state"] == "pre" else 2, e.get("start") or ""))
     return {"events": out}
 
@@ -578,13 +597,11 @@ async def auto_settle(user_id: str):
     open_bets = await db.bets.find({"user_id": user_id, "status": "open"}).to_list(200)
     if not open_bets:
         return
-    results = await asyncio.gather(*[fetch_sgo_league(m) for m in SGO_LEAGUES], return_exceptions=True)
+    results = await _fetch_sgo_sequential(SGO_LEAGUES)
     finished = {}
-    for r in results:
-        if isinstance(r, list):
-            for ev in r:
-                if ev["state"] == "post":
-                    finished[ev["event_id"]] = ev
+    for ev in results:
+        if ev["state"] == "post":
+            finished[ev["event_id"]] = ev
     for b in open_bets:
         legs = []
         for s in b["selections"]:

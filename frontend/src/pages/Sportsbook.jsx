@@ -21,7 +21,7 @@ export function Sportsbook() {
 
   const loadOdds = useCallback(async () => {
     const { data } = await api.get("/odds");
-    setEvents(data.events);
+    setEvents(data.events || []);
     setLoading(false);
   }, []);
 
