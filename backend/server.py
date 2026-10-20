@@ -1081,7 +1081,8 @@ _ALERT_SYNC = {}
 
 async def _save_notification(user_id, kind, a, stage=None, key_id=None, created_at=None):
     from pymongo.errors import DuplicateKeyError
-    key = f"wd:{key_id}:{stage}" if kind == "withdrawal" else f"co:{key_id}" if kind == "cashout" else f"dep:{a.get('tx_hash')}"
+    key = (f"wd:{key_id}:{stage}" if kind == "withdrawal" else f"co:{key_id}" if kind == "cashout"
+           else f"lb:{key_id}" if kind == "lossback" else f"dep:{a.get('tx_hash')}")
     try:
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()), "key": key, "user_id": user_id, "kind": kind, "stage": stage,
@@ -1145,10 +1146,14 @@ async def deposit_alerts(user: dict = Depends(get_current_user)):
         _ALERT_SYNC[user["id"]] = now
     withdrawals = await _withdrawal_alerts(user["id"], sync)
     _kick_auto_cashouts()
-    cashouts = await db.notifications.find({"user_id": user["id"], "kind": "cashout", "alerted": {"$ne": True}},
-                                           {"_id": 0, "key": 0}).to_list(20)
-    if cashouts:
-        await db.notifications.update_many({"id": {"$in": [n["id"] for n in cashouts]}}, {"$set": {"alerted": True}})
+    if sync:
+        await auto_settle(user["id"])
+    pending = await db.notifications.find({"user_id": user["id"], "kind": {"$in": ["cashout", "lossback"]},
+                                           "alerted": {"$ne": True}}, {"_id": 0, "key": 0}).to_list(20)
+    if pending:
+        await db.notifications.update_many({"id": {"$in": [n["id"] for n in pending]}}, {"$set": {"alerted": True}})
+    cashouts = [n for n in pending if n["kind"] == "cashout"]
+    lossbacks = [n for n in pending if n["kind"] == "lossback"]
     if OXAPAY_KEY and sync:
         addrs = await db.static_addresses.find({"user_id": user["id"]}).to_list(20)
         async with httpx.AsyncClient(timeout=10) as hc:
@@ -1168,7 +1173,7 @@ async def deposit_alerts(user: dict = Depends(get_current_user)):
         await _save_notification(user["id"], "withdrawal", w, stage=w["stage"], key_id=w["id"])
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"alerts": [{k: a.get(k) for k in ("tx_hash", "coin", "net", "amount", "created_at")} for a in alerts],
-            "withdrawals": withdrawals, "cashouts": cashouts, "balances": (wallet or {}).get("balances")}
+            "withdrawals": withdrawals, "cashouts": cashouts, "lossbacks": lossbacks, "balances": (wallet or {}).get("balances")}
 
 
 @api_router.post("/wallet/deposit-address/{coin}/check")
@@ -1654,6 +1659,7 @@ async def auto_settle(user_id: str):
             await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id, "type": "lossback",
                                               "coin": b["coin"], "amount": lb, "created_at": now_iso(),
                                               "hash": "lossback:" + b["id"]})
+            await _save_notification(user_id, "lossback", {"coin": b["coin"], "amount": lb}, key_id=b["id"])
         if res.modified_count:
             await _accrue_player(user_id)
         if won and res.modified_count:

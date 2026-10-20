@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Undo2, ExternalLink, HandCoins } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Undo2, ExternalLink, HandCoins, LifeBuoy } from "lucide-react";
 import { api, COIN_META, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto } from "@/lib/format";
@@ -59,7 +59,11 @@ export function DepositAlerts() {
         const { data } = await api.get("/wallet/deposit-alerts");
         const wds = data.withdrawals || [];
         const cos = data.cashouts || [];
-        if (!data.alerts.length && !wds.length && !cos.length) return;
+        const lbs = data.lossbacks || [];
+        if (!data.alerts.length && !wds.length && !cos.length && !lbs.length) return;
+        lbs.forEach((l) => toast.custom(() => (
+          <AlertToast a={l} kind="lossback" title="10% lossback" sub={`You got ${fmtCrypto(l.amount, l.coin)} ${l.coin} back on your losing bet`} Icon={LifeBuoy} tone="emerald" sign="+" />
+        ), { duration: 12000 }));
         cos.forEach((c) => toast.custom(() => (
           <AlertToast a={c} kind="cashout" title="Auto cash out" sub="Your target was hit — winnings added" Icon={HandCoins} tone="sky" sign="+" />
         ), { duration: 12000 }));

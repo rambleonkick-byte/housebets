@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, ArrowDownToLine, ExternalLink, HandCoins } from "lucide-react";
+import { Bell, ArrowDownToLine, ExternalLink, HandCoins, LifeBuoy } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { api, COIN_META, explorerUrl } from "@/lib/api";
 import { fmtCrypto } from "@/lib/format";
@@ -15,8 +15,9 @@ function timeAgo(iso) {
 }
 
 function NotificationRow({ n }) {
-  const dep = n.kind === "deposit" || n.kind === "cashout";
+  const dep = n.kind === "deposit" || n.kind === "cashout" || n.kind === "lossback";
   const meta = n.kind === "cashout" ? { title: "Auto cash out", Icon: HandCoins, tone: "sky" }
+    : n.kind === "lossback" ? { title: "10% lossback", Icon: LifeBuoy, tone: "emerald" }
     : n.kind === "deposit" ? { title: "Deposit received", Icon: ArrowDownToLine, tone: "emerald" } : WD_STAGE[n.stage] || WD_STAGE.sent;
   const t = TONE[meta.tone];
   const url = explorerUrl(n.coin, n.tx_hash, n.net);
