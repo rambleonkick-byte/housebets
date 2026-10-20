@@ -233,6 +233,7 @@ SGO_LEAGUES = [
     {"id": "MLB", "group": "baseball", "label": "MLB", "draw": False},
     {"id": "NHL", "group": "hockey", "label": "NHL", "draw": False},
     {"id": "MLS", "group": "soccer", "label": "MLS", "draw": True},
+    {"id": "UFC", "group": "mma", "label": "UFC", "draw": False},
 ]
 GROUPS = [
     {"key": "soccer", "label": "Soccer", "icon": "goal"},
@@ -240,6 +241,7 @@ GROUPS = [
     {"key": "football", "label": "Am. Football", "icon": "shield"},
     {"key": "baseball", "label": "Baseball", "icon": "circle-dot"},
     {"key": "hockey", "label": "Ice Hockey", "icon": "snowflake"},
+    {"key": "mma", "label": "MMA", "icon": "swords"},
 ]
 _SGO_CACHE = {}
 
@@ -277,6 +279,8 @@ def _sgo_score(ev, side):
 
 def _sgo_abbr(team):
     n = team.get("names", {}) or {}
+    if str(team.get("teamID", "")).endswith("_UFC") and n.get("lastName"):
+        return n["lastName"]
     return n.get("short") or n.get("medium") or n.get("long") or team.get("teamID", "TBD")
 
 
@@ -463,7 +467,8 @@ async def _fetch_sgo_sequential(metas):
 
 @api_router.get("/sports")
 async def list_sports():
-    return GROUPS
+    return [{**g, "leagues": [{"key": m["id"], "label": m["label"]} for m in SGO_LEAGUES if m["group"] == g["key"]]}
+            for g in GROUPS]
 
 
 @api_router.get("/odds")

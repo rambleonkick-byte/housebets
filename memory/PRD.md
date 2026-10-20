@@ -144,3 +144,7 @@
 ## Reverted to SportsGameOdds (2026-06)
 - User asked to revert the API-Sports switch. Removed backend/apisports.py, APISPORTS_KEY, and the merge/cache layer; `_fetch_sgo_sequential`, `_find_event` and `/api/odds` are back to the original SGO-only code. Labels back to "SportsGameOdds". Kept unrelated fixes (blackjack race fix, wallet MOCK removal, sidebar redesign, scrollbar, MatchCard selected/FINAL fixes). Mongo `feed_cache` collection is now unused.
 - SGO free tier currently returns 429 for most leagues, so /api/odds may be empty until the rate limit resets or the plan is upgraded.
+
+## MMA + League Categories (2026-06)
+- Added SGO league `UFC` (group `mma`, label UFC, moneyline only; fighters shown by last name). Sidebar icon Swords.
+- `/api/sports` now returns each sport with its `leagues` (from SGO_LEAGUES). Sidebar shows league sub-items (NFL / NCAA Football, NBA / NCAA Basketball) under multi-league sports with counts + live dot; selecting `lg:<ID>` filters by `league_key`. Mobile chips are per league. Verified NFL filter shows 15 cards.

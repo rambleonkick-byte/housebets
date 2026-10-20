@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { LayoutGrid, Goal, Dribbble, Shield, CircleDot, Snowflake, Dices } from "lucide-react";
+import { LayoutGrid, Goal, Dribbble, Shield, CircleDot, Snowflake, Dices, Swords } from "lucide-react";
 
 const ICONS = {
   all: { Icon: LayoutGrid, color: "#10B981" },
@@ -9,6 +9,7 @@ const ICONS = {
   football: { Icon: Shield, color: "#A16207" },
   baseball: { Icon: CircleDot, color: "#EF4444" },
   hockey: { Icon: Snowflake, color: "#38BDF8" },
+  mma: { Icon: Swords, color: "#F43F5E" },
 };
 
 function Tabs() {
@@ -35,8 +36,18 @@ export function Sidebar({ sports, active, onSelect, counts, live = {} }) {
         </div>
         <nav className="space-y-0.5">
           {items.map((s) => (
-            <SideItem key={s.key} sKey={s.key} label={s.label} active={active === s.key} count={counts[s.key]}
-              live={live[s.key]} onClick={() => onSelect(s.key)} testid={`sidebar-sport-${s.key}`} />
+            <div key={s.key}>
+              <SideItem sKey={s.key} label={s.label} active={active === s.key} count={counts[s.key]}
+                live={live[s.key]} onClick={() => onSelect(s.key)} testid={`sidebar-sport-${s.key}`} />
+              {(s.leagues || []).length > 1 && (
+                <div className="ml-5 pl-3 border-l border-[#262A38] space-y-0.5 my-0.5">
+                  {s.leagues.map((l) => (
+                    <LeagueItem key={l.key} label={l.label} active={active === `lg:${l.key}`} count={counts[`lg:${l.key}`]}
+                      live={live[`lg:${l.key}`]} onClick={() => onSelect(`lg:${l.key}`)} testid={`sidebar-league-${l.key}`} />
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
       </div>
@@ -44,6 +55,18 @@ export function Sidebar({ sports, active, onSelect, counts, live = {} }) {
         Live odds from <span className="text-zinc-300">SportsGameOdds</span> · 85+ bookmakers.
       </p>
     </aside>
+  );
+}
+
+function LeagueItem({ label, active, count, live, onClick, testid }) {
+  return (
+    <button data-testid={testid} onClick={onClick}
+      className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+        active ? "bg-emerald-500/10 text-emerald-300 font-semibold" : "text-zinc-400 hover:text-white hover:bg-[#1A1D28]"}`}>
+      <span className="flex-1 text-left truncate">{label}</span>
+      {live ? <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+        : count > 0 ? <span className="font-mono text-[10px] text-zinc-500">{count}</span> : null}
+    </button>
   );
 }
 

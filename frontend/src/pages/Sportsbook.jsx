@@ -38,16 +38,19 @@ export function Sportsbook() {
 
   const counts = useMemo(() => {
     const c = { all: events.length };
-    for (const e of events) c[e.league] = (c[e.league] || 0) + 1;
+    for (const e of events) { c[e.league] = (c[e.league] || 0) + 1; c[`lg:${e.league_key}`] = (c[`lg:${e.league_key}`] || 0) + 1; }
     return c;
   }, [events]);
   const liveBy = useMemo(() => {
     const c = {};
-    for (const e of events) if (e.state === "in") { c[e.league] = (c[e.league] || 0) + 1; c.all = (c.all || 0) + 1; }
+    for (const e of events) if (e.state === "in") { c[e.league] = (c[e.league] || 0) + 1; c[`lg:${e.league_key}`] = 1; c.all = (c.all || 0) + 1; }
     return c;
   }, [events]);
 
-  const shown = active === "all" ? events : events.filter((e) => e.league === active);
+  const shown = active === "all" ? events
+    : active.startsWith("lg:") ? events.filter((e) => e.league_key === active.slice(3))
+    : events.filter((e) => e.league === active);
+  const leagues = sports.flatMap((s) => s.leagues || []);
   const liveCount = events.filter((e) => e.state === "in").length;
 
   return (
@@ -82,14 +85,14 @@ export function Sportsbook() {
         {/* Mobile sport chips */}
         <div className="lg:hidden flex gap-2 overflow-x-auto scrollbar-thin px-4 pb-2">
           <Chip label="All" active={active === "all"} onClick={() => setActive("all")} testid="chip-all" />
-          {sports.map((s) => (
-            <Chip key={s.key} label={s.label} active={active === s.key} onClick={() => setActive(s.key)} testid={`chip-${s.key}`} />
+          {leagues.map((l) => (
+            <Chip key={l.key} label={l.label} active={active === `lg:${l.key}`} onClick={() => setActive(`lg:${l.key}`)} testid={`chip-${l.key}`} />
           ))}
         </div>
 
         <div className="flex items-center justify-between px-4 py-2">
           <h2 className="font-display text-xl font-bold tracking-tight uppercase">
-            {active === "all" ? "All Events" : sports.find((s) => s.key === active)?.label || "Events"}
+            {active === "all" ? "All Events" : active.startsWith("lg:") ? leagues.find((l) => `lg:${l.key}` === active)?.label || "Events" : sports.find((s) => s.key === active)?.label || "Events"}
           </h2>
           <button data-testid="refresh-odds" onClick={() => { setLoading(true); loadOdds(); }}
             className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-emerald-400 transition-colors">
