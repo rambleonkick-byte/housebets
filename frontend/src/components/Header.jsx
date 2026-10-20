@@ -11,6 +11,7 @@ export function Header({ onWallet, onHistory, onAdmin }) {
   const { rates } = usePrices();
   const total = user && user.balances ? usdValue(user.balances, rates) : 0;
   const onCasino = pathname.startsWith("/casino");
+  const onSports = !onCasino && pathname !== "/affiliate";
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 h-16 bg-[#090A0F]/90 backdrop-blur-md border-b border-[#2A2F45]">
@@ -27,12 +28,16 @@ export function Header({ onWallet, onHistory, onAdmin }) {
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
             <Link to="/" data-testid="nav-sports"
-              className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${!onCasino ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
+              className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${onSports ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
               Sports
             </Link>
             <Link to="/casino" data-testid="nav-casino"
               className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${onCasino ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
               Casino
+            </Link>
+            <Link to="/affiliate" data-testid="nav-affiliate"
+              className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${pathname === "/affiliate" ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
+              Affiliate
             </Link>
           </nav>
         </div>

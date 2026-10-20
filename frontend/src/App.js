@@ -18,6 +18,7 @@ import { Mines } from "@/pages/games/Mines";
 import { Plinko } from "@/pages/games/Plinko";
 import { Keno } from "@/pages/games/Keno";
 import { Dice } from "@/pages/games/Dice";
+import Affiliate from "@/pages/Affiliate";
 
 function Shell() {
   const { user, setAuthOpen } = useAuth();
@@ -41,6 +42,7 @@ function Shell() {
           <Route path="/casino/keno" element={<Keno />} />
           <Route path="/casino/dice" element={<Dice />} />
           <Route path="/casino/blackjack" element={<Blackjack />} />
+          <Route path="/affiliate" element={<Affiliate />} />
         </Routes>
       </div>
       <AuthModal />

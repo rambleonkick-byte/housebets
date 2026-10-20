@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Mail, Lock, User, Loader2 } from "lucide-react";
+import { X, Mail, Lock, User, Loader2, Gift } from "lucide-react";
 import { useAuth, formatApiErrorDetail } from "@/context/AuthContext";
 import { toast } from "sonner";
 
@@ -12,6 +12,17 @@ export function AuthModal() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [ref, setRef] = useState(() => localStorage.getItem("apex_ref") || "");
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("ref");
+    if (code) {
+      localStorage.setItem("apex_ref", code.toUpperCase());
+      setRef(code.toUpperCase());
+      setMode("register");
+      setAuthOpen(true);
+    }
+  }, [setAuthOpen]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -19,7 +30,7 @@ export function AuthModal() {
     setError("");
     try {
       if (mode === "login") await login(email, password);
-      else await register(name, email, password);
+      else await register(name, email, password, ref.trim());
       toast.success(mode === "login" ? "Welcome back" : "Account created");
       setAuthOpen(false);
       setPassword("");
@@ -65,6 +76,10 @@ export function AuthModal() {
                 placeholder="Email address" />
               <Field icon={Lock} testid="auth-password-input" type="password" value={password} onChange={setPassword}
                 placeholder="Password" />
+              {mode === "register" && (
+                <Field icon={Gift} testid="auth-ref-input" value={ref} onChange={(v) => setRef(v.toUpperCase())}
+                  placeholder="Referral code (optional)" required={false} />
+              )}
               {error && <p className="text-sm text-red-400" data-testid="auth-error">{error}</p>}
               <button type="submit" disabled={loading} data-testid="auth-submit-button"
                 className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold py-3 rounded-lg transition-colors disabled:opacity-60">
@@ -88,11 +103,11 @@ export function AuthModal() {
   );
 }
 
-function Field({ icon: Icon, testid, type = "text", value, onChange, placeholder }) {
+function Field({ icon: Icon, testid, type = "text", value, onChange, placeholder, required = true }) {
   return (
     <div className="relative">
       <Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-      <input data-testid={testid} type={type} value={value} required
+      <input data-testid={testid} type={type} value={value} required={required}
         onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
         className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg pl-9 pr-3 py-3 text-sm
           focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-zinc-600" />

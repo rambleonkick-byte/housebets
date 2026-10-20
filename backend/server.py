@@ -82,6 +82,11 @@ class RegisterInput(BaseModel):
     name: str
     email: EmailStr
     password: str = Field(min_length=6)
+    ref_code: Optional[str] = Field(default=None, max_length=24)
+
+
+class AffCodeInput(BaseModel):
+    code: str = Field(min_length=4, max_length=16, pattern=r"^[A-Za-z0-9_-]+$")
 
 
 class LoginInput(BaseModel):
@@ -186,8 +191,15 @@ async def register(body: RegisterInput, response: Response):
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
+    referrer = None
+    if body.ref_code and body.ref_code.strip():
+        referrer = await db.affiliates.find_one({"code": body.ref_code.strip().upper()})
+        if not referrer:
+            raise HTTPException(status_code=400, detail="Invalid referral code")
     doc = {"name": body.name, "email": email, "password_hash": hash_password(body.password),
            "role": "user", "created_at": now_iso()}
+    if referrer:
+        doc["referred_by"] = referrer["user_id"]
     res = await db.users.insert_one(doc)
     uid = str(res.inserted_id)
     await ensure_wallet(uid)
@@ -2397,6 +2409,10 @@ async def root():
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    await db.affiliates.create_index("code", unique=True)
+    await db.affiliates.create_index("user_id", unique=True)
+    await db.affiliate_ledger.create_index([("affiliate_id", 1), ("player_id", 1), ("coin", 1)], unique=True)
+    await db.users.create_index("referred_by")
     await db.static_deposits.create_index("tx_hash", unique=True)
     await db.bj_games.update_many({"open": {"$exists": False}}, [{"$set": {"open": {"$ne": ["$status", "done"]}}}])
     await db.bj_games.create_index("user_id", name="bj_one_open_hand", unique=True,
@@ -2436,6 +2452,124 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     client.close()
+
+
+# ----------------------------------------------------------------------------
+# Affiliates: 10% of NGR (stakes - payouts) from referred players, losses carried forward
+# ----------------------------------------------------------------------------
+AFF_RATE = 0.10
+
+
+async def _ensure_affiliate(user_id):
+    a = await db.affiliates.find_one({"user_id": user_id}, {"_id": 0})
+    while not a:
+        code = secrets.token_hex(3).upper()
+        try:
+            await db.affiliates.insert_one({"user_id": user_id, "code": code, "available": {}, "claimed": {},
+                                            "created_at": now_iso()})
+        except Exception:
+            pass
+        a = await db.affiliates.find_one({"user_id": user_id}, {"_id": 0})
+    return a
+
+
+async def _player_ngr(player_ids):
+    out = {}
+    def add(uid, coin, v):
+        out.setdefault(uid, {}).setdefault(coin, 0.0)
+        out[uid][coin] += v
+    async for r in db.bets.aggregate([
+        {"$match": {"user_id": {"$in": player_ids}, "status": {"$in": ["won", "lost", "void", "cashed_out"]}}},
+        {"$group": {"_id": {"u": "$user_id", "c": "$coin"}, "stake": {"$sum": "$stake"},
+                    "paid": {"$sum": {"$ifNull": ["$cashout_amount", {"$ifNull": ["$payout", 0]}]}}}}]):
+        add(r["_id"]["u"], r["_id"]["c"], r["stake"] - r["paid"])
+    async for r in db.casino_games.aggregate([
+        {"$match": {"user_id": {"$in": player_ids}}},
+        {"$group": {"_id": {"u": "$user_id", "c": "$coin"}, "stake": {"$sum": "$stake"}, "paid": {"$sum": "$payout"}}}]):
+        add(r["_id"]["u"], r["_id"]["c"], r["stake"] - r["paid"])
+    return out
+
+
+async def _credit_ledger(aff_id, pid, coin, credited, target, exists):
+    flt = {"affiliate_id": aff_id, "player_id": pid, "coin": coin}
+    flt["credited"] = credited if exists else {"$exists": False}
+    try:
+        res = await db.affiliate_ledger.update_one(flt, {"$set": {"credited": target}}, upsert=not exists)
+    except Exception:
+        return
+    if res.modified_count or res.upserted_id:
+        await db.affiliates.update_one({"user_id": aff_id}, {"$inc": {f"available.{coin}": round(target - credited, 8)}})
+
+
+async def _accrue_affiliate(aff_user_id):
+    players = await db.users.find({"referred_by": aff_user_id}, {"name": 1, "created_at": 1}).to_list(5000)
+    ids = [str(p["_id"]) for p in players]
+    ngr = await _player_ngr(ids) if ids else {}
+    ledger = {(l["player_id"], l["coin"]): l async for l in db.affiliate_ledger.find({"affiliate_id": aff_user_id})}
+    rows = []
+    for p in players:
+        pid = str(p["_id"])
+        earned = {}
+        for coin, v in ngr.get(pid, {}).items():
+            target = round(max(0.0, v * AFF_RATE), 8)
+            credited = (ledger.get((pid, coin)) or {}).get("credited", 0.0)
+            if target > credited:
+                await _credit_ledger(aff_user_id, pid, coin, credited, target, (pid, coin) in ledger)
+                credited = target
+            earned[coin] = credited
+        nm = p.get("name") or "Player"
+        rows.append({"name": nm[:2] + "•••" if len(nm) > 2 else nm + "•••", "joined": p.get("created_at"),
+                     "ngr": {c: round(v, 8) for c, v in ngr.get(pid, {}).items()}, "commission": earned})
+    return rows
+
+
+@api_router.get("/affiliate")
+async def affiliate_panel(user: dict = Depends(get_current_user)):
+    await _ensure_affiliate(user["id"])
+    rows = await _accrue_affiliate(user["id"])
+    a = await db.affiliates.find_one({"user_id": user["id"]}, {"_id": 0})
+    lifetime = {}
+    for r in rows:
+        for c, v in r["commission"].items():
+            lifetime[c] = round(lifetime.get(c, 0) + v, 8)
+    rows.sort(key=lambda r: r["joined"] or "", reverse=True)
+    return {"code": a["code"], "rate": AFF_RATE, "referrals": len(rows), "players": rows[:200],
+            "available": {c: round(v, 8) for c, v in (a.get("available") or {}).items() if v > 0},
+            "claimed": a.get("claimed") or {}, "lifetime": lifetime}
+
+
+@api_router.put("/affiliate/code")
+async def set_affiliate_code(body: AffCodeInput, user: dict = Depends(get_current_user)):
+    await _ensure_affiliate(user["id"])
+    code = body.code.upper()
+    if await db.affiliates.find_one({"code": code, "user_id": {"$ne": user["id"]}}):
+        raise HTTPException(status_code=400, detail="That code is taken")
+    await db.affiliates.update_one({"user_id": user["id"]}, {"$set": {"code": code}})
+    return {"code": code}
+
+
+@api_router.get("/affiliate/check/{code}")
+async def check_affiliate_code(code: str):
+    a = await db.affiliates.find_one({"code": code.strip().upper()[:24]})
+    return {"valid": bool(a)}
+
+
+@api_router.post("/affiliate/claim")
+async def claim_affiliate(user: dict = Depends(get_current_user)):
+    await _ensure_affiliate(user["id"])
+    await _accrue_affiliate(user["id"])
+    a = await db.affiliates.find_one_and_update({"user_id": user["id"]}, {"$set": {"available": {}}})
+    avail = {c: round(v, 8) for c, v in (a.get("available") or {}).items() if v > 0}
+    if not avail:
+        raise HTTPException(status_code=400, detail="Nothing to claim yet")
+    await ensure_wallet(user["id"])
+    for coin, v in avail.items():
+        await db.wallets.update_one({"user_id": user["id"]}, {"$inc": {f"balances.{coin}": v}})
+        await db.affiliates.update_one({"user_id": user["id"]}, {"$inc": {f"claimed.{coin}": v}})
+        await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"], "type": "affiliate",
+                                          "coin": coin, "amount": v, "created_at": now_iso(),
+                                          "hash": "0x" + uuid.uuid4().hex[:24]})
+    return {"claimed": avail, "balances": await _balances(user["id"])}
 
 
 app.include_router(api_router)
