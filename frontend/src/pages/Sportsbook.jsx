@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { MatchCard } from "@/components/MatchCard";
 import { UfcEventCard } from "@/components/UfcEventCard";
 import { BetSlip } from "@/components/BetSlip";
+import { BoostsStrip } from "@/components/BoostsStrip";
 import { CasinoStrip } from "@/components/CasinoStrip";
 import { useSharedSlipLoader } from "@/lib/slips";
 import { useBetSlip } from "@/context/BetSlipContext";
@@ -92,6 +93,7 @@ export function Sportsbook() {
           </div>
         </div>
 
+        <BoostsStrip ready={allDone} />
         <CasinoStrip />
 
         {/* Mobile sport chips */}

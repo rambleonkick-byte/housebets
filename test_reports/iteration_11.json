@@ -1,0 +1,42 @@
+{
+  "summary": "Tested UFC fighter photos and records from ESPN, UFC event-card layout, and per-league progressive odds loading, both API and UI. Backend: 11/11 pytest tests passed. UI works on desktop: 14 separate /api/odds?league_key= requests; the league-loading-UFC placeholder shows while UFC is delayed and disappears once it arrives; 4 UFC event cards, each with exactly 1 main event (big headshots, flags, records, VS, ML odds) plus bout rows with small headshots, records and 'Win' buttons; initials ('AA', 'LK') and 'Record N/A' shown for fighters ESPN didn't match; More markets reveals Total Rounds and Goes the Distance; ML, rounds, distance and bout 'Win' buttons all add to the bet slip; the MMA filter shows only UFC cards (0 MatchCards) and NBA shows only MatchCards; Refresh works; a logged-in UFC moneyline single (2 USDT) got POST /api/bets 200 and a 'Bet placed!' toast. No page errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/odds?league_key=UFC", "issue": "Fighter names come from SGO and can be garbled (e.g. 'Gaston BolaÃos' instead of 'Gaston Bolaños'). The ESPN match still works because _norm_name strips non a-z letters. Fix: when an ESPN match exists, overwrite ev[side]['name'] with ESPN's displayName."},
+      {"endpoint": "/api/odds?league_key=UFC", "issue": "If ESPN fails, the un-enriched UFC events are still cached for 5 min (SGO cache TTL), so cards render as plain MatchCards until the cache expires."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "UfcEventCard MainEvent fallback", "issue": "When SGO doesn't have the real headliner (UFC 335: Oliveira vs Lopes is missing, and Fight Night: Moicano vs Nolan too), the fight with the highest bout_order (Pavlovich vs Pereira) is labelled 'MAIN EVENT', which is wrong. Only show the 'Main Event' badge when ev.main_event is true; otherwise label it 'Featured Bout'.", "selector": "[data-testid^='ufc-main-event-']", "priority": "MEDIUM"},
+      {"component": "UfcEventCard BoutRow (mobile 390px)", "issue": "Bout rows don't fit on mobile. In each half of the grid-cols-2 layout, the 44px headshot and the w-20 odds button leave almost no room for the name, so names shrink to 'M', 'L.', 'R.' and records wrap one digit per line ('2- 5-'). Fix: stack the layout on small screens (fighter info above the odds) or hide the headshot / narrow the button below the sm breakpoint.", "selector": "[data-testid^='ufc-bout-']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "UFC bout rows (desktop)", "issues": ["Both 'Win' buttons sit next to each other in the middle of the row, far from the fighter names at each edge, so it's unclear which button is which fighter. Consider labels like 'Pico' / 'Allen' instead of 'Win', or put each button beside its fighter."]},
+      {"screen": "UFC main event (mobile)", "issues": ["The two headshots sit at different heights when one name wraps onto two lines (Volkanovski vs Evloev)."]},
+      {"screen": "Sportsbook loading", "issues": ["Shimmer placeholders are added at the end of the grid, below all loaded events, so on 'All Events' a pending league's tile is off-screen. Acceptable, but slow leagues are easy to miss."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_ufc_cards_league_odds.py", "/app/test_reports/pytest/pytest_ufc.xml"],
+  "action_items": [
+    "Fix the BoutRow layout for mobile (names and records currently collapse at 390px)",
+    "Don't show the 'MAIN EVENT' badge on the fallback fight when no event has main_event=true",
+    "Use ESPN displayName for fighter names when matched, to fix garbled SGO names (BolaÃos)",
+    "Optional: make it clear which fighter each bout-row 'Win' button belongs to"
+  ],
+  "critical_code_review_comments": [
+    "Sportsbook.jsx loadOdds sends 14 requests every 20s. The backend cache absorbs them, but there's no protection against concurrent refetches: a slow refresh can overlap the next interval tick.",
+    "_enrich_ufc keeps the last matched side's info. If the two fighters match different ESPN cards (name collision), the card info comes from whichever matched last. Edge case only.",
+    "UfcEventCard sorts bouts by bout_order desc; events without bout_order (-1) go last. Fine.",
+    "MatchCard is reused cleanly through the exported OddsButton/Market/buildMeta, so the bet slip keeps working."
+  ],
+  "updated_files": ["/app/backend/tests/test_ufc_cards_league_odds.py"],
+  "success_rate": {"backend": "100%", "frontend": "90% (all flows work; mobile bout layout and main-event fallback label are wrong)"},
+  "test_credentials": "player@apexodds.io/player123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Placed one 2 USDT UFC moneyline single (Volkanovski ML) as player@apexodds.io",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "UFC event IDs seen: main event NUUW40UEuHqKg0DP2W5g (Volkanovski vs Evloev, UFC 333); XDEkvrrnEWieefICayf1 (Arnold Allen has no ESPN record/photo, and only a moneyline market); evAfqrNF0gNObg0dcLJr (Kavanagh shows 'Record N/A'). The bet slip renders twice (desktop + mobile), so use .first or an 'aside' scope for bet-slip-* testids. Sidebar MMA testid is sidebar-sport-mma; mobile chip is chip-UFC."
+}

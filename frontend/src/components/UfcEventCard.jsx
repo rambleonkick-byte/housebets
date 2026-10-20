@@ -62,23 +62,25 @@ function MainEvent({ ev }) {
       className="relative rounded-lg border border-[#2A2F45] bg-gradient-to-b from-[#1A1220] to-[#12141C] p-5 overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/70 to-transparent" />
       <div className="flex items-center justify-center gap-2 mb-4">
-        <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-red-400 bg-red-500/10 border border-red-500/30 rounded px-2 py-0.5">Main Event</span>
+        <span data-testid={`ufc-headline-label-${ev.event_id}`} className={`text-[10px] font-mono uppercase tracking-[0.25em] rounded px-2 py-0.5 border ${ev.main_event ? "text-red-400 bg-red-500/10 border-red-500/30" : "text-amber-300 bg-amber-500/10 border-amber-500/30"}`}>
+          {ev.main_event ? "Main Event" : "Featured Bout"}
+        </span>
         {ev.weight_class && <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{ev.weight_class}</span>}
       </div>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
         {["away", "home"].map((side, i) => {
           const f = ev[side];
           const sel = fighterOdds(ev, side);
           return (
             <div key={side} className={`flex flex-col items-center text-center gap-2 ${i === 1 ? "order-3" : ""}`}>
               <Headshot f={f} size="w-24 h-24 sm:w-28 sm:h-28" />
-              <p className="font-display text-base sm:text-lg font-black tracking-tight leading-tight" data-testid={`ufc-fighter-${ev.event_id}-${side}`}>{f.name}</p>
+              <p className="font-display text-base sm:text-lg font-black tracking-tight leading-tight min-h-[2.5rem] sm:min-h-0 flex items-center" data-testid={`ufc-fighter-${ev.event_id}-${side}`}>{f.name}</p>
               <Record f={f} testid={`ufc-record-${ev.event_id}-${side}`} />
               {sel && <div className="w-full max-w-[9rem] [&>button]:w-full"><OddsButton sel={{ ...sel, market: "moneyline" }} meta={meta} /></div>}
             </div>
           );
         })}
-        <div className="order-2 font-display text-2xl font-black italic text-zinc-600">VS</div>
+        <div className="order-2 self-start mt-10 sm:mt-12 font-display text-2xl font-black italic text-zinc-600">VS</div>
       </div>
       <div className="text-center text-[11px] font-mono text-zinc-500 mt-3">{ev.state === "in" ? "LIVE" : ev.status_detail}</div>
       <ExtraMarkets ev={ev} meta={meta} />
@@ -94,18 +96,18 @@ function BoutRow({ ev }) {
         <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{ev.weight_class || "Bout"}</span>
         <span className="text-[10px] font-mono text-zinc-600">{ev.state === "in" ? "LIVE" : ev.status_detail}</span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-2">
         {["away", "home"].map((side) => {
           const f = ev[side];
           const sel = fighterOdds(ev, side);
           return (
-            <div key={side} className={`flex items-center gap-2.5 min-w-0 ${side === "home" ? "flex-row-reverse text-right" : ""}`}>
-              <Headshot f={f} size="w-11 h-11 shrink-0" />
+            <div key={side} className="flex items-center gap-2.5 min-w-0">
+              <Headshot f={f} size="w-10 h-10 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold truncate" data-testid={`ufc-fighter-${ev.event_id}-${side}`}>{f.name}</p>
                 <Record f={f} testid={`ufc-record-${ev.event_id}-${side}`} />
               </div>
-              {sel && <div className="w-20 shrink-0 [&>button]:w-full"><OddsButton sel={{ ...sel, market: "moneyline", label: "Win" }} meta={meta} /></div>}
+              {sel && <div className="w-24 shrink-0 [&>button]:w-full"><OddsButton sel={{ ...sel, market: "moneyline", label: "To Win" }} meta={meta} /></div>}
             </div>
           );
         })}

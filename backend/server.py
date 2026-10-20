@@ -30,6 +30,7 @@ import ipaddress
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
+from types import SimpleNamespace
 
 # ----------------------------------------------------------------------------
 # DB
@@ -126,6 +127,7 @@ class PlaceBetInput(BaseModel):
     coin: str
     bet_type: str = "single"
     accept_better: bool = True
+    boost_id: Optional[str] = None
 
 
 # ----------------------------------------------------------------------------
@@ -454,7 +456,7 @@ async def _espn_ufc_card(date_str):
                     rec = next((x.get("summary") for x in p.get("records") or [] if x.get("type") == "total"), None)
                     fighters[_norm_name(a.get("displayName") or a.get("fullName"))] = {
                         "photo": f"https://a.espncdn.com/i/headshots/mma/players/full/{p.get('id')}.png" if p.get("id") else "",
-                        "record": rec, "flag": (a.get("flag") or {}).get("href", ""),
+                        "name": a.get("displayName"), "record": rec, "flag": (a.get("flag") or {}).get("href", ""),
                         "country": (a.get("flag") or {}).get("alt", ""),
                         "card_name": e.get("name"), "weight_class": (c.get("type") or {}).get("abbreviation"),
                         "bout_order": idx, "main_event": idx == len(comps) - 1,
@@ -486,6 +488,8 @@ async def _enrich_ufc(events):
             f = lookup.get(_norm_name(ev[side]["name"]))
             if f:
                 ev[side].update({k: f[k] for k in ("photo", "record", "flag", "country")})
+                if f.get("name"):
+                    ev[side]["name"] = f["name"]
                 info = f
         if info:
             ev.update({"card_name": info["card_name"], "weight_class": info["weight_class"],
@@ -540,6 +544,8 @@ async def fetch_sgo_league(meta):
         ttl = 30
     if key == "UFC" and events:
         await _enrich_ufc(events)
+        if not any(e.get("card_name") for e in events):
+            ttl = 60
     _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": ttl, "data": events}
     return events
 
@@ -1349,17 +1355,108 @@ async def _verify_selections(selections, accept_better=True):
             "changed": changed, "unavailable": gone})
 
 
+BOOST_TIERS = [("botd", "Bet of the Day", 0.15), ("boosted", "Boosted Odds", 0.20), ("golden", "Golden Boost", 0.30)]
+
+
+def _boost_leg(ev, market, side, pick, line, odds):
+    return {"event_id": ev["event_id"], "league": ev["league"], "league_label": ev["league_label"],
+            "home": ev["home"]["abbr"], "away": ev["away"]["abbr"], "home_name": ev["home"]["name"],
+            "away_name": ev["away"]["name"], "status_detail": ev.get("status_detail"),
+            "market": market, "side": side, "pick": pick, "line": line, "odds": odds}
+
+
+def _boost_legs(ev):
+    mk = {m["market"]: m for m in ev.get("markets", [])}
+    legs = []
+    ml = [x for x in (mk.get("moneyline") or {}).get("selections", []) if x["side"] != "draw" and x.get("odds")]
+    if ml:
+        f = min(ml, key=lambda x: x["odds"])
+        legs.append(_boost_leg(ev, "moneyline", f["side"], f["pick"], f.get("line"), f["odds"]))
+    tot = [x for x in (mk.get("total") or {}).get("selections", []) if x.get("odds")]
+    if tot:
+        t = min(tot, key=lambda x: x["odds"])
+        legs.append(_boost_leg(ev, "total", t["side"], t["pick"], t.get("line"), t["odds"]))
+    props = [p for p in ev.get("props") or [] if p.get("over") and 1.5 <= p["over"] <= 3.0]
+    if props:
+        p = min(props, key=lambda x: abs(x["over"] - 2))
+        legs.append(_boost_leg(ev, "prop", f"{p['stat']}:{p['player_id']}:over",
+                               f"{p['player']} O{p['line']} {p['label']}", p["line"], p["over"]))
+    else:
+        sp = [x for x in (mk.get("spread") or {}).get("selections", []) if x.get("odds")]
+        if sp:
+            x = min(sp, key=lambda y: y["odds"])
+            legs.append(_boost_leg(ev, "spread", x["side"], x["pick"], x.get("line"), x["odds"]))
+    return legs if len(legs) == 3 else None
+
+
+def _boost_price(legs, pct):
+    base = compute_parlay_odds([SimpleNamespace(**l) for l in legs])
+    return round(base, 2), round(1 + (base - 1) * (1 + pct), 2)
+
+
+def build_boosts():
+    soon = datetime.now(timezone.utc) + timedelta(minutes=5)
+    cands = []
+    for c in _SGO_CACHE.values():
+        for ev in c["data"]:
+            try:
+                st = datetime.fromisoformat(ev["start"].replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if ev["state"] != "pre" or st < soon:
+                continue
+            legs = _boost_legs(ev)
+            if legs:
+                cands.append((legs[2]["market"] != "prop", ev["start"], ev, legs))
+    cands.sort(key=lambda x: (x[0], x[1]))
+    picked, leagues = [], set()
+    for pass_ in (0, 1):
+        for c in cands:
+            if len(picked) == len(BOOST_TIERS):
+                break
+            if c in picked or (pass_ == 0 and c[2]["league_key"] in leagues):
+                continue
+            picked.append(c)
+            leagues.add(c[2]["league_key"])
+    out = []
+    for (tier, label, pct), (_, _, ev, legs) in zip(BOOST_TIERS, picked):
+        base, boosted = _boost_price(legs, pct)
+        out.append({"id": f"{tier}:{ev['event_id']}", "tier": tier, "label": label, "pct": pct,
+                    "event_id": ev["event_id"], "league_label": ev["league_label"], "starts_at": ev["start"],
+                    "home": ev["home"]["name"], "away": ev["away"]["name"],
+                    "legs": legs, "base_odds": base, "boosted_odds": boosted})
+    return out
+
+
+@api_router.get("/boosts")
+async def get_boosts():
+    if not any(c["data"] for c in _SGO_CACHE.values()):
+        await _fetch_sgo_sequential(SGO_LEAGUES)
+    return {"boosts": build_boosts()}
+
+
+def _leg_sig(x):
+    return (x["event_id"], x["market"], x["side"], x.get("line"))
+
+
 @api_router.post("/bets")
 async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user)):
     if body.coin not in STARTING_BALANCES:
         raise HTTPException(status_code=400, detail="Invalid coin")
     await ensure_wallet(user["id"])
+    boost = None
+    if body.boost_id:
+        boost = next((b for b in build_boosts() if b["id"] == body.boost_id), None)
+        if not boost or {_leg_sig(l) for l in boost["legs"]} != {_leg_sig(s.model_dump()) for s in body.selections}:
+            raise HTTPException(status_code=409, detail={"msg": "This boost is no longer available", "changed": [], "unavailable": [], "boost_gone": True})
     await _verify_selections(body.selections, body.accept_better)
 
-    is_parlay = body.bet_type == "parlay" and len(body.selections) > 1
+    is_parlay = (body.bet_type == "parlay" and len(body.selections) > 1) or bool(boost)
     if not is_parlay and len(body.selections) != 1:
         raise HTTPException(status_code=400, detail="Single bets take exactly one selection")
     total_odds = round(compute_parlay_odds(body.selections), 2) if is_parlay else round(body.selections[0].odds, 2)
+    if boost:
+        total_odds = _boost_price([s.model_dump() for s in body.selections], boost["pct"])[1]
     potential = round(body.stake * total_odds, 6)
 
     res = await db.wallets.update_one({"user_id": user["id"], f"balances.{body.coin}": {"$gte": body.stake}},
@@ -1371,6 +1468,7 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
            "bet_type": "parlay" if is_parlay else "single",
            "stake": body.stake, "coin": body.coin, "total_odds": total_odds,
            "potential_payout": potential, "status": "open",
+           "boost": {"id": boost["id"], "label": boost["label"], "pct": boost["pct"]} if boost else None,
            "created_at": now_iso()}
     await db.bets.insert_one(dict(bet))
     await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"],

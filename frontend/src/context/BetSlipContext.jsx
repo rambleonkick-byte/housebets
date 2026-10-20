@@ -21,10 +21,12 @@ function baseKey(s) {
 export function BetSlipProvider({ children }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
+  const [boost, setBoost] = useState(null);
   const [acceptBetter, setAcceptBetter] = useState(() => localStorage.getItem("apex_accept_better") !== "0");
   useEffect(() => { localStorage.setItem("apex_accept_better", acceptBetter ? "1" : "0"); }, [acceptBetter]);
 
   const addSelection = useCallback((sel) => {
+    setBoost(null);
     setItems((prev) => {
       const id = selId(sel);
       // Clicking the same pick again toggles it off.
@@ -45,9 +47,10 @@ export function BetSlipProvider({ children }) {
   }, []);
 
   const removeSelection = useCallback((id) => {
+    setBoost(null);
     setItems((prev) => prev.filter((p) => selId(p) !== id));
   }, []);
-  const clear = useCallback(() => setItems([]), []);
+  const clear = useCallback(() => { setItems([]); setBoost(null); }, []);
   // Mark a price move on a leg; worse moves (or any move when auto-accept is off) need confirmation.
   const movePrice = useCallback((p, odds, autoOk) => {
     if (Math.round(odds * 100) === Math.round(p.odds * 100)) return p;
@@ -76,14 +79,15 @@ export function BetSlipProvider({ children }) {
       .map((p) => (upd.has(selId(p)) ? { ...movePrice(p, upd.get(selId(p)), false), pending: true } : p)));
   }, [movePrice]);
 
-  const loadSlip = useCallback((sels) => {
+  const loadSlip = useCallback((sels, b = null) => {
     setItems(sels.map((s) => ({ ...s, _id: selId(s) })));
+    setBoost(b);
     setOpen(true);
   }, []);
   const has = useCallback((sel) => items.some((p) => selId(p) === selId(sel)), [items]);
 
   return (
-    <BetSlipContext.Provider value={{ items, addSelection, removeSelection, clear, has, open, setOpen, selId, loadSlip, applyServerPrices, syncPrices, acceptChanges, acceptBetter, setAcceptBetter }}>
+    <BetSlipContext.Provider value={{ items, addSelection, removeSelection, clear, has, open, setOpen, selId, loadSlip, applyServerPrices, syncPrices, boost, setBoost, acceptChanges, acceptBetter, setAcceptBetter }}>
       {children}
     </BetSlipContext.Provider>
   );

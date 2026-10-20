@@ -112,7 +112,7 @@ function GameCard({ legs, selId, onRemove }) {
 }
 
 export function BetSlip() {
-  const { items, removeSelection, clear, selId, open, setOpen, applyServerPrices, acceptChanges, acceptBetter, setAcceptBetter } = useBetSlip();
+  const { items, removeSelection, clear, selId, open, setOpen, applyServerPrices, acceptChanges, acceptBetter, setAcceptBetter, boost, setBoost } = useBetSlip();
   const pendingChanges = items.some((s) => s.pending);
   const { user, setAuthOpen, setBalances } = useAuth();
   const [stake, setStake] = useState("");
@@ -122,8 +122,9 @@ export function BetSlip() {
   const [share, setShare] = useState(null);
   const [sharing, setSharing] = useState(false);
 
-  const isParlay = mode === "parlay" && items.length > 1;
-  const parlayOdds = useMemo(() => computeParlayOdds(items), [items]);
+  const isParlay = !!boost || (mode === "parlay" && items.length > 1);
+  const rawParlay = useMemo(() => computeParlayOdds(items), [items]);
+  const parlayOdds = boost ? 1 + (rawParlay - 1) * (1 + boost.pct) : rawParlay;
   const groups = useMemo(() => groupByGame(items), [items]);
   const hasSgp = useMemo(() => groups.some((g) => g.length > 1), [groups]);
   const anyLive = items.some((s) => s.live);
@@ -134,7 +135,7 @@ export function BetSlip() {
   const totalStake = isParlay ? stakeNum : stakeNum * items.length;
   const bal = user?.balances?.[coin] ?? 0;
 
-  const oddsLabel = isParlay ? "Combined odds" : "Single bets";
+  const oddsLabel = boost ? boost.label : isParlay ? "Combined odds" : "Single bets";
   const oddsValue = isParlay ? fmtOdds(parlayOdds) : items.length === 1 ? fmtOdds(items[0].odds) : `×${items.length}`;
 
   const shareSlip = async () => {
@@ -157,7 +158,7 @@ export function BetSlip() {
     setLoading(true);
     try {
       if (isParlay) {
-        const { data } = await api.post("/bets", { selections: items.map(stripSel), stake: stakeNum, coin, bet_type: "parlay", accept_better: acceptBetter });
+        const { data } = await api.post("/bets", { selections: items.map(stripSel), stake: stakeNum, coin, bet_type: "parlay", accept_better: acceptBetter, boost_id: boost?.id ?? null });
         setBalances(data.balances);
       } else {
         let lastBal = null;
@@ -174,7 +175,10 @@ export function BetSlip() {
       setStake("");
     } catch (e) {
       const d = e.response?.data?.detail;
-      if (e.response?.status === 409 && d) {
+      if (e.response?.status === 409 && d?.boost_gone) {
+        setBoost(null);
+        toast.warning(d.msg, { description: "Your picks are still on the slip at regular odds." });
+      } else if (e.response?.status === 409 && d) {
         applyServerPrices(d);
         toast.warning(d.msg, { description: "Your slip has been updated to the latest odds." });
       } else {
@@ -223,7 +227,12 @@ export function BetSlip() {
             </span>
           )}
         </div>
-        {items.length > 1 && (
+        {boost && (
+          <div data-testid="bet-slip-boost-banner" className="flex items-center gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1.5">
+            <Zap size={12} fill="currentColor" /> {boost.label} · +{Math.round(boost.pct * 100)}% boost applied
+          </div>
+        )}
+        {items.length > 1 && !boost && (
           <div className="flex gap-1 bg-[#12141C] border border-[#232838] p-1 rounded-full">
             {["single", "parlay"].map((m) => (
               <button key={m} data-testid={`bet-slip-mode-${m}`} onClick={() => setMode(m)}
@@ -254,9 +263,12 @@ export function BetSlip() {
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{oddsLabel}</p>
               <p className="text-[10px] uppercase tracking-wider text-zinc-600">{items.length} selection{items.length > 1 ? "s" : ""}</p>
             </div>
-            <p className="font-mono text-2xl font-bold text-emerald-400" data-testid="bet-slip-combined-odds">
-              {oddsValue}
-            </p>
+            <div className="text-right leading-none">
+              {boost && <p className="font-mono text-xs text-zinc-600 line-through mb-1" data-testid="bet-slip-boost-base">{fmtOdds(rawParlay)}</p>}
+              <p className="font-mono text-2xl font-bold text-emerald-400" data-testid="bet-slip-combined-odds">
+                {oddsValue}
+              </p>
+            </div>
           </div>
 
           <div className="flex gap-1.5">
