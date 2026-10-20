@@ -982,16 +982,21 @@ async def _credit_static_txs(sa, txs) -> float:
         amt = float(tx.get("sent_amount") or tx.get("received_amount") or 0)
         if not h or amt <= 0 or str(tx.get("status", "")).lower() != "confirmed":
             continue
+        # A static address can receive other tokens on the same chain; credit the coin actually sent
+        coin = str(tx.get("currency") or sa["coin"]).upper()
+        if coin not in STARTING_BALANCES:
+            logger.warning(f"static deposit {h}: unsupported currency {coin}, not credited")
+            continue
         try:
-            await db.static_deposits.insert_one({"tx_hash": h, "user_id": sa["user_id"], "coin": sa["coin"],
+            await db.static_deposits.insert_one({"tx_hash": h, "user_id": sa["user_id"], "coin": coin,
                                                  "net": sa.get("net"), "amount": amt, "track_id": sa["track_id"],
                                                  "notified": False, "created_at": now_iso()})
         except DuplicateKeyError:
             continue
-        await _adjust(sa["user_id"], sa["coin"], amt)
+        await _adjust(sa["user_id"], coin, amt)
         await db.transactions.insert_one({
             "id": str(uuid.uuid4()), "user_id": sa["user_id"], "type": "deposit",
-            "coin": sa["coin"], "amount": amt, "created_at": now_iso(), "hash": "oxapay-static:" + h})
+            "coin": coin, "amount": amt, "created_at": now_iso(), "hash": "oxapay-static:" + h})
         total += amt
     return total
 
