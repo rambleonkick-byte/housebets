@@ -1,6 +1,6 @@
 import { useState } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { BetSlipProvider } from "@/context/BetSlipContext";
@@ -19,19 +19,21 @@ import { Plinko } from "@/pages/games/Plinko";
 import { Keno } from "@/pages/games/Keno";
 import { Dice } from "@/pages/games/Dice";
 import Affiliate from "@/pages/Affiliate";
+import AdminPanel from "@/pages/AdminPanel";
 
 function Shell() {
   const { user, setAuthOpen } = useAuth();
   const [walletOpen, setWalletOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const navigate = useNavigate();
 
   const openWallet = () => (user ? setWalletOpen(true) : setAuthOpen(true));
   const openHistory = () => (user ? setHistoryOpen(true) : setAuthOpen(true));
 
   return (
     <div className="min-h-screen bg-background text-foreground grain">
-      <Header onWallet={openWallet} onHistory={openHistory} onAdmin={() => setAdminOpen(true)} />
+      <Header onWallet={openWallet} onHistory={openHistory} onAdmin={() => navigate("/admin")} />
       <div className="pt-16">
         <Routes>
           <Route path="/" element={<Sportsbook />} />
@@ -43,6 +45,7 @@ function Shell() {
           <Route path="/casino/dice" element={<Dice />} />
           <Route path="/casino/blackjack" element={<Blackjack />} />
           <Route path="/affiliate" element={<Affiliate />} />
+          <Route path="/admin" element={<AdminPanel onWithdrawals={() => setAdminOpen(true)} />} />
         </Routes>
       </div>
       <AuthModal />

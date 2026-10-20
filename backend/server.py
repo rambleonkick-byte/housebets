@@ -151,6 +151,8 @@ async def get_current_user(request: Request) -> dict:
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        if user.get("blocked"):
+            raise HTTPException(status_code=403, detail="Account locked. Contact support.")
         user["id"] = str(user.pop("_id"))
         user.pop("password_hash", None)
         return user
@@ -214,6 +216,8 @@ async def login(body: LoginInput, response: Response):
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if user.get("blocked"):
+        raise HTTPException(status_code=403, detail="Account locked. Contact support.")
     uid = str(user["_id"])
     await ensure_wallet(uid)
     set_auth_cookie(response, create_access_token(uid, email))
@@ -2661,6 +2665,113 @@ async def claim_affiliate(user: dict = Depends(get_current_user)):
                                           "coin": coin, "amount": v, "created_at": now_iso(),
                                           "hash": "0x" + uuid.uuid4().hex[:24]})
     return {"claimed": avail, "balances": await _balances(user["id"])}
+
+
+# ----------------------------------------------------------------------------
+# Admin: users, balances, blocking
+# ----------------------------------------------------------------------------
+class AdjustInput(BaseModel):
+    coin: str
+    amount: float
+    reason: str = Field(min_length=2, max_length=200)
+
+
+class BlockInput(BaseModel):
+    blocked: bool
+    reason: Optional[str] = Field(default=None, max_length=200)
+
+
+async def _sum_by_user(coll, match, field):
+    out = {}
+    async for r in db[coll].aggregate([{"$match": match},
+                                       {"$group": {"_id": {"u": "$user_id", "c": "$coin"}, "t": {"$sum": f"${field}"}}}]):
+        out.setdefault(r["_id"]["u"], {})[r["_id"]["c"]] = round(r["t"], 8)
+    return out
+
+
+async def _money_flow(ids):
+    dep = await _sum_by_user("transactions", {"user_id": {"$in": ids}, "type": "deposit"}, "amount")
+    wd = await _sum_by_user("withdrawals", {"user_id": {"$in": ids},
+                                            "status": {"$nin": ["rejected", "failed", "canceled"]}}, "amount")
+    wag = await _sum_by_user("bets", {"user_id": {"$in": ids}}, "stake")
+    for u, v in (await _sum_by_user("casino_games", {"user_id": {"$in": ids}}, "stake")).items():
+        for c, t in v.items():
+            wag.setdefault(u, {})[c] = round(wag.get(u, {}).get(c, 0) + t, 8)
+    return dep, wd, wag
+
+
+@api_router.get("/admin/users")
+async def admin_users(q: Optional[str] = None, skip: int = 0, limit: int = 50, admin: dict = Depends(get_admin_user)):
+    flt = {}
+    if q and q.strip():
+        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
+        flt = {"$or": [{"name": rx}, {"email": rx}]}
+    total = await db.users.count_documents(flt)
+    users = await db.users.find(flt, {"password_hash": 0}).sort("created_at", -1).skip(max(0, skip)).limit(min(limit, 200)).to_list(200)
+    ids = [str(u["_id"]) for u in users]
+    wallets = {w["user_id"]: w.get("balances", {}) async for w in db.wallets.find({"user_id": {"$in": ids}})}
+    dep, wd, wag = await _money_flow(ids)
+    ref_ids = list({u["referred_by"] for u in users if u.get("referred_by")})
+    refs = {str(r["_id"]): r.get("name") or r["email"] async for r in db.users.find(
+        {"_id": {"$in": [ObjectId(x) for x in ref_ids if ObjectId.is_valid(x)]}}, {"name": 1, "email": 1})}
+    today = datetime.now(timezone.utc).date().isoformat()
+    rows = [{"id": uid, "name": u.get("name"), "email": u["email"], "role": u.get("role", "user"),
+             "created_at": u.get("created_at"), "blocked": bool(u.get("blocked")),
+             "referred_by": refs.get(u.get("referred_by")), "balances": wallets.get(uid, {}),
+             "deposits": dep.get(uid, {}), "withdrawals": wd.get(uid, {}), "wagered": wag.get(uid, {})}
+            for u, uid in zip(users, ids)]
+    return {"users": rows, "total": total,
+            "signups_today": await db.users.count_documents({"created_at": {"$gte": today}}),
+            "blocked": await db.users.count_documents({"blocked": True})}
+
+
+async def _admin_target(uid):
+    if not ObjectId.is_valid(uid):
+        raise HTTPException(404, "User not found")
+    u = await db.users.find_one({"_id": ObjectId(uid)})
+    if not u:
+        raise HTTPException(404, "User not found")
+    return u
+
+
+@api_router.post("/admin/users/{uid}/adjust")
+async def admin_adjust(uid: str, body: AdjustInput, admin: dict = Depends(get_admin_user)):
+    u = await _admin_target(uid)
+    if body.coin not in STARTING_BALANCES:
+        raise HTTPException(400, "Unknown coin")
+    amt = round(body.amount, 8)
+    if amt == 0:
+        raise HTTPException(400, "Amount can't be zero")
+    await ensure_wallet(uid)
+    flt = {"user_id": uid}
+    if amt < 0:
+        flt[f"balances.{body.coin}"] = {"$gte": -amt}
+    res = await db.wallets.update_one(flt, {"$inc": {f"balances.{body.coin}": amt}})
+    if not res.modified_count:
+        raise HTTPException(400, "Balance can't go below zero")
+    await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "type": "adjustment", "coin": body.coin,
+                                      "amount": amt, "created_at": now_iso(), "hash": "admin:" + uuid.uuid4().hex[:12]})
+    await db.admin_actions.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "user_email": u["email"],
+                                       "admin": admin["email"], "action": "adjust", "coin": body.coin, "amount": amt,
+                                       "reason": body.reason, "created_at": now_iso()})
+    return {"balances": await _balances(uid)}
+
+
+@api_router.post("/admin/users/{uid}/block")
+async def admin_block(uid: str, body: BlockInput, admin: dict = Depends(get_admin_user)):
+    u = await _admin_target(uid)
+    if uid == admin["id"] or u.get("role") == "admin":
+        raise HTTPException(400, "Admin accounts can't be locked")
+    await db.users.update_one({"_id": u["_id"]}, {"$set": {"blocked": body.blocked}})
+    await db.admin_actions.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "user_email": u["email"],
+                                       "admin": admin["email"], "action": "block" if body.blocked else "unblock",
+                                       "reason": body.reason, "created_at": now_iso()})
+    return {"blocked": body.blocked}
+
+
+@api_router.get("/admin/users/{uid}/log")
+async def admin_user_log(uid: str, admin: dict = Depends(get_admin_user)):
+    return {"actions": await db.admin_actions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(100)}
 
 
 app.include_router(api_router)
