@@ -430,6 +430,68 @@ def _sgo_player_results(ev):
     return out
 
 
+_ESPN_UFC_CACHE = {}
+ESPN_UFC_SB = "https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
+
+
+def _norm_name(s):
+    return re.sub(r"[^a-z]", "", (s or "").lower())
+
+
+async def _espn_ufc_card(date_str):
+    cached = _ESPN_UFC_CACHE.get(date_str)
+    if cached and datetime.now(timezone.utc).timestamp() - cached["ts"] < 3600:
+        return cached["data"]
+    fighters = {}
+    try:
+        async with httpx.AsyncClient(timeout=10) as hc:
+            r = await hc.get(ESPN_UFC_SB, params={"dates": date_str})
+        for e in (r.json().get("events") or []):
+            comps = e.get("competitions") or []
+            for idx, c in enumerate(comps):
+                for p in c.get("competitors") or []:
+                    a = p.get("athlete") or {}
+                    rec = next((x.get("summary") for x in p.get("records") or [] if x.get("type") == "total"), None)
+                    fighters[_norm_name(a.get("displayName") or a.get("fullName"))] = {
+                        "photo": f"https://a.espncdn.com/i/headshots/mma/players/full/{p.get('id')}.png" if p.get("id") else "",
+                        "record": rec, "flag": (a.get("flag") or {}).get("href", ""),
+                        "country": (a.get("flag") or {}).get("alt", ""),
+                        "card_name": e.get("name"), "weight_class": (c.get("type") or {}).get("abbreviation"),
+                        "bout_order": idx, "main_event": idx == len(comps) - 1,
+                    }
+    except Exception as ex:
+        logger.warning(f"ESPN UFC fetch failed {date_str}: {ex}")
+        _ESPN_UFC_CACHE[date_str] = {"ts": datetime.now(timezone.utc).timestamp() - 3300, "data": {}}
+        return {}
+    _ESPN_UFC_CACHE[date_str] = {"ts": datetime.now(timezone.utc).timestamp(), "data": fighters}
+    return fighters
+
+
+async def _enrich_ufc(events):
+    dates = set()
+    for ev in events:
+        try:
+            d = datetime.fromisoformat(ev["start"].replace("Z", "+00:00"))
+        except Exception:
+            continue
+        for off in (-1, 0, 1):
+            dates.add((d + timedelta(days=off)).strftime("%Y%m%d"))
+    cards = await asyncio.gather(*[_espn_ufc_card(d) for d in sorted(dates)])
+    lookup = {}
+    for c in cards:
+        lookup.update(c)
+    for ev in events:
+        info = {}
+        for side in ("home", "away"):
+            f = lookup.get(_norm_name(ev[side]["name"]))
+            if f:
+                ev[side].update({k: f[k] for k in ("photo", "record", "flag", "country")})
+                info = f
+        if info:
+            ev.update({"card_name": info["card_name"], "weight_class": info["weight_class"],
+                       "bout_order": info["bout_order"], "main_event": info["main_event"]})
+
+
 async def fetch_sgo_league(meta):
     if not SGO_KEY:
         return []
@@ -476,6 +538,8 @@ async def fetch_sgo_league(meta):
     except Exception as e:
         logger.warning(f"SGO fetch failed for {key}: {e}")
         ttl = 30
+    if key == "UFC" and events:
+        await _enrich_ufc(events)
     _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": ttl, "data": events}
     return events
 
@@ -494,8 +558,13 @@ async def list_sports():
 
 
 @api_router.get("/odds")
-async def get_odds(league: Optional[str] = None):
-    metas = [m for m in SGO_LEAGUES if m["group"] == league] if league else SGO_LEAGUES
+async def get_odds(league: Optional[str] = None, league_key: Optional[str] = None):
+    if league_key:
+        metas = [m for m in SGO_LEAGUES if m["id"] == league_key]
+        if not metas:
+            raise HTTPException(404, "Unknown league")
+    else:
+        metas = [m for m in SGO_LEAGUES if m["group"] == league] if league else SGO_LEAGUES
     out = await _fetch_sgo_sequential(metas)
     _kick_auto_cashouts()
     out.sort(key=lambda e: (0 if e["state"] == "in" else 1 if e["state"] == "pre" else 2, e.get("start") or ""))

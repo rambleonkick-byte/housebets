@@ -15,7 +15,7 @@ function TeamLogo({ team }) {
   );
 }
 
-function OddsButton({ sel, meta }) {
+export function OddsButton({ sel, meta }) {
   const { addSelection, has } = useBetSlip();
   const active = has({ ...sel, event_id: meta.event_id });
   const closed = meta.state === "post";
@@ -52,13 +52,15 @@ function OddsButton({ sel, meta }) {
   );
 }
 
+export const buildMeta = (ev) => ({
+  event_id: ev.event_id, league: ev.league, league_label: ev.league_label,
+  home: ev.home.abbr, away: ev.away.abbr,
+  home_name: ev.home.name, away_name: ev.away.name, status_detail: ev.status_detail, live: ev.state === "in", state: ev.state,
+});
+
 export function MatchCard({ ev }) {
   const live = ev.state === "in";
-  const meta = {
-    event_id: ev.event_id, league: ev.league, league_label: ev.league_label,
-    home: ev.home.abbr, away: ev.away.abbr,
-    home_name: ev.home.name, away_name: ev.away.name, status_detail: ev.status_detail, live, state: ev.state,
-  };
+  const meta = buildMeta(ev);
   const moneyline = ev.markets.find((m) => m.market === "moneyline");
   const spread = ev.markets.find((m) => m.market === "spread");
   const total = ev.markets.find((m) => m.market === "total");
@@ -171,7 +173,7 @@ function PropsSection({ ev, meta }) {
   );
 }
 
-function Market({ label, cols, children }) {
+export function Market({ label, cols, children }) {
   return (
     <div>
       <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-600 mb-1.5">{label}</p>
