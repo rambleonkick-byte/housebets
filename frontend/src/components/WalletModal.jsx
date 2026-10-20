@@ -179,9 +179,13 @@ export function WalletModal({ open, onClose }) {
 
                 {tab === "deposit" && deposit && (
                   <div className="space-y-3" data-testid="deposit-address-panel">
-                    <div className="bg-white rounded-lg p-3 flex items-center justify-center">
-                      <img src={deposit.qr_code} alt="Deposit QR" data-testid="deposit-qr"
-                        className="w-44 h-44 object-contain" />
+                    <div className="flex justify-center py-2">
+                      <div className="relative p-2.5 bg-white rounded-xl shadow-[0_0_0_1px_#2A2F45,0_8px_30px_-8px_rgba(16,185,129,0.35)]">
+                        <img src={deposit.qr_code} alt="Deposit QR" data-testid="deposit-qr"
+                          className="w-40 h-40 object-contain block [image-rendering:pixelated]" />
+                        <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#12141C] border"
+                          style={{ color: COIN_META[coin].color, borderColor: COIN_META[coin].color }}>{coin}</span>
+                      </div>
                     </div>
                     <div className="text-center">
                       <p className="text-[11px] font-mono uppercase tracking-wider text-emerald-400" data-testid="deposit-permanent-label">Your permanent {coin} address</p>
