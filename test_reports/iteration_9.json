@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 9 re-verify. Blackjack race fix: PASS. Over 3 probe runs (player 30 rounds x16 parallel, player 20 rounds x32 parallel, admin 20 rounds x24 parallel at the same time), I sent 63 active hands mixed hit/stand/double calls at once: 0 wallet mismatches (delta == total_payout - total_stake), exactly 1 casino_games record per hand (nonce+user_id), 0 stuck locks, 0 open hands left. Unknown game_id -> 404, foreign user's game_id -> 404, a fresh lock -> 409, a stale lock (>15s) is recovered -> 200 and released. pytest test_blackjack.py: 16/16 pass. House Games strip: PASS. scrollbar-width is none, offsetHeight == clientHeight (no scrollbar gutter) at 1920 and 390. A horizontal wheel scrolls it (scrollLeft 0 -> 88, the max) and on mobile scrollBy works (scrollWidth 976 > clientWidth 366). No page-level horizontal overflow. Blackjack resume: PASS. After a reload during a hand with side bets 0.02/0.03/0.04, the side inputs are restored and disabled, and bj-total-bet shows 'Total bet 0.19 USDT' (stake + sides). After stand, Deal is back and inputs are enabled again.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/casino/blackjack/action", "issue": "Legacy docs with lock=True and no lock_at are never recovered (the stale check needs lock_at < stale) and return 409 forever. None exist in the DB right now (count 0), so this is theoretical. Optionally add {lock_at: {$exists: false}, lock: {$nin:[None,False]}} to the stale branch."},
+      {"endpoint": "POST /api/casino/blackjack/action", "issue": "Edge case: double/split/insurance take the wallet deduction BEFORE the token-guarded save. If the lock is stolen by stale recovery (a request taking >15s), the save raises 409 and the extra stake is already deducted and never refunded. Also, a crash between _bj_save and _bj_settle leaves a 'done' hand that was never paid or recorded. Low probability; consider refunding on save failure."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Home House Games strip", "issues": ["With the scrollbar hidden, desktop mouse users (vertical wheel only, no trackpad) have no obvious way to scroll. Only the cut-off last card hints there is more. Consider an edge fade or prev/next arrows, or mapping the vertical wheel to horizontal scroll (optional)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_blackjack.py",
+    "/app/backend/tests/race_probe_blackjack_it9.py",
+    "/app/backend/tests/probe_blackjack_lock_edges.py",
+    "/app/test_reports/pytest/pytest_blackjack_it9.xml"
+  ],
+  "action_items": [
+    "Optional: handle legacy lock=True docs without lock_at in the stale-recovery query",
+    "Optional: refund the double/split/insurance deduction if _bj_save fails with 409",
+    "Optional UX: add a scroll affordance (fade/arrows) to the casino strip now that the scrollbar is hidden"
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~2200 lines; split the casino/blackjack logic into its own module",
+    "The lock token + token-guarded replace_one + settle-after-save design is correct; the release in finally is token-scoped, so it can no longer release another request's lock"
+  ],
+  "updated_files": ["/app/backend/tests/race_probe_blackjack_it9.py", "/app/backend/tests/probe_blackjack_lock_edges.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "About 70 blackjack hands at 0.1 USDT (+ small side bets) on player@apexodds.io and admin@apexodds.io",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: REACT_APP_BACKEND_URL=... PAR=16 ROUNDS=30 python backend/tests/race_probe_blackjack_it9.py [email pw]. The insurance path in the resume UI was not exercised this round (the deal landed on an active hand); it was verified in iteration_8. Wallet/sidebar were not retested, as requested."
+}

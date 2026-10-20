@@ -133,3 +133,9 @@
 ## Auto-Bet Win/Loss Adjust + Mines Auto-Pick (2026-06)
 - PlayArea: "On win" / "On loss" → Reset (back to base stake) or Increase by X% of last stake. Base stake restored when auto bet ends. Verified Dice on-loss +100%: 0.01 → 0.02 → 0.04, restored to 0.01.
 - Mines now has Manual/Auto. Auto: tap tiles to build a numbered pattern (violet, capped at 25 − mines, Clear button); each round starts a game, reveals the pattern in order (gem/bomb sounds), cashes out if all safe (BigWin), else counts as loss. Works with rounds, stop on profit/loss and win/loss adjust. Verified 3/3 rounds.
+
+## Odds Feed → API-Sports (2026-06)
+- New `backend/apisports.py` (key `APISPORTS_KEY` in backend/.env, Free plan 100 req/day per sport). Soccer: v3 football fixtures (yesterday+today) + odds (today, Bet365 id 8, pages 1–2) → moneyline 1X2 + Over/Under 2.5. NBA(12)/NHL(57)/MLB(1)/NFL(1): v1 games by date for status & scores.
+- Free plan blocks current-season odds for v1 sports ("try 2022 to 2024"), so US sports are priced from SportsGameOdds when its matching game is available (team-name match). SGO is also kept for player props (merged into matching API-Sports events).
+- Cache persisted in Mongo `feed_cache` (soccer 60 min TTL, others 45 min; failures back off 10 min) so restarts don't burn quota. `_fetch_sgo_sequential` now returns API-Sports events (+merges); no-market events are `hidden` from /api/odds but used for settlement. Event ids `as-<sport>-<id>`; bets on old SGO ids won't auto-settle.
+- Blackjack: lock-token + guarded save + post-save settle (race fixed, iteration_9 PASS); bj_one_open_hand partial unique index. Wallet "Payment API (pluggable) MOCK" UI removed. Sidebar redesigned (pill tabs, Top Sports card, icons, LIVE badges). House games strip scrollbar hidden.
