@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Settings, Copy, ExternalLink, ShieldCheck } from "lucide-react";
-import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
+import { api, formatApiErrorDetail, COIN_META, COIN_NETWORK } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto, usdValue } from "@/lib/format";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ export function WalletModal({ open, onClose }) {
   const [tab, setTab] = useState("deposit");
   const [coin, setCoin] = useState("USDT");
   const [amount, setAmount] = useState("");
+  const [address, setAddress] = useState("");
   const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cfg, setCfg] = useState(null);
@@ -73,12 +74,14 @@ export function WalletModal({ open, onClose }) {
     // withdraw only (deposits go through generateAddress)
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { toast.error("Enter an amount"); return; }
+    if (!address || address.trim().length < 10) { toast.error("Enter a valid wallet address"); return; }
     setLoading(true);
     try {
-      const { data } = await api.post(`/wallet/withdraw`, { coin, amount: amt });
+      const { data } = await api.post(`/wallet/withdraw`, { coin, amount: amt, address: address.trim() });
       setBalances(data.balances);
-      toast.success(`Withdrew ${amt} ${coin}`);
+      toast.success(`Withdrawal submitted — sending ${amt} ${coin} on-chain`);
       setAmount("");
+      setAddress("");
       load();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
@@ -205,12 +208,19 @@ export function WalletModal({ open, onClose }) {
 
                 {tab === "withdraw" && (
                   <>
+                    <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-start gap-2">
+                      <ArrowUpFromLine size={15} className="text-emerald-400 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-zinc-400">Send your {coin} to any external wallet on the <span className="text-zinc-200">{COIN_NETWORK[coin]}</span> network. Payouts are sent on-chain via OxaPay — double-check the address, crypto sent can't be reversed.</p>
+                    </div>
+                    <input data-testid="wallet-address-input" value={address}
+                      onChange={(e) => setAddress(e.target.value)} placeholder={`${coin} wallet address`}
+                      className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-xs break-all focus:outline-none focus:border-emerald-500" />
                     <input data-testid="wallet-amount-input" type="number" min="0" value={amount}
                       onChange={(e) => setAmount(e.target.value)} placeholder={`Amount in ${coin}`}
                       className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
                     <button data-testid="wallet-submit-button" onClick={act} disabled={loading}
                       className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-60">
-                      {loading && <Loader2 size={16} className="animate-spin" />} Withdraw
+                      {loading && <Loader2 size={16} className="animate-spin" />} Withdraw to Address
                     </button>
                   </>
                 )}

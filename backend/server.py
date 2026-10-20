@@ -88,6 +88,13 @@ class WalletTxInput(BaseModel):
     amount: float
 
 
+class WithdrawInput(BaseModel):
+    coin: str
+    amount: float
+    address: str
+    memo: Optional[str] = None
+
+
 class PaymentConfigInput(BaseModel):
     provider: str
     api_base: str = ""
@@ -351,6 +358,31 @@ def _sgo_markets(ev, draw):
     return markets
 
 
+def _sgo_player_results(ev):
+    """Final per-player stat values for settling props, keyed 'player_id:stat'.
+    SGO attaches a `score` to each market once finished; results.game also holds
+    entity stats. Best-effort — missing values leave a leg unsettled."""
+    out = {}
+    for o in (ev.get("odds", {}) or {}).values():
+        if not isinstance(o, dict) or o.get("periodID") != "game":
+            continue
+        ent = o.get("statEntityID")
+        if ent in ("home", "away", "all") or not ent:
+            continue
+        val = _num(o.get("score"))
+        if val is not None:
+            out[f"{ent}:{o.get('statID')}"] = val
+    game = (ev.get("results") or {}).get("game") or {}
+    if isinstance(game, dict):
+        for ent, stats in game.items():
+            if isinstance(stats, dict):
+                for stat, v in stats.items():
+                    val = _num(v)
+                    if val is not None:
+                        out.setdefault(f"{ent}:{stat}", val)
+    return out
+
+
 async def fetch_sgo_league(meta):
     if not SGO_KEY:
         return []
@@ -391,6 +423,7 @@ async def fetch_sgo_league(meta):
                 "away": {"name": _sgo_long(away), "abbr": aa, "logo": "", "score": _sgo_score(ev, "away")},
                 "markets": markets, "source": "sportsgameodds", "book": "Top books",
                 "props": _sgo_props(ev),
+                "player_results": _sgo_player_results(ev) if state in ("in", "post") else {},
             })
     except Exception as e:
         logger.warning(f"SGO fetch failed for {key}: {e}")
@@ -448,27 +481,65 @@ async def get_wallet(user: dict = Depends(get_current_user)):
 
 
 @api_router.post("/wallet/withdraw")
-async def withdraw(body: WalletTxInput, user: dict = Depends(get_current_user)):
+async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
     await ensure_wallet(user["id"])
     wallet = await db.wallets.find_one({"user_id": user["id"]})
     if body.coin not in STARTING_BALANCES or body.amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid withdrawal")
+    address = (body.address or "").strip()
+    if len(address) < 10:
+        raise HTTPException(status_code=400, detail="Enter a valid wallet address")
     if wallet["balances"].get(body.coin, 0) < body.amount:
         raise HTTPException(status_code=400, detail="Insufficient balance")
+    if not OXAPAY_PAYOUT_KEY:
+        raise HTTPException(status_code=503, detail="Payouts not configured — add an OxaPay payout key")
+
+    # Reserve funds first so a mid-flight failure cannot double-spend.
     await db.wallets.update_one({"user_id": user["id"]},
                                 {"$inc": {f"balances.{body.coin}": -body.amount}})
+    payload = {
+        "address": address, "currency": body.coin, "amount": body.amount,
+        "network": COIN_NETWORK.get(body.coin),
+        "callback_url": f"{os.environ.get('FRONTEND_URL', '')}/api/oxapay/payout/webhook",
+        "description": f"ApexOdds withdrawal ({body.coin})",
+    }
+    if body.memo:
+        payload["memo"] = body.memo
+    try:
+        async with httpx.AsyncClient(timeout=20) as hc:
+            r = await hc.post(f"{OXAPAY_API}/payout", json=payload,
+                              headers={"payout_api_key": OXAPAY_PAYOUT_KEY, "Content-Type": "application/json"})
+        result = r.json()
+    except Exception as e:
+        await db.wallets.update_one({"user_id": user["id"]}, {"$inc": {f"balances.{body.coin}": body.amount}})
+        logger.warning(f"OxaPay payout error: {e}")
+        raise HTTPException(status_code=502, detail="Payout gateway unreachable — balance restored")
+    data = result.get("data") or {}
+    if r.status_code >= 400 or result.get("status") != 200 or not data.get("track_id"):
+        await db.wallets.update_one({"user_id": user["id"]}, {"$inc": {f"balances.{body.coin}": body.amount}})
+        logger.warning(f"OxaPay payout rejected: {r.status_code} {result}")
+        err = (result.get("error") or {}).get("message") or result.get("message") or "Payout rejected"
+        raise HTTPException(status_code=502, detail=f"{err} (balance restored)")
+
+    track_id = str(data["track_id"])
+    status = str(data.get("status", "processing")).lower()
+    await db.oxa_payouts.insert_one({
+        "track_id": track_id, "user_id": user["id"], "coin": body.coin, "amount": body.amount,
+        "address": address, "network": COIN_NETWORK.get(body.coin), "memo": body.memo or "",
+        "status": status, "refunded": False, "tx_hash": None, "created_at": now_iso()})
     tx = {"id": str(uuid.uuid4()), "user_id": user["id"], "type": "withdraw",
           "coin": body.coin, "amount": body.amount, "created_at": now_iso(),
-          "hash": "0x" + uuid.uuid4().hex[:24]}
+          "hash": "oxapay:" + track_id}
     await db.transactions.insert_one(dict(tx))
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
-    return {"balances": wallet["balances"], "transaction": tx}
+    return {"balances": wallet["balances"], "track_id": track_id, "status": status}
 
 
 # ----------------------------------------------------------------------------
 # OxaPay — real crypto deposits
 # ----------------------------------------------------------------------------
 OXAPAY_KEY = os.environ.get("OXAPAY_MERCHANT_API_KEY")
+OXAPAY_PAYOUT_KEY = os.environ.get("OXAPAY_PAYOUT_API_KEY")
 OXAPAY_API = "https://api.oxapay.com/v1"
 
 
@@ -574,6 +645,74 @@ async def oxapay_webhook(request: Request):
 
 
 # ----------------------------------------------------------------------------
+# OxaPay — real crypto payouts (withdrawals)
+# ----------------------------------------------------------------------------
+PAYOUT_FAILED = {"failed", "rejected", "canceled", "cancelled"}
+
+
+async def _refund_payout(track_id: str, status: str):
+    """Idempotently refund a payout that OxaPay reports as failed/rejected/canceled."""
+    status = str(status).lower()
+    if status not in PAYOUT_FAILED:
+        await db.oxa_payouts.update_one({"track_id": track_id}, {"$set": {"status": status}})
+        return
+    po = await db.oxa_payouts.find_one_and_update(
+        {"track_id": track_id, "refunded": {"$ne": True}},
+        {"$set": {"refunded": True, "status": status, "refunded_at": now_iso()}})
+    if not po:
+        return
+    await _adjust(po["user_id"], po["coin"], po["amount"])
+    await db.transactions.insert_one({
+        "id": str(uuid.uuid4()), "user_id": po["user_id"], "type": "refund",
+        "coin": po["coin"], "amount": po["amount"], "created_at": now_iso(),
+        "hash": "oxapay-refund:" + track_id})
+
+
+@api_router.get("/wallet/payout/status/{track_id}")
+async def payout_status(track_id: str, user: dict = Depends(get_current_user)):
+    po = await db.oxa_payouts.find_one({"track_id": track_id, "user_id": user["id"]})
+    if not po:
+        raise HTTPException(status_code=404, detail="Payout not found")
+    status = po.get("status", "processing")
+    if not po.get("refunded") and OXAPAY_PAYOUT_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=15) as hc:
+                r = await hc.get(f"{OXAPAY_API}/payout/{track_id}",
+                                 headers={"payout_api_key": OXAPAY_PAYOUT_KEY})
+            data = r.json().get("data", {})
+            status = data.get("status", status)
+            if data.get("tx_hash"):
+                await db.oxa_payouts.update_one({"track_id": track_id}, {"$set": {"tx_hash": data["tx_hash"]}})
+            await _refund_payout(track_id, status)
+        except Exception as e:
+            logger.warning(f"OxaPay payout poll error: {e}")
+    po = await db.oxa_payouts.find_one({"track_id": track_id}, {"_id": 0})
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"status": po.get("status"), "refunded": po.get("refunded", False),
+            "tx_hash": po.get("tx_hash"), "balances": wallet["balances"] if wallet else {}}
+
+
+@api_router.post("/oxapay/payout/webhook", response_class=PlainTextResponse)
+async def oxapay_payout_webhook(request: Request):
+    raw = await request.body()
+    received = request.headers.get("HMAC", "")
+    if OXAPAY_PAYOUT_KEY:
+        expected = hmac.new(OXAPAY_PAYOUT_KEY.encode(), raw, hashlib.sha512).hexdigest()
+        if not hmac.compare_digest(expected, received.strip()):
+            raise HTTPException(status_code=401, detail="invalid signature")
+    try:
+        event = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON")
+    track_id = event.get("track_id")
+    if track_id:
+        if event.get("tx_hash"):
+            await db.oxa_payouts.update_one({"track_id": str(track_id)}, {"$set": {"tx_hash": event["tx_hash"]}})
+        await _refund_payout(str(track_id), event.get("status", ""))
+    return "ok"
+
+
+# ----------------------------------------------------------------------------
 # Bets
 # ----------------------------------------------------------------------------
 # Same-game parlay correlation: picks from the same game are related, so the
@@ -628,12 +767,27 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
 
 
 def settle_selection(sel, ev) -> Optional[bool]:
+    m, side, line = sel["market"], sel["side"], sel.get("line")
+    if m == "prop":
+        if line is None:
+            return None
+        parts = str(side).split(":")  # stat:player_id:over|under
+        if len(parts) != 3:
+            return None
+        stat, player_id, ou = parts
+        val = (ev.get("player_results") or {}).get(f"{player_id}:{stat}")
+        if val is None:
+            return None
+        if ou == "over":
+            return val > line
+        if ou == "under":
+            return val < line
+        return None
     try:
         hs = int(ev["home"]["score"])
         as_ = int(ev["away"]["score"])
     except (TypeError, ValueError):
         return None
-    m, side, line = sel["market"], sel["side"], sel.get("line")
     if m == "moneyline":
         if side == "home":
             return hs > as_

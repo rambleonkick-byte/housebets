@@ -25,10 +25,13 @@
 ## Backlog (P1/P2)
 - Live score auto-refresh/websocket ticker
 - Cashout on open bets
-- Prop settlement (props currently stay open; needs player box-score data)
 - Crash game (still "SOON" in casino lobby)
-- Real payment provider wiring (NOWPayments/Coinbase) when keys provided
 - Admin settlement panel
+
+## Prop Settlement + Real Payouts (2026-06)
+- Prop bets now settle: `fetch_sgo_league` attaches `player_results` (final per-player stat from each market's `score` field and `results.game`), and `settle_selection` resolves `prop` legs (over/under vs line). Missing stats leave the leg open (best-effort on free tier). Verified via unit test (over/under/missing).
+- Same-game parlays can therefore pay out once all legs settle.
+- Withdraw-to-address: real OxaPay payouts via `POST /v1/payout` (separate OXAPAY_PAYOUT_API_KEY). Flow reserves balance → calls OxaPay → on reject/unreachable refunds immediately; `GET /api/wallet/payout/status/{track_id}` polls and `POST /api/oxapay/payout/webhook` (HMAC-SHA512 with payout key) auto-refund on failed/rejected/canceled. Frontend withdraw tab collects address + amount + network hint. Verified: valid request authenticated & validated by OxaPay (rejected only for empty merchant balance), balance refunded on rejection.
 
 ## Same-Game Parlay (2026-06)
 - Bet slip now allows multiple props/markets from one game. Context blocks conflicting sides of the same underlying market (e.g. Over+Under on one prop line).

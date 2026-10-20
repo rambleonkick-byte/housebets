@@ -22,3 +22,5 @@ export const COIN_META = {
   USDT: { name: "Tether", color: "#26A17B" },
   SOL: { name: "Solana", color: "#14F195" },
 };
+
+export const COIN_NETWORK = { BTC: "BTC", ETH: "ERC20", USDT: "TRC20", SOL: "SOL" };
