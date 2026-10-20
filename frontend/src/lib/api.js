@@ -24,3 +24,17 @@ export const COIN_META = {
 };
 
 export const COIN_NETWORK = { BTC: "BTC", ETH: "ERC20", USDT: "ERC20", SOL: "SOL" };
+
+const EXPLORERS = {
+  BTC: (h) => `https://blockchair.com/bitcoin/transaction/${h}`,
+  ETH: (h) => `https://etherscan.io/tx/${h}`,
+  ERC20: (h) => `https://etherscan.io/tx/${h}`,
+  TRC20: (h) => `https://tronscan.org/#/transaction/${h}`,
+  SOL: (h) => `https://solscan.io/tx/${h}`,
+};
+
+export function explorerUrl(coin, hash, net) {
+  if (!hash) return null;
+  const f = EXPLORERS[coin === "USDT" ? net || COIN_NETWORK.USDT : coin];
+  return f ? f(hash) : null;
+}

@@ -828,7 +828,8 @@ async def _credit_static_txs(sa, txs) -> float:
             continue
         try:
             await db.static_deposits.insert_one({"tx_hash": h, "user_id": sa["user_id"], "coin": sa["coin"],
-                                                 "amount": amt, "track_id": sa["track_id"], "created_at": now_iso()})
+                                                 "net": sa.get("net"), "amount": amt, "track_id": sa["track_id"],
+                                                 "notified": False, "created_at": now_iso()})
         except DuplicateKeyError:
             continue
         await _adjust(sa["user_id"], sa["coin"], amt)
@@ -878,6 +879,31 @@ async def get_deposit_address(coin: str, user: dict = Depends(get_current_user))
     await db.static_addresses.update_one(sel, {"$setOnInsert": sa}, upsert=True)
     sa = await db.static_addresses.find_one(sel)
     return _static_public(sa)
+
+
+_ALERT_SYNC = {}
+
+
+@api_router.get("/wallet/deposit-alerts")
+async def deposit_alerts(user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc).timestamp()
+    if OXAPAY_KEY and now - _ALERT_SYNC.get(user["id"], 0) >= 30:
+        _ALERT_SYNC[user["id"]] = now
+        addrs = await db.static_addresses.find({"user_id": user["id"]}).to_list(20)
+        async with httpx.AsyncClient(timeout=10) as hc:
+            for sa in addrs:
+                try:
+                    r = await hc.get(f"{OXAPAY_API}/payment/{sa['track_id']}", headers={"merchant_api_key": OXAPAY_KEY})
+                    await _credit_static_txs(sa, (r.json().get("data") or {}).get("txs") or [])
+                except Exception as e:
+                    logger.warning(f"deposit alert sync error: {e}")
+    alerts = await db.static_deposits.find({"user_id": user["id"], "notified": False}, {"_id": 0}).to_list(20)
+    if alerts:
+        await db.static_deposits.update_many({"tx_hash": {"$in": [a["tx_hash"] for a in alerts]}},
+                                             {"$set": {"notified": True}})
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"alerts": [{k: a.get(k) for k in ("tx_hash", "coin", "net", "amount", "created_at")} for a in alerts],
+            "balances": (wallet or {}).get("balances")}
 
 
 @api_router.post("/wallet/deposit-address/{coin}/check")
@@ -1539,6 +1565,7 @@ async def startup():
     for c, n in {"BTC": "BTC", "ETH": "ERC20", "USDT": "TRC20", "SOL": "SOL"}.items():
         await db.static_addresses.update_many({"coin": c, "net": {"$exists": False}}, {"$set": {"net": n}})
     await db.static_addresses.create_index([("user_id", 1), ("coin", 1), ("net", 1)], unique=True)
+    await db.static_deposits.update_many({"notified": {"$exists": False}}, {"$set": {"notified": True}})
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@apexodds.io").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})

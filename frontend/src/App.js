@@ -9,6 +9,7 @@ import { AuthModal } from "@/components/AuthModal";
 import { WalletModal } from "@/components/WalletModal";
 import { AdminWithdrawalsModal } from "@/components/AdminWithdrawalsModal";
 import { BetHistoryModal } from "@/components/BetHistoryModal";
+import { DepositAlerts } from "@/components/DepositAlerts";
 import { Sportsbook } from "@/pages/Sportsbook";
 import { Casino } from "@/pages/Casino";
 import { Limbo } from "@/pages/games/Limbo";
@@ -41,6 +42,7 @@ function Shell() {
         </Routes>
       </div>
       <AuthModal />
+      <DepositAlerts />
       <WalletModal open={walletOpen} onClose={() => setWalletOpen(false)} />
       <AdminWithdrawalsModal open={adminOpen} onClose={() => setAdminOpen(false)} />
       <BetHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />

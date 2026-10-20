@@ -69,3 +69,8 @@
 ## USDT on Ethereum (2026-06)
 - USDT network switched TRC20 → ERC20 (backend + frontend COIN_NETWORK, explorer → Etherscan). Applies to deposits and withdrawals.
 - static_addresses now keyed by (user_id, coin, net); old Tron USDT addresses kept (net=TRC20) so any late deposits to them still credit via webhook. New USDT addresses are ERC20 (verified 0x… address, persistent).
+
+## Deposit Notifications (2026-06)
+- `GET /api/wallet/deposit-alerts`: syncs the user's static addresses with OxaPay (throttled 30s/user), returns un-notified confirmed deposits from `static_deposits` (notified=false) and marks them notified; returns fresh balances.
+- Global `DepositAlerts` component (App.js) polls every 15s while logged in — works on any page, wallet open or not. Shows a custom toast: amount + coin, ≈USD, and the tx hash linking to the right explorer (`explorerUrl` in lib/api.js, USDT by network ERC20/TRC20). Header balance updates instantly.
+- Verified: signed webhook for 25 USDT → popup on login with Etherscan link (test data cleaned up).

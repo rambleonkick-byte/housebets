@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Settings, Copy, ExternalLink, ShieldCheck } from "lucide-react";
-import { api, formatApiErrorDetail, COIN_META, COIN_NETWORK } from "@/lib/api";
+import { api, formatApiErrorDetail, COIN_META, COIN_NETWORK, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto, usdValue } from "@/lib/format";
 import { Usd } from "@/components/Usd";
@@ -10,12 +10,6 @@ import { toast } from "sonner";
 
 const COINS = ["BTC", "ETH", "USDT", "SOL"];
 
-const EXPLORER = {
-  BTC: (h) => `https://blockchair.com/bitcoin/transaction/${h}`,
-  ETH: (h) => `https://etherscan.io/tx/${h}`,
-  USDT: (h) => `https://etherscan.io/tx/${h}`,
-  SOL: (h) => `https://solscan.io/tx/${h}`,
-};
 const PAYOUT_TERMINAL = ["confirmed", "failed", "rejected", "canceled", "cancelled"];
 
 function payoutBadge(status, refunded) {
@@ -83,11 +77,7 @@ export function WalletModal({ open, onClose }) {
     pollRef.t = setInterval(async () => {
       try {
         const { data: st } = await api.post(`/wallet/deposit-address/${coin}/check`);
-        if (st.credited > 0) {
-          setBalances(st.balances);
-          toast.success(`Deposit confirmed — ${st.credited} ${coin} credited`);
-          load();
-        }
+        if (st.credited > 0) load();
       } catch { /* address not ready yet */ }
     }, 10000);
     return () => { alive = false; clearInterval(pollRef.t); setOxaPolling(false); };
@@ -247,7 +237,7 @@ export function WalletModal({ open, onClose }) {
                       const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund";
                       const po = t.payout;
                       const hash = po?.tx_hash;
-                      const explorer = hash && EXPLORER[t.coin] ? EXPLORER[t.coin](hash) : null;
+                      const explorer = explorerUrl(t.coin, hash, po?.network);
                       return (
                         <div key={t.id} className="bg-[#0E1017] rounded-md px-3 py-2" data-testid={`wallet-tx-${t.id}`}>
                           <div className="flex items-center justify-between text-sm">
