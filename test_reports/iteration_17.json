@@ -1,0 +1,34 @@
+{
+  "summary": "Retest of the iteration_16 alt-line fixes. Everything passes. Backend: 25/25 pytest (15 existing + 10 new). New tests cover: main spread+alt_spread and total+alt_total parlays on the same game return 400 'Conflicting', even at the identical line; 409 changed/unavailable entries now include 'line'; at the same line the alt price is never higher than the main price; ladders are monotonic for NFL/NBA/EPL. Frontend: 409 interception (changed alt_total@232 1.91->1.81, unavailable alt_spread@-4). The alt_spread leg was removed, the alt_total leg repriced with a struck-through prev odds of 1.91, and the odds-changed note and 'Accept odds changes' button appeared. Accept -> resubmit hit the real API and placed the bet (alt_total over 232 @1.91). Conflicts: main spread in slip + alt pick -> replaced ('Alternate line updated'); alt in slip + main pick (either side) -> 'Can't pick both sides of the same market'. Same for total/alt_total. Labels read 'Total 6.5' / 'Total 228.5' with no 'pts' anywhere. The -/+ step buttons move one line at a time and disable at the ends (checked with Home/End). Regression: ArrowRight keys, mobile drag (390px), adding, replacing and placing a single with an alt leg all work.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/odds (_smooth)", "issue": "This is not an alt-market bug. The alt price is never above the main price, but in 6 of ~290 main-line pairs it is lower, usually by 0.01-0.03. The outlier is the live DET +6.5 game: main price 1.83 vs alt 1.57. Here the main spread price is out of line with the ladder (DET +4.5 is 1.89 and +6 is 1.57), so the main market is the stale value. Optional: smooth the main line together with the ladder, or flag main prices that don't fit the ladder."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bet slip conflict toast", "issues": ["Picking the main spread on the SAME side while an alt line of that side is in the slip shows 'Can't pick both sides of the same market'. It is the same side at a different line, so the message is misleading. Consider 'Remove the alternate line first' or replacing the leg the same way as alt picks."]},
+      {"screen": "Toasts (dev only)", "issues": ["addSelection calls toast() inside the setItems updater, so React StrictMode in dev shows each toast twice ('Added to bet slip' x2). Move side effects outside the updater."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_alt_lines.py", "/app/test_reports/pytest/pytest_alt_lines_it17.xml"],
+  "action_items": [
+    "Optional: clearer toast when picking the main line while an alt line of the same side is in the slip",
+    "Optional: move toast/setBoost/setOpen side effects out of the setItems updater in BetSlipContext.addSelection"
+  ],
+  "critical_code_review_comments": [
+    "applyServerPrices now keys with selId (includes line for alt_) and the backend sends line. Verified working.",
+    "_market_key/baseKey strip 'alt_', so spread/alt_spread and total/alt_total conflict. Verified on both backend and UI.",
+    "_smooth only clamps downward, so one low stale price on a harder line flattens every easier line below it. Acceptable for safety.",
+    "server.py is ~2870 lines and should still be split into modules"
+  ],
+  "updated_files": ["/app/backend/tests/test_alt_lines.py"],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "100% of the retested flows"},
+  "seed_data_creation": "Created test_altui17@apexodds.io (1000 USDT via mongo) plus pytest test_alt_* users. All of them and their wallets, bets and transactions were deleted. DB users now: admin@apexodds.io and dhensley727@icloud.com only.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_alt_lines.py has a TestAltFixes class (conflicts, 409 line, main-vs-alt price, monotonic ladders) and self-cleans. To check the UI 409 flow: log in via page.request.post('/api/auth/login'), add alt_total over + alt_spread home on an 'Upcoming' card, switch to parlay, page.route('**/api/bets') to return 409 once with changed/unavailable entries that include line, then route.continue_() for the resubmit. Slip testids are duplicated (desktop + mobile), so use .first."
+}

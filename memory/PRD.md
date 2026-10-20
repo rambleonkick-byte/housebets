@@ -200,3 +200,12 @@
 - Prod user lilbabyrollbit@gmail.com sent ~200 USDT (Solana SPL) to their SOL static address and was credited 200.24 SOL (about $30k). `_credit_static_txs` now credits `tx.currency` (uppercased) when it is a supported coin, skips unsupported currencies, falls back to the address coin when currency is missing, and records `address_coin` on static_deposits. Tested 9/9 (iteration_15).
 - The PROD balance correction still has to be done by the admin through the panel: remove 200.242908 SOL and add 200.242908 USDT for that user.
 - Deposit coin warning (2026-06): each deposit address now has a red "Only send {COIN} to this address" box giving the network and a coin-specific tip (e.g. no USDT to the SOL address). The previous coin's address is cleared when switching coins, so it can't briefly show under the wrong coin.
+
+## Alternate Lines (2026-06)
+- SGO is now fetched with includeAltLines=true. `_alt_ladder` builds every line from each bookmaker's main line and alt lines, using the median price. Quarter lines (.25/.75) are skipped. `_smooth` uses the main price wherever a line matches the main market, and clamps prices so an easier line never pays more. The new markets are `alt_spread` (home L mirrors away -L) and `alt_total`.
+- Settlement treats alt_spread like spread and alt_total like total. An exact tie on a whole-number line is now a "push" for both main and alt markets.
+- Conflict keys map alt_X to X on the backend (`_market_key`) and frontend (`baseKey`), so a main and alt pick on the same market can't be combined. The slip swaps one for the other instead. selId includes the line for alt markets. 409 changed/unavailable entries carry the line.
+- Frontend `AltLineSlider.jsx` uses a radix slider plus -/+ step buttons, starts at the main line and shows "Not offered" when a side has no price. GZipMiddleware cut NFL odds from 484KB to 68KB. Tested in iteration_16 and _17 (25/25 backend).
+
+## Tawk.to Live Chat (2026-06)
+- The Tawk.to embed script was added before </body> in frontend/index.html, so it loads on every page of the SPA.

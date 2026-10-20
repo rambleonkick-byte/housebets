@@ -39,7 +39,7 @@ export function BetSlipProvider({ children }) {
       }
       // Block conflicting sides of the same underlying market.
       const conflict = prev.find((p) => baseKey(p) === baseKey(sel) && selId(p) !== id);
-      if (conflict && String(sel.market).startsWith("alt_")) {
+      if (conflict && (String(sel.market).startsWith("alt_") || String(conflict.market).startsWith("alt_"))) {
         toast.success("Alternate line updated");
         setBoost(null);
         setOpen(true);

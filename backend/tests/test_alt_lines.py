@@ -173,3 +173,84 @@ class TestAltBets:
         bets = data if isinstance(data, list) else data.get("bets", [])
         mkts = {x["market"] for b in bets for x in b["selections"]}
         assert {"alt_spread", "alt_total"} <= mkts
+
+
+# ---- iteration_17 retest: conflict keys, 409 line, price consistency/monotonic ----
+class TestAltFixes:
+    def _pair(self, ev, base, alt, side):
+        m = [x for x in mk(ev, base)["selections"] if x["side"] == side][0]
+        a = [x for x in mk(ev, alt)["selections"] if x["side"] == side and x["line"] != m["line"]][0]
+        return m, a
+
+    @pytest.mark.parametrize("base,alt,side", [("spread", "alt_spread", "home"), ("total", "alt_total", "over")])
+    def test_main_plus_alt_conflict_400(self, user, base, alt, side):
+        s, _ = user
+        ev = [e for e in pre_events("NBA") if mk(e, base)][0]
+        m, a = self._pair(ev, base, alt, side)
+        r = s.post(f"{API}/bets", json={"selections": [leg(ev, base, m), leg(ev, alt, a)],
+                                        "stake": 5, "coin": "USDT", "bet_type": "parlay"})
+        assert r.status_code == 400, r.text
+        assert "Conflicting" in r.text
+
+    def test_same_line_both_markets_conflict_400(self, user):
+        s, _ = user
+        ev = [e for e in pre_events("NBA") if mk(e, "total")][0]
+        m = mk(ev, "total")["selections"][0]
+        a = [x for x in mk(ev, "alt_total")["selections"] if x["side"] == m["side"] and x["line"] == m["line"]]
+        if not a:
+            pytest.skip("main line not in ladder")
+        r = s.post(f"{API}/bets", json={"selections": [leg(ev, "total", m), leg(ev, "alt_total", a[0])],
+                                        "stake": 5, "coin": "USDT", "bet_type": "parlay"})
+        assert r.status_code == 400
+
+    def test_409_entries_include_line(self, user):
+        s, _ = user
+        evs = pre_events("NFL") or pre_events("NBA")
+        ev = evs[0]
+        t = dict([x for x in mk(ev, "alt_total")["selections"] if 1.3 < x["odds"] < 5][0])
+        t["odds"] = round(t["odds"] + 3, 2)
+        sp = dict(mk(ev, "alt_spread")["selections"][0])
+        sp["line"] = 999.5
+        r = s.post(f"{API}/bets", json={"selections": [leg(ev, "alt_total", t), leg(ev, "alt_spread", sp)],
+                                        "stake": 5, "coin": "USDT", "bet_type": "parlay"})
+        assert r.status_code == 409, r.text
+        d = r.json()["detail"]
+        assert d["changed"][0]["line"] == t["line"] and d["changed"][0]["market"] == "alt_total"
+        assert d["unavailable"][0]["line"] == 999.5 and d["unavailable"][0]["market"] == "alt_spread"
+
+    @pytest.mark.parametrize("league", ["NFL", "NBA", "EPL"])
+    def test_alt_matches_main_price(self, league):
+        _, evs = odds(league)
+        bad = []
+        for e in evs:
+            for base in ("spread", "total"):
+                bm, am = mk(e, base), mk(e, "alt_" + base)
+                if not bm or not am:
+                    continue
+                for s in bm["selections"]:
+                    for a in am["selections"]:
+                        if a["side"] == s["side"] and a["line"] == s["line"] and a["odds"] > s["odds"] + 1e-9:
+                            bad.append((e["event_id"], base, s["side"], s["line"], s["odds"], a["odds"]))
+        assert not bad, bad[:5]
+
+    @pytest.mark.parametrize("league", ["NFL", "NBA", "EPL"])
+    def test_monotonic_ladders(self, league):
+        _, evs = odds(league)
+        bad = []
+        for e in evs:
+            for mname in ("alt_spread", "alt_total"):
+                m = mk(e, mname)
+                if not m:
+                    continue
+                for side in {x["side"] for x in m["selections"]}:
+                    rows = sorted((x["line"], x["odds"]) for x in m["selections"] if x["side"] == side)
+                    # easier direction: spread -> higher line; total over -> lower line; under -> higher line
+                    if mname == "alt_spread" or side == "under":
+                        seq = [o for _, o in rows]  # ascending line = easier, odds must not increase
+                    else:
+                        seq = [o for _, o in reversed(rows)]  # descending line easier for over
+                    for i in range(1, len(seq)):
+                        if seq[i] > seq[i - 1] + 1e-9:
+                            bad.append((e["event_id"], mname, side, rows))
+                            break
+        assert not bad, [b[:3] for b in bad[:5]]
