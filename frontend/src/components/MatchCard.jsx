@@ -55,6 +55,7 @@ export function MatchCard({ ev }) {
   const meta = {
     event_id: ev.event_id, league: ev.league, league_label: ev.league_label,
     home: ev.home.abbr, away: ev.away.abbr,
+    home_name: ev.home.name, away_name: ev.away.name, status_detail: ev.status_detail, live,
   };
   const moneyline = ev.markets.find((m) => m.market === "moneyline");
   const spread = ev.markets.find((m) => m.market === "spread");

@@ -82,3 +82,8 @@
 ## Notification Center (2026-06)
 - `notifications` collection (unique `key`: dep:<tx_hash> / wd:<id>:<stage>), saved whenever a deposit/withdrawal alert fires. `GET /api/notifications` (latest 50 + unread count), `POST /api/notifications/read-all`. One-time startup backfill from past deposits/withdrawals (marked read).
 - Header bell (`NotificationBell.jsx`) with unread badge; popover lists history (icon/tone per stage, amount, time-ago, explorer link). Closing the panel marks all read. Refreshes when the alert poller finds new items. Verified with seeded deposit + withdrawal (cleaned up).
+
+## Bet Slip Redesign (2026-06)
+- Slip is now a floating rounded card with the ApexOdds logo, glowing "Bet Slip" title, LIVE badge (when any leg is live), pill Single/Parlay toggle.
+- One card per game: full team names "Away vs Home", league · status/time, colored pick pills (totals lime, moneyline emerald, spread sky, props cyan), large odds on the right, SGP badge.
+- Footer: big "Combined odds · N selections" panel, coin pills, compact stake row (10/50/MAX), total stake + payout with USD, pill CTA. Selection meta now carries home_name/away_name/status_detail/live (MatchCard).
