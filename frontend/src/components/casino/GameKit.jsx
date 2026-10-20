@@ -186,8 +186,37 @@ function NumField({ label, value, onChange, disabled, testId, suffix }) {
 }
 
 // Manual / Auto play switch. `play` must resolve with the round result ({payout}) or null on failure.
-export function PlayArea({ g, play, manual, onRunning }) {
-  const [mode, setMode] = useState("manual");
+function AdjustField({ label, mode, setMode, pct, setPct, disabled, id }) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="flex gap-1.5">
+        <div className="flex gap-1 bg-[#090A0F] border border-[#2A2F45] p-1 rounded-xl">
+          {["reset", "increase"].map((m) => (
+            <button key={m} data-testid={`autobet-${id}-${m}`} disabled={disabled} onClick={() => setMode(m)}
+              className={`px-2.5 text-[11px] font-bold py-1 rounded-lg capitalize transition-colors disabled:opacity-60 ${mode === m ? "bg-[#252A3B] text-white" : "text-slate-500 hover:text-white"}`}>
+              {m === "reset" ? "Reset" : "Increase"}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1">
+          <input data-testid={`autobet-${id}-pct`} type="number" min="0" value={pct} disabled={disabled || mode === "reset"}
+            onChange={(e) => setPct(e.target.value)} placeholder="0"
+            className="w-full h-full bg-[#090A0F] border border-[#2A2F45] rounded-xl px-3 font-mono text-sm text-white outline-none focus:border-emerald-500 disabled:opacity-40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-500">%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PlayArea({ g, play, manual, onRunning, onMode }) {
+  const [mode, setModeRaw] = useState("manual");
+  const setMode = (m) => { setModeRaw(m); onMode?.(m); };
+  const [onWin, setOnWin] = useState("reset");
+  const [winPct, setWinPct] = useState("");
+  const [onLoss, setOnLoss] = useState("reset");
+  const [lossPct, setLossPct] = useState("");
   const [rounds, setRounds] = useState("10");
   const [stopProfit, setStopProfit] = useState("");
   const [stopLoss, setStopLoss] = useState("");
@@ -205,6 +234,9 @@ export function PlayArea({ g, play, manual, onRunning }) {
     const total = parseInt(rounds, 10) || 0;
     const sp = parseFloat(stopProfit) || 0;
     const sl = parseFloat(stopLoss) || 0;
+    const base = g.stakeNum;
+    const wp = parseFloat(winPct) || 0;
+    const lp = parseFloat(lossPct) || 0;
     stopRef.current = false;
     setRun(true);
     let done = 0, net = 0, reason = "Auto bet finished";
@@ -217,9 +249,13 @@ export function PlayArea({ g, play, manual, onRunning }) {
       setStats({ done, net });
       if (sp > 0 && net >= sp) { reason = "Stop on profit reached"; break; }
       if (sl > 0 && -net >= sl) { reason = "Stop on loss reached"; break; }
+      const won = res.payout > res.stake;
+      const pct = won ? (onWin === "increase" ? wp : null) : (onLoss === "increase" ? lp : null);
+      g.setStake(String(pct == null ? base : +(res.stake * (1 + pct / 100)).toFixed(8)));
       await sleep(300);
     }
     if (stopRef.current) reason = "Auto bet stopped";
+    g.setStake(String(base));
     setRun(false);
     toast(reason, { description: `${done} bets · net ${net >= 0 ? "+" : ""}${fmtCrypto(net, g.coin)} ${g.coin}` });
   };
@@ -239,6 +275,8 @@ export function PlayArea({ g, play, manual, onRunning }) {
             <NumField label="Stop on profit" value={stopProfit} onChange={setStopProfit} disabled={running} testId="autobet-stop-profit" suffix={g.coin} />
             <NumField label="Stop on loss" value={stopLoss} onChange={setStopLoss} disabled={running} testId="autobet-stop-loss" suffix={g.coin} />
           </div>
+          <AdjustField label="On win" mode={onWin} setMode={setOnWin} pct={winPct} setPct={setWinPct} disabled={running} id="on-win" />
+          <AdjustField label="On loss" mode={onLoss} setMode={setOnLoss} pct={lossPct} setPct={setLossPct} disabled={running} id="on-loss" />
           {(running || stats.done > 0) && (
             <div className="grid grid-cols-2 gap-2">
               <StatBox label="Bets" value={`${stats.done}${parseInt(rounds, 10) ? ` / ${parseInt(rounds, 10)}` : ""}`} testId="autobet-count" />

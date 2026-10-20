@@ -129,3 +129,7 @@
 - `PlayArea` in GameKit: Manual/Auto switch. Auto: number of bets (0 = unlimited), stop on profit, stop on loss (in coin), live Bets + Net profit stats, Start/Stop button, summary toast. Loop awaits each round's animation, 300ms gap; stops on errors (e.g. insufficient balance).
 - Wired into Dice, Limbo, Keno, Plinko (each `play()` now resolves `{payout, stake}` after its animation, or null). Controls locked while running. Mines excluded (manual tile picks).
 - Verified: Dice 5/5 rounds, Limbo unlimited stopped by stop-on-loss, Keno manual stop, no console errors.
+
+## Auto-Bet Win/Loss Adjust + Mines Auto-Pick (2026-06)
+- PlayArea: "On win" / "On loss" → Reset (back to base stake) or Increase by X% of last stake. Base stake restored when auto bet ends. Verified Dice on-loss +100%: 0.01 → 0.02 → 0.04, restored to 0.01.
+- Mines now has Manual/Auto. Auto: tap tiles to build a numbered pattern (violet, capped at 25 − mines, Clear button); each round starts a game, reveals the pattern in order (gem/bomb sounds), cashes out if all safe (BigWin), else counts as loss. Works with rounds, stop on profit/loss and win/loss adjust. Verified 3/3 rounds.
