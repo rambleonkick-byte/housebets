@@ -50,8 +50,7 @@ export function WalletModal({ open, onClose }) {
   };
   useEffect(() => { if (open) load(); }, [open]);
   useEffect(() => () => { if (pollRef.t) clearInterval(pollRef.t); if (payoutRef.t) clearInterval(payoutRef.t); }, []);
-  // reset generated address when switching coin/tab
-  useEffect(() => { setDeposit(null); setOxaPolling(false); if (pollRef.t) clearInterval(pollRef.t); }, [coin, tab]);
+  useEffect(() => { setDeposit(null); }, [coin, tab]);
 
   // keep pending withdrawals up to date (admin approval, on-chain status, tx hash)
   useEffect(() => {
@@ -71,46 +70,31 @@ export function WalletModal({ open, onClose }) {
     return () => { if (payoutRef.t) clearInterval(payoutRef.t); };
   }, [open, wallet]);
 
-  const startPolling = (trackId, amt) => {
+  // permanent per-coin deposit address; poll for confirmed on-chain deposits
+  useEffect(() => {
+    if (!open || tab !== "deposit") return;
+    let alive = true;
+    setLoading(true);
+    api.get(`/wallet/deposit-address/${coin}`)
+      .then(({ data }) => { if (alive) setDeposit(data); })
+      .catch((e) => alive && toast.error(formatApiErrorDetail(e.response?.data?.detail)))
+      .finally(() => alive && setLoading(false));
     setOxaPolling(true);
-    if (pollRef.t) clearInterval(pollRef.t);
-    let tries = 0;
     pollRef.t = setInterval(async () => {
-      tries += 1;
       try {
-        const { data: st } = await api.get(`/wallet/oxapay/status/${trackId}`);
-        if (st.credited) {
-          clearInterval(pollRef.t);
-          setOxaPolling(false);
+        const { data: st } = await api.post(`/wallet/deposit-address/${coin}/check`);
+        if (st.credited > 0) {
           setBalances(st.balances);
-          toast.success(`Deposit confirmed — ${amt} ${coin} credited`);
-          setDeposit(null);
-          setAmount("");
+          toast.success(`Deposit confirmed — ${st.credited} ${coin} credited`);
           load();
         }
-      } catch { /* keep polling */ }
-      if (tries >= 60) { clearInterval(pollRef.t); setOxaPolling(false); }
-    }, 5000);
-  };
-
-  const generateAddress = async () => {
-    const amt = parseFloat(amount);
-    if (!amt || amt <= 0) { toast.error("Enter an amount"); return; }
-    setLoading(true);
-    try {
-      const { data } = await api.post("/wallet/oxapay/invoice", { coin, amount: amt });
-      setDeposit(data);
-      startPolling(data.track_id, data.pay_amount);
-      toast.success("Deposit address ready — scan or copy to pay");
-    } catch (e) {
-      toast.error(formatApiErrorDetail(e.response?.data?.detail));
-    } finally {
-      setLoading(false);
-    }
-  };
+      } catch { /* address not ready yet */ }
+    }, 10000);
+    return () => { alive = false; clearInterval(pollRef.t); setOxaPolling(false); };
+  }, [open, tab, coin]);
 
   const act = async () => {
-    // withdraw only (deposits go through generateAddress)
+    // withdraw only (deposits use permanent addresses)
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { toast.error("Enter an amount"); return; }
     if (!address || address.trim().length < 10) { toast.error("Enter a valid wallet address"); return; }
@@ -188,31 +172,9 @@ export function WalletModal({ open, onClose }) {
                 </div>
 
                 {tab === "deposit" && !deposit && (
-                  <>
-                    <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-start gap-2">
-                      <ShieldCheck size={15} className="text-emerald-400 mt-0.5 shrink-0" />
-                      <p className="text-[11px] text-zinc-400">Enter the amount in <span className="text-zinc-200">USD</span> — we'll generate a live {coin} address for the exact crypto equivalent. Scan the QR or copy the address to pay; your balance credits automatically once confirmed on-chain.</p>
-                    </div>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">$</span>
-                      <input data-testid="wallet-amount-input" type="number" min="0" value={amount}
-                        onChange={(e) => setAmount(e.target.value)} placeholder="Amount in USD"
-                        className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg pl-7 pr-20 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-zinc-500">USD → {coin}</span>
-                    </div>
-                    <div className="flex gap-1.5">
-                      {[25, 50, 100, 250].map((v) => (
-                        <button key={v} data-testid={`deposit-usd-${v}`} onClick={() => setAmount(String(v))}
-                          className="flex-1 text-[11px] font-mono text-zinc-400 border border-[#2A2F45] rounded py-1.5 hover:border-emerald-500/60">
-                          ${v}
-                        </button>
-                      ))}
-                    </div>
-                    <button data-testid="wallet-generate-address" onClick={generateAddress} disabled={loading}
-                      className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-60">
-                      {loading && <Loader2 size={16} className="animate-spin" />} Generate Deposit Address
-                    </button>
-                  </>
+                  <div className="flex items-center justify-center gap-2 text-sm text-zinc-400 py-10" data-testid="deposit-loading">
+                    {loading ? <><Loader2 size={16} className="animate-spin" /> Loading your {coin} address…</> : "Deposit address unavailable — try again shortly"}
+                  </div>
                 )}
 
                 {tab === "deposit" && deposit && (
@@ -222,11 +184,9 @@ export function WalletModal({ open, onClose }) {
                         className="w-44 h-44 object-contain" />
                     </div>
                     <div className="text-center">
-                      <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">Send exactly</p>
-                      <p className="font-mono text-xl font-bold text-emerald-400" data-testid="deposit-pay-amount">
-                        {deposit.pay_amount} {deposit.pay_currency}
-                      </p>
+                      <p className="text-[11px] font-mono uppercase tracking-wider text-emerald-400" data-testid="deposit-permanent-label">Your permanent {coin} address</p>
                       <p className="text-[11px] text-zinc-500 mt-0.5">Network: <span className="text-zinc-300">{deposit.network}</span></p>
+                      <p className="text-[11px] text-zinc-500 mt-1">Send any amount, anytime — it never expires. Only send {coin} on this network.</p>
                     </div>
                     <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-center justify-between gap-2">
                       <code className="font-mono text-xs text-zinc-200 break-all" data-testid="deposit-address">{deposit.address}</code>
@@ -238,14 +198,10 @@ export function WalletModal({ open, onClose }) {
                         <p className="text-[11px] text-amber-300">Memo/Tag required: <span className="font-mono font-bold">{deposit.memo}</span></p>
                       </div>
                     )}
-                    <div className="flex items-center justify-center gap-2 text-sm text-zinc-400" data-testid="deposit-status">
-                      <Loader2 size={14} className={oxaPolling ? "animate-spin" : ""} />
-                      {oxaPolling ? "Waiting for payment…" : "Checking paused — reopen to resume"}
+                    <div className="flex items-center justify-center gap-2 text-xs text-zinc-400" data-testid="deposit-status">
+                      <Loader2 size={13} className={oxaPolling ? "animate-spin" : ""} />
+                      Watching for incoming deposits — balance credits automatically once confirmed
                     </div>
-                    <button data-testid="deposit-new" onClick={() => { setDeposit(null); setAmount(""); if (pollRef.t) clearInterval(pollRef.t); setOxaPolling(false); }}
-                      className="w-full text-xs text-zinc-400 border border-[#2A2F45] rounded-lg py-2 hover:border-emerald-500/50">
-                      New deposit
-                    </button>
                   </div>
                 )}
 

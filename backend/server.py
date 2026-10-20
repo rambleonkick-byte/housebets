@@ -808,9 +808,90 @@ async def oxapay_webhook(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="invalid JSON")
     track_id = event.get("track_id")
-    if track_id:
+    if track_id and str(event.get("type", "")).lower() == "static_address":
+        sa = await db.static_addresses.find_one({"track_id": str(track_id)})
+        if sa:
+            await _credit_static_txs(sa, event.get("txs") or [])
+    elif track_id:
         await _credit_oxa_invoice(str(track_id), event.get("status", ""))
     return "ok"
+
+
+async def _credit_static_txs(sa, txs) -> float:
+    """Credit each confirmed on-chain tx to a static address exactly once. Returns total credited."""
+    from pymongo.errors import DuplicateKeyError
+    total = 0.0
+    for tx in txs:
+        h = tx.get("tx_hash")
+        amt = float(tx.get("sent_amount") or tx.get("received_amount") or 0)
+        if not h or amt <= 0 or str(tx.get("status", "")).lower() != "confirmed":
+            continue
+        try:
+            await db.static_deposits.insert_one({"tx_hash": h, "user_id": sa["user_id"], "coin": sa["coin"],
+                                                 "amount": amt, "track_id": sa["track_id"], "created_at": now_iso()})
+        except DuplicateKeyError:
+            continue
+        await _adjust(sa["user_id"], sa["coin"], amt)
+        await db.transactions.insert_one({
+            "id": str(uuid.uuid4()), "user_id": sa["user_id"], "type": "deposit",
+            "coin": sa["coin"], "amount": amt, "created_at": now_iso(), "hash": "oxapay-static:" + h})
+        total += amt
+    return total
+
+
+def _static_public(sa):
+    return {k: sa.get(k) for k in ("coin", "address", "network", "memo", "qr_code", "track_id")}
+
+
+@api_router.get("/wallet/deposit-address/{coin}")
+async def get_deposit_address(coin: str, user: dict = Depends(get_current_user)):
+    coin = coin.upper()
+    if coin not in STARTING_BALANCES:
+        raise HTTPException(status_code=400, detail="Unsupported coin")
+    sa = await db.static_addresses.find_one({"user_id": user["id"], "coin": coin})
+    if sa:
+        return _static_public(sa)
+    if not OXAPAY_KEY:
+        raise HTTPException(status_code=503, detail="Payment gateway not configured")
+    await ensure_wallet(user["id"])
+    base = os.environ.get("FRONTEND_URL", "")
+    payload = {"network": COIN_NETWORK.get(coin), "auto_withdrawal": 0,
+               "callback_url": f"{base}/api/oxapay/webhook", "email": user.get("email"),
+               "order_id": f"static:{user['id']}:{coin}", "description": f"ApexOdds {coin} deposit address"}
+    try:
+        async with httpx.AsyncClient(timeout=20) as hc:
+            r = await hc.post(f"{OXAPAY_API}/payment/static-address", json=payload,
+                              headers={"merchant_api_key": OXAPAY_KEY, "Content-Type": "application/json"})
+        result = r.json()
+    except Exception as e:
+        logger.warning(f"OxaPay static-address error: {e}")
+        raise HTTPException(status_code=502, detail="Payment gateway unreachable")
+    if r.status_code >= 400 or result.get("status") != 200:
+        logger.warning(f"OxaPay static-address rejected: {r.status_code} {result}")
+        raise HTTPException(status_code=502, detail=(result.get("message") or "Gateway error creating address"))
+    d = result["data"]
+    sa = {"user_id": user["id"], "coin": coin, "address": d.get("address"), "network": d.get("network"),
+          "memo": d.get("memo") or "", "qr_code": d.get("qr_code"), "track_id": str(d.get("track_id")),
+          "created_at": now_iso()}
+    await db.static_addresses.update_one({"user_id": user["id"], "coin": coin}, {"$setOnInsert": sa}, upsert=True)
+    sa = await db.static_addresses.find_one({"user_id": user["id"], "coin": coin})
+    return _static_public(sa)
+
+
+@api_router.post("/wallet/deposit-address/{coin}/check")
+async def check_deposit_address(coin: str, user: dict = Depends(get_current_user)):
+    sa = await db.static_addresses.find_one({"user_id": user["id"], "coin": coin.upper()})
+    if not sa:
+        raise HTTPException(status_code=404, detail="No deposit address yet")
+    credited = 0.0
+    try:
+        async with httpx.AsyncClient(timeout=15) as hc:
+            r = await hc.get(f"{OXAPAY_API}/payment/{sa['track_id']}", headers={"merchant_api_key": OXAPAY_KEY})
+        credited = await _credit_static_txs(sa, (r.json().get("data") or {}).get("txs") or [])
+    except Exception as e:
+        logger.warning(f"OxaPay static check error: {e}")
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"credited": credited, "balances": wallet["balances"]}
 
 
 # ----------------------------------------------------------------------------
@@ -1447,6 +1528,8 @@ async def root():
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    await db.static_deposits.create_index("tx_hash", unique=True)
+    await db.static_addresses.create_index([("user_id", 1), ("coin", 1)], unique=True)
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@apexodds.io").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})

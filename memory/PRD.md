@@ -59,3 +59,9 @@
 
 ## Fee-free Deposits (2026-06)
 - OxaPay white-label invoices now use `fee_paid_by_payer: 0` — the merchant absorbs the OxaPay gateway fee; players send exactly the USD-equivalent amount (verified: $50 USDT invoice → pay_amount 50.0).
+
+## Permanent Deposit Addresses (2026-06)
+- Replaced expiring USD-amount invoices with OxaPay static addresses: one permanent address per player per coin (`static_addresses` collection, unique user_id+coin), created on first view via `POST /v1/payment/static-address`.
+- `GET /api/wallet/deposit-address/{coin}` (get-or-create), `POST /api/wallet/deposit-address/{coin}/check` (polls OxaPay `/payment/{track_id}` txs). Webhook handles `type=static_address`: credits each confirmed tx once (idempotent via unique `static_deposits.tx_hash`), crediting `sent_amount` (fee-free for player).
+- Deposit tab: shows QR + permanent address + network, auto-polls every 10s. Verified: same address returned on repeat, signed webhook credited 5 USDT once (duplicate ignored).
+- Note: OxaPay revokes static addresses with no transactions for 6 months.
