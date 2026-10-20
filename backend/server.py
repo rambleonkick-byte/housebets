@@ -1604,6 +1604,8 @@ async def auto_settle(user_id: str):
         res = await db.bets.update_one({"id": b["id"], "status": "open"},
                                        {"$set": {"status": "void" if void else "won" if won else "lost",
                                                  "settled_at": now_iso(), "payout": payout}})
+        if res.modified_count:
+            await _accrue_player(user_id)
         if won and res.modified_count:
             await db.wallets.update_one({"user_id": user_id},
                                         {"$inc": {f"balances.{b['coin']}": payout}})
@@ -1657,6 +1659,7 @@ async def _do_cashout(b, value, auto=False) -> bool:
                                              "auto_cashed": auto}})
     if not res.modified_count:
         return False
+    await _accrue_player(b["user_id"])
     await db.wallets.update_one({"user_id": b["user_id"]}, {"$inc": {f"balances.{b['coin']}": value}})
     await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": b["user_id"], "type": "cashout",
                                       "coin": b["coin"], "amount": value, "created_at": now_iso(),
@@ -1838,6 +1841,7 @@ async def _record_game(user_id, game, coin, stake, multiplier, payout, won, deta
     if fair:
         doc.update(fair)
     await db.casino_games.insert_one(doc)
+    await _accrue_player(user_id)
 
 
 # --- provably-fair seed engine ---
@@ -2413,6 +2417,16 @@ async def startup():
     await db.affiliates.create_index("user_id", unique=True)
     await db.affiliate_ledger.create_index([("affiliate_id", 1), ("player_id", 1), ("coin", 1)], unique=True)
     await db.users.create_index("referred_by")
+    await db.affiliate_earnings.create_index([("affiliate_id", 1), ("date", 1)])
+    async for led in db.affiliate_ledger.find({}):
+        got = await db.affiliate_earnings.aggregate([
+            {"$match": {"affiliate_id": led["affiliate_id"], "player_id": led["player_id"], "coin": led["coin"]}},
+            {"$group": {"_id": None, "s": {"$sum": "$amount"}}}]).to_list(1)
+        gap = round(led.get("credited", 0) - (got[0]["s"] if got else 0), 8)
+        if gap > 0:
+            await db.affiliate_earnings.insert_one({"affiliate_id": led["affiliate_id"], "player_id": led["player_id"],
+                                                    "coin": led["coin"], "amount": gap, "created_at": now_iso(),
+                                                    "date": datetime.now(timezone.utc).date().isoformat()})
     await db.static_deposits.create_index("tx_hash", unique=True)
     await db.bj_games.update_many({"open": {"$exists": False}}, [{"$set": {"open": {"$ne": ["$status", "done"]}}}])
     await db.bj_games.create_index("user_id", name="bj_one_open_hand", unique=True,
@@ -2498,7 +2512,26 @@ async def _credit_ledger(aff_id, pid, coin, credited, target, exists):
     except Exception:
         return
     if res.modified_count or res.upserted_id:
-        await db.affiliates.update_one({"user_id": aff_id}, {"$inc": {f"available.{coin}": round(target - credited, 8)}})
+        amt = round(target - credited, 8)
+        await db.affiliates.update_one({"user_id": aff_id}, {"$inc": {f"available.{coin}": amt}})
+        await db.affiliate_earnings.insert_one({"affiliate_id": aff_id, "player_id": pid, "coin": coin, "amount": amt,
+                                                "date": datetime.now(timezone.utc).date().isoformat(), "created_at": now_iso()})
+
+
+async def _accrue_player(pid):
+    try:
+        u = await db.users.find_one({"_id": ObjectId(pid)}, {"referred_by": 1})
+    except Exception:
+        return
+    aff = (u or {}).get("referred_by")
+    if not aff:
+        return
+    for coin, v in (await _player_ngr([pid])).get(pid, {}).items():
+        target = round(max(0.0, v * AFF_RATE), 8)
+        led = await db.affiliate_ledger.find_one({"affiliate_id": aff, "player_id": pid, "coin": coin})
+        credited = (led or {}).get("credited", 0.0)
+        if target > credited:
+            await _credit_ledger(aff, pid, coin, credited, target, bool(led))
 
 
 async def _accrue_affiliate(aff_user_id):
@@ -2536,6 +2569,25 @@ async def affiliate_panel(user: dict = Depends(get_current_user)):
     return {"code": a["code"], "rate": AFF_RATE, "referrals": len(rows), "players": rows[:200],
             "available": {c: round(v, 8) for c, v in (a.get("available") or {}).items() if v > 0},
             "claimed": a.get("claimed") or {}, "lifetime": lifetime}
+
+
+@api_router.get("/affiliate/daily")
+async def affiliate_daily(user: dict = Depends(get_current_user)):
+    days = 30
+    today = datetime.now(timezone.utc).date()
+    keys = [(today - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
+    out = {k: {"date": k, "commission": {}, "signups": 0} for k in keys}
+    players = await db.users.find({"referred_by": user["id"]}, {"created_at": 1}).to_list(5000)
+    for p in players:
+        d = (p.get("created_at") or "")[:10]
+        if d in out:
+            out[d]["signups"] += 1
+    async for r in db.affiliate_earnings.aggregate([
+            {"$match": {"affiliate_id": user["id"], "date": {"$gte": keys[0]}}},
+            {"$group": {"_id": {"d": "$date", "c": "$coin"}, "amt": {"$sum": "$amount"}}}]):
+        if r["_id"]["d"] in out:
+            out[r["_id"]["d"]]["commission"][r["_id"]["c"]] = round(r["amt"], 8)
+    return {"days": list(out.values())}
 
 
 @api_router.put("/affiliate/code")

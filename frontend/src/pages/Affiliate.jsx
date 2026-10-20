@@ -6,6 +6,7 @@ import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { usePrices, fmtUsd } from "@/lib/prices";
 import { usdValue, fmtCrypto } from "@/lib/format";
+import { AffiliateChart } from "@/components/AffiliateChart";
 
 const copy = (text, what) => navigator.clipboard.writeText(text).then(() => toast.success(`${what} copied`));
 
@@ -152,6 +153,7 @@ export default function Affiliate() {
         </div>
         <Stat icon={TrendingUp} label="Lifetime earned" value={fmtUsd(lifeUsd)} testid="aff-stat-lifetime" sub="If a player is up overall, commission resumes once the house is back in profit." />
       </div>
+      <AffiliateChart rates={rates} refreshKey={data.referrals} />
       <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5">
         <h2 className="font-display text-lg font-bold uppercase tracking-tight mb-2">Your players</h2>
         <PlayersTable players={data.players} rates={rates} />
