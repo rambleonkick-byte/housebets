@@ -191,3 +191,6 @@
 
 ## Link Preview Branding (2026-06)
 - index.html now has og:url, og:image (/brand/og-image.png, 1200x630), twitter summary_large_image, application-name, and favicon.ico, icon-512.png and apple-touch-icon.png made from the logo tile. The og URLs point to https://wager-ledger-4.emergent.host; switch them to the custom domain once it is linked.
+
+## 10% Lossback (2026-06)
+- Sports bets only. When `auto_settle` marks a bet lost, 10% of the stake (`LOSSBACK_RATE`) goes straight to the wallet as real balance with no cap. The amount is saved as `bets.lossback` and logged as a "lossback" transaction. Affiliate NGR subtracts lossback. Bet history shows a "10% lossback credited" line, and the wallet lists lossback as a plus.

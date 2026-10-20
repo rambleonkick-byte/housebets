@@ -221,7 +221,7 @@ export function WalletModal({ open, onClose }) {
                   <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-600 mb-2">Recent activity</p>
                   <div className="space-y-1.5" data-testid="wallet-transactions">
                     {wallet.transactions.slice(0, 8).map((t) => {
-                      const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund" || t.type === "cashout" || t.type === "affiliate" || (t.type === "adjustment" && t.amount > 0);
+                      const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund" || t.type === "cashout" || t.type === "affiliate" || t.type === "lossback" || (t.type === "adjustment" && t.amount > 0);
                       const po = t.payout;
                       const hash = po?.tx_hash;
                       const explorer = explorerUrl(t.coin, hash, po?.network);

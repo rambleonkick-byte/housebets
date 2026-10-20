@@ -128,6 +128,11 @@ export function BetHistoryModal({ open, onClose }) {
                           </span> <Usd amount={b.status === "cashed_out" ? b.cashout_amount : b.potential_payout} coin={b.coin} prefix="(" />{")"}
                         </span>
                       </div>
+                      {b.status === "lost" && b.lossback > 0 && (
+                        <p data-testid={`bet-lossback-${b.id}`} className="mt-2 text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2 py-1">
+                          10% lossback credited: <span className="font-mono font-bold">+{fmtCrypto(b.lossback, b.coin)} {b.coin}</span>
+                        </p>
+                      )}
                       {b.status === "open" && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />}
                     </div>
                   );

@@ -1621,6 +1621,9 @@ def settle_selection(sel, ev) -> Optional[bool]:
     return None
 
 
+LOSSBACK_RATE = 0.10
+
+
 async def auto_settle(user_id: str):
     open_bets = await db.bets.find({"user_id": user_id, "status": "open"}).to_list(200)
     if not open_bets:
@@ -1644,6 +1647,13 @@ async def auto_settle(user_id: str):
         res = await db.bets.update_one({"id": b["id"], "status": "open"},
                                        {"$set": {"status": "void" if void else "won" if won else "lost",
                                                  "settled_at": now_iso(), "payout": payout}})
+        if res.modified_count and not won:
+            lb = round(b["stake"] * LOSSBACK_RATE, 8)
+            await db.bets.update_one({"id": b["id"]}, {"$set": {"lossback": lb}})
+            await db.wallets.update_one({"user_id": user_id}, {"$inc": {f"balances.{b['coin']}": lb}})
+            await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id, "type": "lossback",
+                                              "coin": b["coin"], "amount": lb, "created_at": now_iso(),
+                                              "hash": "lossback:" + b["id"]})
         if res.modified_count:
             await _accrue_player(user_id)
         if won and res.modified_count:
@@ -2535,7 +2545,8 @@ async def _player_ngr(player_ids):
     async for r in db.bets.aggregate([
         {"$match": {"user_id": {"$in": player_ids}, "status": {"$in": ["won", "lost", "void", "cashed_out"]}}},
         {"$group": {"_id": {"u": "$user_id", "c": "$coin"}, "stake": {"$sum": "$stake"},
-                    "paid": {"$sum": {"$ifNull": ["$cashout_amount", {"$ifNull": ["$payout", 0]}]}}}}]):
+                    "paid": {"$sum": {"$add": [{"$ifNull": ["$cashout_amount", {"$ifNull": ["$payout", 0]}]},
+                                               {"$ifNull": ["$lossback", 0]}]}}}}]):
         add(r["_id"]["u"], r["_id"]["c"], r["stake"] - r["paid"])
     async for r in db.casino_games.aggregate([
         {"$match": {"user_id": {"$in": player_ids}}},
