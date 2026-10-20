@@ -209,3 +209,4 @@
 
 ## Tawk.to Live Chat (2026-06)
 - The Tawk.to embed script was added before </body> in frontend/index.html, so it loads on every page of the SPA.
+- Tawk.to was shrunk to a small headphone button (2026-06). Tawk's default bubble and greeting are hidden via Tawk_API.onLoad/onChatMinimized → hideWidget(). `SupportButton.jsx` is a 44px headphone button (bottom-right; on mobile it sits above the bet slip button) that opens the chat with maximize() and shows the unread count.
