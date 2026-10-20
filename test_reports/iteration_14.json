@@ -1,0 +1,29 @@
+{
+  "summary": "Admin Players panel (backend + frontend) tested end-to-end. Backend: 16/16 pytest pass (list/search/regex-escape/pagination, adjust add/remove, over-remove 400, validation 422/400, unknown user 404, block -> 403 on /auth/me, /wallet and login, wrong pw still 401, unblock restores, admin can't be locked 400, action log newest-first, non-admin 403, unauth 401). Frontend: signed-out and non-admin see admin-denied; header-admin-button navigates to /admin; stats render; search filters (debounced); row click opens drawer; Add/Remove disabled without reason; add updates drawer + table; over-remove shows 'Balance can't go below zero' toast; lock/unlock updates button, row status and Locked stat; admin's own drawer has no block toggle; admin-open-withdrawals opens the approvals modal; wallet shows adjustments with the correct +/- sign. No user is left locked (blocked count 0). Test users were deleted.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "WalletModal recent activity", "issue": "A negative adjustment shows the USD value as '≈ $-20.00'. The coin amount uses Math.abs but the <Usd amount={t.amount}> does not. Should be '≈ $20.00' to match the sign style.", "selector": "[data-testid^='wallet-tx-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_admin_users.py", "/app/test_reports/pytest/pytest_admin_users.xml"],
+  "action_items": [
+    "LOW: WalletModal: pass Math.abs(t.amount) to the Usd component for negative transactions",
+    "Update the review/test_credentials: tester@example.com/password123 does not exist in the DB. The non-admin account is player@apexodds.io/player123 (this one works)"
+  ],
+  "critical_code_review_comments": [
+    "If a user is locked while they are using the app, their session state stays loaded. API calls just return 403 toasts until they reload. Consider a global axios interceptor that logs the user out on 403 'Account locked'.",
+    "admin_users: limit is capped at 200, but a negative or zero limit is not validated (limit=0 in Mongo means no limit, so the cap gets bypassed). Clamp to max(1, min(limit, 200)).",
+    "signups_today relies on lexical comparison of ISO created_at strings against the UTC date. This works, but it uses UTC days, not the admin's local timezone.",
+    "server.py is about 2785 lines. Consider splitting the admin routes into their own module."
+  ],
+  "updated_files": ["/app/backend/tests/test_admin_users.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% (1 low cosmetic issue)"},
+  "test_credentials": "admin@apexodds.io/admin123 (admin); player@apexodds.io/player123 (non-admin). tester@example.com is NOT present.",
+  "seed_data_creation": "Created TEST_AdminTarget/TEST_UIUser users during the tests, then deleted them along with their wallets, transactions and admin_actions",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest tests/test_admin_users.py (it creates and unlocks its own test user). The UI flow uses data-testids admin-user-row-<id>, admin-adjust-*, admin-block-toggle, admin-action-log."
+}

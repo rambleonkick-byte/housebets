@@ -182,3 +182,9 @@
 ## Odds Speed (2026-06)
 - `fetch_sgo_league` now works as stale-while-revalidate. Once the 5-min freshness window passes, it returns the last odds immediately and refreshes them in the background (`_SGO_REFRESHING` stops duplicate refreshes running at once). Odds are saved to `db.odds_cache`, so a server restart loads them straight from the database. If SportsGameOdds fails, the previous odds are kept instead of an empty list. Bet checks (`_find_event`) force a fresh fetch if the saved odds are more than 10 min old.
 - League responses went from 2–3.5s (when the cache had expired) to about 0.15–0.2s.
+
+## Admin Players Panel (2026-06)
+- The header Admin button now opens /admin (`AdminPanel.jsx`). It shows stats (total users, signed up today, locked accounts), a debounced name/email search, and a table of players: joined date, balance (USD and per coin), deposited, withdrawn, wagered, and status. Pages of 50.
+- Clicking a player opens a side panel showing their money in/out and who referred them. You can add or remove balance (a reason is required, and a balance can't go below zero); each change is logged as an "adjustment" transaction and in `admin_actions`. You can also lock or unlock the account (admins can't be locked) and see the change history. The withdrawal queue opens from a button on the panel.
+- A locked user gets 403 "Account locked. Contact support." at login and on every signed-in request.
+- APIs: GET /api/admin/users, POST /api/admin/users/{id}/adjust, POST /api/admin/users/{id}/block, GET /api/admin/users/{id}/log.

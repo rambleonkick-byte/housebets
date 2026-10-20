@@ -231,7 +231,7 @@ export function WalletModal({ open, onClose }) {
                             <span className="capitalize text-zinc-300">{t.type}</span>
                             <span className={`font-mono text-xs ${positive ? "text-emerald-400" : "text-zinc-400"}`}>
                               {positive ? "+" : "-"}{fmtCrypto(Math.abs(t.amount), t.coin)} {t.coin}
-                              <Usd amount={t.amount} coin={t.coin} className="text-zinc-500 ml-1.5" />
+                              <Usd amount={Math.abs(t.amount)} coin={t.coin} className="text-zinc-500 ml-1.5" />
                             </span>
                           </div>
                           {po && (() => {
