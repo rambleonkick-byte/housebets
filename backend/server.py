@@ -125,6 +125,7 @@ class PlaceBetInput(BaseModel):
     stake: float = Field(gt=0, allow_inf_nan=False)
     coin: str
     bet_type: str = "single"
+    accept_better: bool = True
 
 
 # ----------------------------------------------------------------------------
@@ -1224,7 +1225,7 @@ def _live_price(sel, ev):
     return None
 
 
-async def _verify_selections(selections):
+async def _verify_selections(selections, accept_better=True):
     seen, changed, gone = set(), [], []
     for sel in selections:
         k = _market_key(sel)
@@ -1237,7 +1238,7 @@ async def _verify_selections(selections):
             gone.append({"event_id": sel.event_id, "market": sel.market, "side": sel.side, "pick": sel.pick})
             continue
         price = float(price)
-        if round(price, 2) < round(sel.odds, 2):
+        if round(price, 2) < round(sel.odds, 2) or (not accept_better and round(price, 2) != round(sel.odds, 2)):
             changed.append({"event_id": sel.event_id, "market": sel.market, "side": sel.side, "odds": price})
         sel.odds = price
     if gone or changed:
@@ -1251,7 +1252,7 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
     if body.coin not in STARTING_BALANCES:
         raise HTTPException(status_code=400, detail="Invalid coin")
     await ensure_wallet(user["id"])
-    await _verify_selections(body.selections)
+    await _verify_selections(body.selections, body.accept_better)
 
     is_parlay = body.bet_type == "parlay" and len(body.selections) > 1
     if not is_parlay and len(body.selections) != 1:

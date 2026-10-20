@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Ticket, Trash2, X, Loader2, Zap, Share2 } from "lucide-react";
+import { Ticket, Trash2, X, Loader2, Zap, Share2, ArrowUp, ArrowDown } from "lucide-react";
 import { ShareSlipModal } from "@/components/ShareSlipModal";
 import { useBetSlip } from "@/context/BetSlipContext";
 import { useAuth } from "@/context/AuthContext";
@@ -51,6 +51,24 @@ function SlipLogo() {
   );
 }
 
+function LegOdds({ s }) {
+  const up = s.move === "up";
+  const tone = !s.move ? "text-white" : up ? "text-emerald-400" : "text-red-400";
+  return (
+    <div className="flex flex-col items-end leading-none">
+      {s.move && s.prevOdds && (
+        <span className="font-mono text-[10px] text-zinc-600 line-through mb-0.5" data-testid={`slip-prev-odds-${s._id}`}>{fmtOdds(s.prevOdds)}</span>
+      )}
+      <motion.span key={s.movedAt || 0} data-testid={`slip-odds-${s._id}`}
+        initial={s.movedAt ? { scale: 1.25, backgroundColor: up ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)" } : false}
+        animate={{ scale: 1, backgroundColor: "rgba(0,0,0,0)" }} transition={{ duration: 0.9 }}
+        className={`flex items-center gap-0.5 font-mono text-lg font-bold rounded-md px-1 ${tone}`}>
+        {s.move && (up ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}{fmtOdds(s.odds)}
+      </motion.span>
+    </div>
+  );
+}
+
 function GameCard({ legs, selId, onRemove }) {
   const head = legs[0];
   const sgp = legs.length > 1;
@@ -80,7 +98,7 @@ function GameCard({ legs, selId, onRemove }) {
               {s.pick}
             </span>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="font-mono text-lg font-bold text-white">{fmtOdds(s.odds)}</span>
+              <LegOdds s={s} />
               <button data-testid={`slip-remove-${selId(s)}`} onClick={() => onRemove(selId(s))} aria-label="Remove"
                 className="w-6 h-6 rounded-full flex items-center justify-center text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
                 <X size={13} />
@@ -94,7 +112,8 @@ function GameCard({ legs, selId, onRemove }) {
 }
 
 export function BetSlip() {
-  const { items, removeSelection, clear, selId, open, setOpen, applyServerPrices } = useBetSlip();
+  const { items, removeSelection, clear, selId, open, setOpen, applyServerPrices, acceptChanges, acceptBetter, setAcceptBetter } = useBetSlip();
+  const pendingChanges = items.some((s) => s.pending);
   const { user, setAuthOpen, setBalances } = useAuth();
   const [stake, setStake] = useState("");
   const [coin, setCoin] = useState("USDT");
@@ -138,12 +157,12 @@ export function BetSlip() {
     setLoading(true);
     try {
       if (isParlay) {
-        const { data } = await api.post("/bets", { selections: items.map(stripSel), stake: stakeNum, coin, bet_type: "parlay" });
+        const { data } = await api.post("/bets", { selections: items.map(stripSel), stake: stakeNum, coin, bet_type: "parlay", accept_better: acceptBetter });
         setBalances(data.balances);
       } else {
         let lastBal = null;
         for (const s of items) {
-          const { data } = await api.post("/bets", { selections: [stripSel(s)], stake: stakeNum, coin, bet_type: "single" });
+          const { data } = await api.post("/bets", { selections: [stripSel(s)], stake: stakeNum, coin, bet_type: "single", accept_better: acceptBetter });
           lastBal = data.balances;
           setBalances(data.balances);
           removeSelection(selId(s));
@@ -286,10 +305,24 @@ export function BetSlip() {
             </p>
           )}
 
-          <button data-testid="bet-slip-place-button" onClick={place} disabled={loading}
+          <div data-testid="bet-slip-accept-better" className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-zinc-400">Auto-accept better odds</span>
+            <button type="button" role="switch" aria-checked={acceptBetter} data-testid="bet-slip-accept-better-toggle"
+              onClick={() => setAcceptBetter((v) => !v)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${acceptBetter ? "bg-emerald-500" : "bg-[#2A2F45]"}`}>
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${acceptBetter ? "translate-x-4" : ""}`} />
+            </button>
+          </div>
+
+          {pendingChanges && (
+            <p data-testid="bet-slip-odds-changed-note" className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+              Odds have changed on your slip. Review the highlighted picks and accept to continue.
+            </p>
+          )}
+          <button data-testid="bet-slip-place-button" onClick={pendingChanges ? acceptChanges : place} disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-full transition-colors disabled:opacity-60 shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)]">
             {loading && <Loader2 size={16} className="animate-spin" />}
-            {user ? (isParlay ? "Place Parlay" : `Place ${items.length} Bet${items.length > 1 ? "s" : ""}`) : "Sign in to bet"}
+            {pendingChanges ? "Accept odds changes" : user ? (isParlay ? "Place Parlay" : `Place ${items.length} Bet${items.length > 1 ? "s" : ""}`) : "Sign in to bet"}
           </button>
         </div>
       )}

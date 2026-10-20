@@ -100,3 +100,8 @@
 - Also: stake must be >0 and finite, ≤20 legs, singles exactly 1 leg, duplicate/conflicting same-market legs rejected, balance deduction is atomic (`$gte` filter) to stop double-spend.
 - Frontend: on 409 the slip auto-updates odds / drops unavailable legs (`applyServerPrices`) and warns; singles remove each placed leg as they succeed.
 - Verified with in-process test (tampered 50.0 → 409, lower → accepted @1.80, wrong line/fake event → 409, prop ok, conflict/neg/huge stake rejected) + UI 409 flow.
+
+## Odds Change Alerts + Auto-accept Better Odds (2026-06)
+- Sportsbook polls odds every 20s; `syncPrices(events)` (BetSlipContext) re-prices slip legs via `refreshLeg`. Moved legs show old odds struck through, arrow + green (up) / red (down) with flash animation.
+- "Auto-accept better odds" switch in slip (persisted localStorage `apex_accept_better`, default on). Up-moves auto-accepted when on; down-moves (or any move when off) mark legs pending → amber note + button becomes "Accept odds changes".
+- Backend `PlaceBetInput.accept_better` (default true): off → any price difference returns 409; on → only worse prices 409. 409 responses also flag legs pending in the slip. Verified backend matrix + UI flow (mocked feed).

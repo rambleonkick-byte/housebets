@@ -8,7 +8,7 @@ export function slipLink(code) {
 }
 
 // Re-price a shared leg against the live feed; returns null if no longer available.
-function refreshLeg(leg, events) {
+export function refreshLeg(leg, events) {
   const ev = events.find((e) => e.event_id === leg.event_id);
   if (!ev || ev.state === "post") return null;
   let odds = null;
