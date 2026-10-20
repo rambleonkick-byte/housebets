@@ -1933,6 +1933,8 @@ def _bj_advance(g):
 
 
 async def _bj_save(g):
+    g["lock"] = False
+    g["open"] = g["status"] != "done"
     await db.bj_games.replace_one({"id": g["id"]}, g)
 
 
@@ -1967,16 +1969,32 @@ async def bj_deal(body: BlackjackDealInput, user: dict = Depends(get_current_use
         g["status"] = "insurance"
     elif bj_is_bj(p) or (up[0] in "ATJQK" and bj_is_bj(g["dealer"])):
         await _bj_finish(g)
-    await db.bj_games.insert_one(dict(g))
+    g["open"] = g["status"] != "done"
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.bj_games.insert_one(dict(g))
+    except DuplicateKeyError:
+        await _adjust(user["id"], body.coin, total - g.get("total_payout", 0))
+        raise HTTPException(status_code=400, detail="Finish your current hand first")
     return _bj_public(g, await _balances(user["id"]))
 
 
 @api_router.post("/casino/blackjack/action")
 async def bj_action(body: BlackjackActionInput, user: dict = Depends(get_current_user)):
-    g = await db.bj_games.find_one({"id": body.game_id, "user_id": user["id"]}, {"_id": 0})
-    if not g or body.action not in _bj_actions(g):
+    # claim the hand atomically so parallel requests can't double-apply moves or payouts
+    g = await db.bj_games.find_one_and_update({"id": body.game_id, "user_id": user["id"], "lock": {"$ne": True}},
+                                              {"$set": {"lock": True}}, projection={"_id": 0})
+    if not g:
+        raise HTTPException(status_code=409, detail="Hand is busy, try again")
+    try:
+        return await _bj_apply(g, body.action, user)
+    finally:
+        await db.bj_games.update_one({"id": body.game_id, "lock": True}, {"$set": {"lock": False}})
+
+
+async def _bj_apply(g, a, user):
+    if a not in _bj_actions(g):
         raise HTTPException(status_code=400, detail="That move isn't available")
-    a = body.action
     if a in ("insurance", "no_insurance"):
         if a == "insurance":
             ins = round(g["hands"][0]["bet"] / 2, 8)
@@ -2115,6 +2133,9 @@ async def root():
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.static_deposits.create_index("tx_hash", unique=True)
+    await db.bj_games.update_many({"open": {"$exists": False}}, [{"$set": {"open": {"$ne": ["$status", "done"]}}}])
+    await db.bj_games.create_index("user_id", name="bj_one_open_hand", unique=True,
+                                   partialFilterExpression={"open": True})
     try:
         await db.static_addresses.drop_index("user_id_1_coin_1")
     except Exception:

@@ -75,6 +75,11 @@ function Felt({ game, coin }) {
                 </span>
               );
             })}
+            {game.insurance?.bet > 0 && (
+              <span data-testid="bj-side-insurance" className={`text-[10px] font-semibold rounded-full px-2.5 py-1 border ${game.insurance.payout > 0 ? "bg-amber-400/20 border-amber-300 text-amber-100" : "bg-black/30 border-white/10 text-emerald-100/60"}`}>
+                Insurance: {game.status !== "done" ? "taken" : game.insurance.payout > 0 ? `+${fmtCrypto(game.insurance.payout, coin)}` : "no win"}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -98,7 +103,10 @@ export function Blackjack() {
 
   useEffect(() => {
     if (!g.user) return;
-    api.get("/casino/blackjack/current").then(({ data }) => data.game && setGame(data.game)).catch(() => {});
+    api.get("/casino/blackjack/current").then(({ data }) => {
+      if (!data.game) return;
+      setGame(data.game); g.setCoin(data.game.coin); g.setStake(String(data.game.hands[0].bet));
+    }).catch(() => {});
   }, [g.user]);
 
   const apply = (data) => {
@@ -184,7 +192,7 @@ export function Blackjack() {
           )}
         </BetControls>
       }>
-      <Felt game={game} coin={g.coin} />
+      <Felt game={game} coin={game?.coin || g.coin} />
     </GameLayout>
   );
 }

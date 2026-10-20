@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Settings, Copy, ExternalLink, ShieldCheck } from "lucide-react";
+import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Copy, ExternalLink, ShieldCheck } from "lucide-react";
 import { api, formatApiErrorDetail, COIN_META, COIN_NETWORK, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto, usdValue } from "@/lib/format";
@@ -30,17 +30,14 @@ export function WalletModal({ open, onClose }) {
   const [address, setAddress] = useState("");
   const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [cfg, setCfg] = useState(null);
-  const [showCfg, setShowCfg] = useState(false);
   const [deposit, setDeposit] = useState(null);     // generated address payload
   const [oxaPolling, setOxaPolling] = useState(false);
   const pollRef = (typeof window !== "undefined") ? WalletModal._pollRef || (WalletModal._pollRef = { t: null }) : { t: null };
   const payoutRef = (typeof window !== "undefined") ? WalletModal._payoutRef || (WalletModal._payoutRef = { t: null }) : { t: null };
 
   const load = async () => {
-    const [{ data: w }, { data: c }] = await Promise.all([api.get("/wallet"), api.get("/payment/config")]);
+    const { data: w } = await api.get("/wallet");
     setWallet(w);
-    setCfg(c);
   };
   useEffect(() => { if (open) load(); }, [open]);
   useEffect(() => () => { if (pollRef.t) clearInterval(pollRef.t); if (payoutRef.t) clearInterval(payoutRef.t); }, []);
@@ -219,16 +216,6 @@ export function WalletModal({ open, onClose }) {
                 )}
               </div>
 
-              {/* Pluggable payment config */}
-              <div className="px-4 pb-4">
-                <button data-testid="payment-config-toggle" onClick={() => setShowCfg((v) => !v)}
-                  className="w-full flex items-center justify-between text-xs text-zinc-500 hover:text-zinc-300 py-2 border-t border-[#2A2F45]">
-                  <span className="flex items-center gap-1.5"><Settings size={13} /> Payment API (pluggable)</span>
-                  <span>{cfg?.mode === "live" ? "LIVE" : "MOCK"}</span>
-                </button>
-                {showCfg && cfg && <PaymentConfig cfg={cfg} onSaved={load} />}
-              </div>
-
               {wallet?.transactions?.length > 0 && (
                 <div className="px-4 pb-5">
                   <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-600 mb-2">Recent activity</p>
@@ -281,46 +268,5 @@ export function WalletModal({ open, onClose }) {
         </motion.div>
       )}
     </AnimatePresence>
-  );
-}
-
-function PaymentConfig({ cfg, onSaved }) {
-  const [provider, setProvider] = useState(cfg.provider || "");
-  const [apiBase, setApiBase] = useState(cfg.api_base || "");
-  const [apiKey, setApiKey] = useState("");
-  const [mode, setMode] = useState(cfg.mode || "mock");
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await api.put("/payment/config", { provider, api_base: apiBase, api_key: apiKey || cfg.api_key, mode });
-      toast.success("Payment config saved");
-      onSaved();
-    } catch (e) {
-      toast.error(formatApiErrorDetail(e.response?.data?.detail));
-    } finally { setSaving(false); }
-  };
-
-  return (
-    <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 space-y-2 mt-1">
-      <p className="text-[11px] text-zinc-500">Plug in your own crypto payment gateway. In mock mode deposits are simulated.</p>
-      <input data-testid="payment-provider-input" value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="Provider name (e.g. NOWPayments)"
-        className="w-full bg-[#090A0F] border border-[#2A2F45] rounded px-2.5 py-2 text-xs focus:outline-none focus:border-emerald-500" />
-      <input data-testid="payment-apibase-input" value={apiBase} onChange={(e) => setApiBase(e.target.value)} placeholder="API base URL"
-        className="w-full bg-[#090A0F] border border-[#2A2F45] rounded px-2.5 py-2 text-xs font-mono focus:outline-none focus:border-emerald-500" />
-      <input data-testid="payment-apikey-input" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={cfg.api_key || "API key"}
-        className="w-full bg-[#090A0F] border border-[#2A2F45] rounded px-2.5 py-2 text-xs font-mono focus:outline-none focus:border-emerald-500" />
-      <div className="flex items-center gap-2">
-        <div className="flex gap-1 flex-1">
-          {["mock", "live"].map((m) => (
-            <button key={m} data-testid={`payment-mode-${m}`} onClick={() => setMode(m)}
-              className={`flex-1 text-xs py-1.5 rounded border uppercase font-mono ${mode === m ? "border-emerald-500 text-emerald-300" : "border-[#2A2F45] text-zinc-500"}`}>{m}</button>
-          ))}
-        </div>
-        <button data-testid="payment-save-button" onClick={save} disabled={saving}
-          className="text-xs bg-emerald-500 text-black font-semibold px-4 py-1.5 rounded">{saving ? "..." : "Save"}</button>
-      </div>
-    </div>
   );
 }

@@ -41,13 +41,18 @@ export function Sportsbook() {
     for (const e of events) c[e.league] = (c[e.league] || 0) + 1;
     return c;
   }, [events]);
+  const liveBy = useMemo(() => {
+    const c = {};
+    for (const e of events) if (e.state === "in") { c[e.league] = (c[e.league] || 0) + 1; c.all = (c.all || 0) + 1; }
+    return c;
+  }, [events]);
 
   const shown = active === "all" ? events : events.filter((e) => e.league === active);
   const liveCount = events.filter((e) => e.state === "in").length;
 
   return (
     <div className="flex max-w-[1600px] mx-auto">
-      <Sidebar sports={sports} active={active} onSelect={setActive} counts={counts} />
+      <Sidebar sports={sports} active={active} onSelect={setActive} counts={counts} live={liveBy} />
 
       <main className="flex-1 min-w-0 pb-24 lg:pb-8">
         {/* Hero */}

@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 7: Blackjack tested end to end. Backend: new pytest suite backend/tests/test_blackjack.py, 16/16 pass. It covers auth (401), 422 for zero/negative stake and negative side bets, 400 for an invalid coin, the hole card shown as XX while a hand is live (also checked on /current), the deck never exposed, no second deal while a hand is open (400), invalid/unavailable/finished actions returning 400, and 40 random-policy hands with all three side bets. In those 40 hands the PP/21+3 results and payouts matched a local re-implementation, Bust It paid by dealer card count, the dealer stood on all 17s (never drew at 17 or more), and the wallet change equalled total_payout - total_stake. Also covered: double (bet x2, 3 cards, extra stake taken), split (2 hands, extra stake taken, split aces one card each, split 21 is not a blackjack), insurance (half the bet, pays 3x total on dealer BJ, other actions blocked during the insurance prompt), blackjack rows in history, and 400 'Insufficient balance' for double/split/insurance with the wallet unchanged. One CRITICAL race condition was found with a separate probe script: sending 'stand' 6-8 times at once on the same hand pays the hand more than once. Frontend (desktop 1920): lobby Blackjack card links to /casino/blackjack; green felt with the APEXODDS logo; side-bet inputs plus total; deal; split shown as 2 hands with an active-hand ring and per-hand results; double; insurance prompt with Insure / No thanks; side chips (pending -> no win / win); big-win overlay (e.g. 2.67x with a Bust It 5-card hit); resume of an open hand after page reload; history modal after seed rotate: 8 of 8 blackjack rows show '✓ Verified'. Mobile was smoke-checked only.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/casino/blackjack/action", "issue": "RACE CONDITION / DOUBLE PAYOUT. bj_action reads the game doc, changes it in memory, then _bj_finish credits the wallet (_adjust) BEFORE _bj_save. The save is an unconditional replace_one. Parallel requests for the same game_id (e.g. 'stand') all pass the _bj_actions check and all credit the payout. Reproduced: 5 of 25 rounds had several 200 responses, and 2 rounds were overpaid (credited 0.4 when payout was 0.2; 0.2 when payout was 0.1). Easy to exploit with large stakes. The same pattern also lets parallel hit/double/split corrupt state. Fix: make the state change atomic and guarded. Either (a) add a version/rev field and save with replace_one({'id':gid,'rev':old_rev}, ...), raising 409/400 when matched_count==0, and credit the payout only after the guarded save succeeds; or (b) claim the game first with find_one_and_update({'id':gid,'status':{'$in':['active','insurance']},'lock':{'$exists':False}}, {'$set':{'lock':now}}). Apply the same guard in the deal path's _bj_finish.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/casino/blackjack/deal", "issue": "The check for an open hand (find_one, then insert) is not atomic, so parallel deals could in theory create 2 active hands. Not reproduced: 1 of 8 parallel deals succeeded. Suggest a partial unique index on bj_games {user_id} where status in [active, insurance], or a per-user lock."},
+      {"endpoint": "POST /api/casino/blackjack/deal", "issue": "No minimum stake. A stake like 1e-10 rounds total to 0 and gives a free hand (harmless, but worth a min-bet check)."},
+      {"endpoint": "Blackjack rules", "issue": "Even money is not offered when the player has a BJ and the dealer shows an Ace (the hand settles at once). That is acceptable but not stated in the UI."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Blackjack resume", "issue": "When /current resumes a hand, the bet input and coin selector still show the previous local values (e.g. 10 USDT) while the hand's bet is 0.1. HandView also formats with g.coin rather than game.coin, so a hand resumed in a different coin shows the wrong unit.", "selector": "[data-testid=bj-hand-0]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Blackjack table", "issues": ["The insurance outcome (bet/payout) is never shown on the table after settlement. Add an 'Insurance' chip next to the side-bet chips.", "Mobile 390px: the table sits above the controls, so the player has to scroll between the cards and the Hit/Stand buttons. The page is also 4px wider than the screen (scrollWidth 394), which cuts off the header bell icon."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_blackjack.py", "/app/backend/tests/race_probe_blackjack.py", "/app/test_reports/pytest/pytest_blackjack.xml"],
+  "action_items": [
+    "CRITICAL: make /api/casino/blackjack/action atomic (versioned/conditional save or a lock) and credit the payout only after the guarded state change succeeds. Re-run backend/tests/race_probe_blackjack.py and expect 'overpaid rounds 0' and 'multi-success rounds 0'.",
+    "Add a unique/atomic guard so a user can only have one active blackjack hand.",
+    "Optional: insurance result chip; use game.coin for display on resume; fix the 4px horizontal overflow on mobile."
+  ],
+  "critical_code_review_comments": [
+    "_bj_finish calls _adjust (wallet credit) before the game doc is saved as done. Any crash between the two leaves an active game that was already paid (it can be played again via /current). Persist status first, guarded, then credit.",
+    "_bj_save uses an unconditional replace_one, so the last writer wins under concurrency.",
+    "The verify logic in fairness.js for split hands only checks 3 of the 4 opening cards. That is acceptable, but it could check detail.player[1][0] against deck[2]."
+  ],
+  "updated_files": ["/app/backend/tests/test_blackjack.py", "/app/backend/tests/race_probe_blackjack.py"],
+  "success_rate": {"backend": "16/16 pytest pass; 1 critical race-condition bug found by probe", "frontend": "100% of requested flows working (desktop); mobile smoke-checked only"},
+  "seed_data_creation": "test_insufficient_balance_actions registers a throwaway user test_bj_<hex>@example.com and sets its USDT balance directly in Mongo; the user doc is deleted on teardown. Admin played about 150 hands at 0.1 USDT.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest backend/tests/test_blackjack.py -v -o addopts=''. Race check: python backend/tests/race_probe_blackjack.py (needs REACT_APP_BACKEND_URL in env). UI login trick: fetch('/api/auth/login') with credentials:'include' inside page.evaluate, then goto. The history Verify needs a seed rotate first (casino-tab-fairness -> fairness-rotate-button).",
+  "rca of the issue": "Double payout: bj_action does a non-atomic read-modify-write. N parallel requests read the same 'active' doc, each one runs _bj_advance/_bj_finish, and each calls _adjust(+payout) on the wallet before the unconditional replace_one. Reproduce: deal 0.1 USDT and get an active hand, then POST action 'stand' 8 times in parallel; when the hand wins, the wallet is credited 2x or more. Mitigation: guarded update on a rev/status field, then credit only when that update returns modified_count==1."
+}
