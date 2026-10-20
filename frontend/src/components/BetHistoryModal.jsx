@@ -12,6 +12,7 @@ const STATUS = {
   open: { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10", label: "Open" },
   won: { icon: Trophy, color: "text-emerald-400", bg: "bg-emerald-500/10", label: "Won" },
   lost: { icon: XCircle, color: "text-red-400", bg: "bg-red-500/10", label: "Lost" },
+  void: { icon: Clock, color: "text-zinc-300", bg: "bg-zinc-500/10", label: "Void · refunded" },
   cashed_out: { icon: HandCoins, color: "text-sky-400", bg: "bg-sky-500/10", label: "Cashed out" },
 };
 

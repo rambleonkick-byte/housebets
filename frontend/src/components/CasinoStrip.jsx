@@ -39,7 +39,7 @@ export function CasinoStrip() {
                     style={g.soon
                       ? { background: "rgba(113,113,122,0.5)", color: "#d4d4d8" }
                       : { background: `${g.accent}26`, color: g.accent, border: `1px solid ${g.accent}66` }}>
-                    {g.soon ? "Soon" : "Maxxed"}
+                    {g.soon ? "Soon" : "Apex"}
                   </span>
                 </div>
               </div>

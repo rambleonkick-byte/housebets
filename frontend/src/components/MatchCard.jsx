@@ -125,6 +125,13 @@ export function MatchCard({ ev }) {
             </Market>
           )}
         </div>
+        {ev.markets.filter((m) => !["moneyline", "spread", "total"].includes(m.market)).map((m) => (
+          <Market key={m.market} label={m.label} cols={m.selections.length}>
+            {m.selections.map((s) => (
+              <OddsButton key={s.side} sel={{ ...s, market: m.market }} meta={meta} />
+            ))}
+          </Market>
+        ))}
       </div>
       {ev.props && ev.props.length > 0 && <PropsSection ev={ev} meta={meta} />}
     </div>

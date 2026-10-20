@@ -65,7 +65,7 @@ function GameCard({ game, index }) {
           ) : (
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-md"
               style={{ background: `${game.accent}26`, color: game.accent, border: `1px solid ${game.accent}66` }}>
-              Maxxed
+              Apex
             </span>
           )}
         </div>

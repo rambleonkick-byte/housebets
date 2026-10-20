@@ -148,3 +148,9 @@
 ## MMA + League Categories (2026-06)
 - Added SGO league `UFC` (group `mma`, label UFC, moneyline only; fighters shown by last name). Sidebar icon Swords.
 - `/api/sports` now returns each sport with its `leagues` (from SGO_LEAGUES). Sidebar shows league sub-items (NFL / NCAA Football, NBA / NCAA Basketball) under multi-league sports with counts + live dot; selecting `lg:<ID>` filters by `league_key`. Mobile chips are per league. Verified NFL filter shows 15 cards.
+
+## More Leagues + MMA Method Bets + Apex badge (2026-06)
+- Soccer leagues added as categories: Premier League (EPL), La Liga, Champions League, Bundesliga, Serie A, Ligue 1 (+ MLS) — all now accessible on the SGO plan (~105 soccer events).
+- UFC markets: Total Rounds (roundsCompleted O/U) and Goes the Distance (wonBy_decision yes/no). Events carry `rounds` (count of `Nr` result periods). Settlement: rounds O/U decided when clear (n ≤ floor(line) → under, n ≥ floor(line)+2 → over), otherwise "push"; distance = "no" if fight ended before R3, otherwise "push" (SGO doesn't report finish method). auto_settle supports pushes: pushed legs drop out of parlays (payout ÷ pushed odds), all-push bets become `void` and refund stake. Cash-out divides out pushed legs. MatchCard renders extra markets generically; My Bets shows "Void · refunded".
+- House games badge text "Maxxed" → "Apex" (Casino lobby + strip).
+- Cold /api/odds now ~7–8s (14 leagues fetched sequentially to avoid SGO 429s), cached 5 min.

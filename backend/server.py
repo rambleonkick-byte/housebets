@@ -232,6 +232,12 @@ SGO_LEAGUES = [
     {"id": "NCAAB", "group": "basketball", "label": "NCAA Basketball", "draw": False},
     {"id": "MLB", "group": "baseball", "label": "MLB", "draw": False},
     {"id": "NHL", "group": "hockey", "label": "NHL", "draw": False},
+    {"id": "EPL", "group": "soccer", "label": "Premier League", "draw": True},
+    {"id": "LA_LIGA", "group": "soccer", "label": "La Liga", "draw": True},
+    {"id": "UEFA_CHAMPIONS_LEAGUE", "group": "soccer", "label": "Champions League", "draw": True},
+    {"id": "BUNDESLIGA", "group": "soccer", "label": "Bundesliga", "draw": True},
+    {"id": "IT_SERIE_A", "group": "soccer", "label": "Serie A", "draw": True},
+    {"id": "FR_LIGUE_1", "group": "soccer", "label": "Ligue 1", "draw": True},
     {"id": "MLS", "group": "soccer", "label": "MLS", "draw": True},
     {"id": "UFC", "group": "mma", "label": "UFC", "draw": False},
 ]
@@ -381,6 +387,21 @@ def _sgo_markets(ev, draw):
             markets.append({"market": "total", "label": "Total", "selections": [
                 {"side": "over", "pick": f"Over {line}", "odds": oo, "line": line},
                 {"side": "under", "pick": f"Under {line}", "odds": uo, "line": line}]})
+    ro, ru = odds.get("roundsCompleted-all-game-ou-over"), odds.get("roundsCompleted-all-game-ou-under")
+    if ro and ru:
+        line = _num(ro.get("bookOverUnder"))
+        oo, uo = american_to_decimal(ro.get("bookOdds")), american_to_decimal(ru.get("bookOdds"))
+        if None not in (line, oo, uo):
+            markets.append({"market": "rounds", "label": "Total Rounds", "selections": [
+                {"side": "over", "pick": f"Over {line} rounds", "label": f"O {line}", "odds": oo, "line": line},
+                {"side": "under", "pick": f"Under {line} rounds", "label": f"U {line}", "odds": uo, "line": line}]})
+    dy, dn = odds.get("wonBy_decision-all-game-yn-yes"), odds.get("wonBy_decision-all-game-yn-no")
+    if dy and dn:
+        yo, no = american_to_decimal(dy.get("bookOdds")), american_to_decimal(dn.get("bookOdds"))
+        if None not in (yo, no):
+            markets.append({"market": "distance", "label": "Goes the Distance", "selections": [
+                {"side": "yes", "pick": "Fight goes the distance", "label": "Yes", "odds": yo, "line": None},
+                {"side": "no", "pick": "Fight doesn't go the distance", "label": "No", "odds": no, "line": None}]})
     return markets
 
 
@@ -450,6 +471,7 @@ async def fetch_sgo_league(meta):
                 "markets": markets, "source": "sportsgameodds", "book": "Top books",
                 "props": _sgo_props(ev),
                 "player_results": _sgo_player_results(ev) if state in ("in", "post") else {},
+                "rounds": sum(1 for k in (ev.get("results") or {}) if re.fullmatch(r"\d+r", k)) or None,
             })
     except Exception as e:
         logger.warning(f"SGO fetch failed for {key}: {e}")
@@ -1306,6 +1328,20 @@ def settle_selection(sel, ev) -> Optional[bool]:
         if ou == "under":
             return val < line
         return None
+    if m in ("rounds", "distance"):
+        n = ev.get("rounds")
+        if not n:
+            return None
+        if m == "distance":
+            # SGO doesn't report the finish method; only fights ending before round 3 are certain
+            return (side == "no") if n < 3 else "push"
+        if line is None:
+            return None
+        if n <= math.floor(line):
+            return side == "under"
+        if n >= math.floor(line) + 2:
+            return side == "over"
+        return "push"
     try:
         hs = int(ev["home"]["score"])
         as_ = int(ev["away"]["score"])
@@ -1348,15 +1384,19 @@ async def auto_settle(user_id: str):
             legs.append(settle_selection(s, ev) if ev else None)
         if any(x is None for x in legs):
             continue
-        won = all(legs)
+        won = all(x is not False for x in legs)
+        pushed = [s for s, x in zip(b["selections"], legs) if x == "push"]
+        void = won and len(pushed) == len(legs)
+        payout = b["stake"] if void else round(b["potential_payout"] / math.prod(float(s["odds"]) for s in pushed), 8) if won else 0
         res = await db.bets.update_one({"id": b["id"], "status": "open"},
-                                       {"$set": {"status": "won" if won else "lost", "settled_at": now_iso()}})
+                                       {"$set": {"status": "void" if void else "won" if won else "lost",
+                                                 "settled_at": now_iso(), "payout": payout}})
         if won and res.modified_count:
             await db.wallets.update_one({"user_id": user_id},
-                                        {"$inc": {f"balances.{b['coin']}": b["potential_payout"]}})
+                                        {"$inc": {f"balances.{b['coin']}": payout}})
             await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id,
-                                              "type": "payout", "coin": b["coin"],
-                                              "amount": b["potential_payout"], "created_at": now_iso(),
+                                              "type": "refund" if void else "payout", "coin": b["coin"],
+                                              "amount": payout, "created_at": now_iso(),
                                               "hash": "0x" + uuid.uuid4().hex[:24]})
 
 
@@ -1374,6 +1414,8 @@ def _cashout_value(b, events) -> Optional[float]:
             r = settle_selection(s, ev)
             if r is None or r is False:
                 return None
+            if r == "push":
+                remaining *= float(s["odds"])
             continue
         price = _live_price(Selection(**{k: s.get(k) for k in Selection.model_fields if k in s}), ev)
         if not price or price <= 1:
