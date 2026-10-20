@@ -188,3 +188,6 @@
 - Clicking a player opens a side panel showing their money in/out and who referred them. You can add or remove balance (a reason is required, and a balance can't go below zero); each change is logged as an "adjustment" transaction and in `admin_actions`. You can also lock or unlock the account (admins can't be locked) and see the change history. The withdrawal queue opens from a button on the panel.
 - A locked user gets 403 "Account locked. Contact support." at login and on every signed-in request.
 - APIs: GET /api/admin/users, POST /api/admin/users/{id}/adjust, POST /api/admin/users/{id}/block, GET /api/admin/users/{id}/log.
+
+## Link Preview Branding (2026-06)
+- index.html now has og:url, og:image (/brand/og-image.png, 1200x630), twitter summary_large_image, application-name, and favicon.ico, icon-512.png and apple-touch-icon.png made from the logo tile. The og URLs point to https://wager-ledger-4.emergent.host; switch them to the custom domain once it is linked.
