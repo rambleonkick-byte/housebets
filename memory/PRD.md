@@ -154,3 +154,16 @@
 - UFC markets: Total Rounds (roundsCompleted O/U) and Goes the Distance (wonBy_decision yes/no). Events carry `rounds` (count of `Nr` result periods). Settlement: rounds O/U decided when clear (n ≤ floor(line) → under, n ≥ floor(line)+2 → over), otherwise "push"; distance = "no" if fight ended before R3, otherwise "push" (SGO doesn't report finish method). auto_settle supports pushes: pushed legs drop out of parlays (payout ÷ pushed odds), all-push bets become `void` and refund stake. Cash-out divides out pushed legs. MatchCard renders extra markets generically; My Bets shows "Void · refunded".
 - House games badge text "Maxxed" → "Apex" (Casino lobby + strip).
 - Cold /api/odds now ~7–8s (14 leagues fetched sequentially to avoid SGO 429s), cached 5 min.
+
+## UFC Event Cards + Progressive Odds (2026-06)
+- ESPN UFC scoreboard (free) gives fighter headshots, W-L-D records, flags, weight class and bout order; matched to SGO fights by name (`_enrich_ufc`). ESPN names replace garbled SGO names.
+- UFC shows as event cards: a large Main Event at the top ("Featured Bout" if ESPN doesn't mark it as the headliner), then fight-card rows with "To Win" buttons and More markets (rounds/distance).
+- `/api/odds?league_key=X` returns one league; the frontend loads every league in parallel and shows each one as it arrives, with shimmer tiles for leagues still loading.
+
+## Boosted Combos (2026-06)
+- `GET /api/boosts`: 3 same-game combos built automatically from cached odds (favourite ML + likelier total side + a prop near 2.0, or the spread). Tiers: Bet of the Day +15%, Golden Boost +30%, Boosted Odds +20% on profit: boosted = 1+(base-1)*(1+pct). No stake cap. Each tier and its legs stay locked to the same event until it's gone.
+- The homepage strip has countdown cards (hidden 5 min before kick-off) and struck base » boosted odds. Clicking a card loads the slip in boost mode. `POST /api/bets` with `boost_id` checks the legs (409 boost_gone if they don't match) and stores the boosted odds plus boost metadata.
+- Global scrollbars restyled: thin, dark, rounded, emerald on hover.
+
+## Backlog
+- P0 Crash game · P1 Prop search & filters · P2 HOT tags · Pending: a valid admin email for withdrawal alerts

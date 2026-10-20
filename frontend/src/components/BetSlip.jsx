@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Ticket, Trash2, X, Loader2, Zap, Share2, ArrowUp, ArrowDown } from "lucide-react";
 import { ShareSlipModal } from "@/components/ShareSlipModal";
@@ -118,6 +118,7 @@ export function BetSlip() {
   const [stake, setStake] = useState("");
   const [coin, setCoin] = useState("USDT");
   const [mode, setMode] = useState("single");
+  useEffect(() => { if (boost) setMode("parlay"); }, [boost]);
   const [loading, setLoading] = useState(false);
   const [share, setShare] = useState(null);
   const [sharing, setSharing] = useState(false);

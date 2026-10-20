@@ -27,7 +27,7 @@ function BoostCard({ b, i }) {
   const d = new Date(b.starts_at);
   const when = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} · ${d.toTimeString().slice(0, 5)}`;
   const active = boost?.id === b.id;
-  if (left <= 0) return null;
+  if (left <= 5 * 60000) return null;
   return (
     <motion.div data-testid={`boost-card-${b.tier}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
       className={`w-[300px] sm:w-[320px] shrink-0 bg-[#16181F] border rounded-2xl p-4 flex flex-col transition-shadow ${t.glow} ${active ? "border-emerald-500/70" : "border-[#262A38]"}`}>
@@ -45,10 +45,10 @@ function BoostCard({ b, i }) {
       <p className="font-bold text-sm text-white mt-1 truncate" data-testid={`boost-matchup-${b.tier}`}>{b.away} vs {b.home}</p>
       <ul className="mt-2 space-y-1.5 flex-1">
         {b.legs.map((l, k) => (
-          <li key={k} className="relative flex items-center gap-2.5 text-[12px] min-w-0">
-            <span className="relative z-10 w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
+          <li key={k} className="relative flex items-start gap-2.5 text-[12px] min-w-0">
+            <span className="relative z-10 mt-[3px] w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
             {k < b.legs.length - 1 && <span className="absolute left-[4px] top-3 h-[calc(100%+2px)] w-0.5 bg-emerald-400/70" />}
-            <span className="truncate"><span className="font-semibold text-white">{l.pick}</span><span className="text-zinc-500"> - {MARKET[l.market] || l.market}</span></span>
+            <span className="line-clamp-2 leading-snug"><span className="font-semibold text-white">{l.pick}</span>{l.market !== "prop" && <span className="text-zinc-500"> - {MARKET[l.market] || l.market}</span>}</span>
           </li>
         ))}
       </ul>

@@ -1,0 +1,39 @@
+{
+  "summary": "Tested Boosted Combos (API + UI) plus UFC/betting regressions. Backend: 20/20 pytest passed (new test_boosts.py has 9 tests, test_ufc_cards_league_odds.py has 11). GET /api/boosts returns 3 boosts in tier order botd/boosted/golden. Each has 3 legs (moneyline, total, prop) from one pre-game event, and base and boosted odds match the formula exactly (e.g. 1.29*1.69*2.0 gives base 3.15 and boosted 3.47). A boost bet via POST /api/bets returns 200 with total_odds equal to the boosted odds, boost meta stored, the balance deducted and the bet persisted. A fake boost_id, a partial set of legs, or another boost's legs all return 409 with boost_gone=true; no auth returns 401. Normal single and parlay bets still work (boost=null, parlay odds equal base). UI: the strip renders 3 cards with tier pill, countdown (ticks every second), league, date, matchup, 3 legs with connector dots, and struck base » boosted odds. Clicking boost-add-<tier> fills the slip with 3 legs, shows the banner, matching combined odds and the struck base, hides the single/parlay toggle, highlights the active card and computes payout correctly (10 x 4.09 = 40.89). Switching to another boost replaces the slip. Removing a leg clears the boost. A logged-in boost bet placed 2 USDT at 5.57 ('Bet placed!', header balance down $2). A boost_gone 409 (simulated with route interception) shows a warning toast and clears the banner. Mobile 390: the strip scrolls sideways with no page overflow; the slip drawer shows the boost. UFC: MAIN EVENT and FEATURED BOUT labels both appear; mobile bout rows are readable (name, flag, record, 'To Win' button). No page errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/boosts + POST /api/bets", "issue": "build_boosts drops events starting within 5 min, but the frontend card only hides at 0. In the last 5 minutes the card still shows, and placing it returns 409 boost_gone. Also, boosts are rebuilt from the live cache on every call. A boost can disappear mid-session (boost_gone) if a cache refresh changes which side is favorite or which prop is closest to 2.0."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BetSlipContext.addSelection", "issue": "setBoost(null) runs before the conflict check. Clicking a conflicting pick (e.g. total-over on the boost event that already has Under) is rejected, but the boost is still silently cleared. Reproduced: added the botd boost, clicked odds-button-<botd>-total-over; the slip still had the same 3 legs, the banner was gone and odds showed x3 singles.", "selector": "[data-testid=bet-slip-boost-banner]", "priority": "MEDIUM"},
+      {"component": "BetSlip mode after boost cleared", "issue": "When a boost is cleared (leg removed, a pick added, or a 409 boost_gone), the slip goes back to mode 'single' (the default state), not parlay. The 3 boost legs become 'Place 3 Bets' singles, and the total stake triples. The boost_gone toast says 'picks still on slip at regular odds', which suggests a parlay. Expected per spec: odds revert to a normal parlay. Fix: setMode('parlay') in loadSlip/when a boost is set, or keep parlay mode when the boost is cleared.", "selector": "[data-testid^=bet-slip-mode-]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Homepage boosts strip", "issues": ["Prop leg text is cut off on desktop cards ('Ausar Thompson O32.5 Fantasyscore - Play…'). Consider a 2-line clamp or dropping the market suffix for props.", "Card order is BOTD, BOOSTED, GOLDEN; the reference/request listed BOTD, GOLDEN, BOOSTED (cosmetic).", "'Fantasyscore' stat label looks unpolished (should be 'Fantasy Score')."]},
+      {"screen": "Mobile bet slip drawer (390px)", "issues": ["With a 3-leg boost, the legs area is very short: the 3rd leg is cut off behind the summary panel and needs an inner scroll."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_boosts.py", "/app/backend/tests/test_ufc_cards_league_odds.py", "/app/test_reports/pytest/pytest_results_it12.xml"],
+  "action_items": [
+    "BetSlipContext.addSelection: only clear the boost when the slip actually changes (not on a rejected conflict or a no-op)",
+    "When a boost is cleared or boost_gone, switch the slip to parlay mode (or set mode='parlay' in loadSlip) so the legs stay a combo instead of turning into N singles",
+    "Make the card countdown hide/disable at starts_at minus 5 min to match the backend cutoff, and consider keying boost validity on a stable id/legs snapshot so cache refreshes don't randomly invalidate a boost",
+    "Minor: prop leg truncation on cards; mobile slip legs area height"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2400+ lines; split the boosts, betting and odds modules",
+    "place_bet: the boost branch recomputes total_odds from verified live prices (good), but the pct comes from the server boost (good). Note there is no stake cap per the user's choice, so boosted payouts are unlimited.",
+    "build_boosts is called synchronously on every /api/boosts and every boost bet; fine for now (small cache)"
+  ],
+  "updated_files": ["/app/backend/tests/test_boosts.py"],
+  "success_rate": {"backend": "100%", "frontend": "90%"},
+  "test_credentials": "admin@apexodds.io/admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Placed small test bets on the admin account: 1 USDT boost parlay, 1 USDT single and 1 USDT parlay via pytest; 2 USDT boost bet via the UI",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Bet slip renders twice (desktop aside + mobile drawer), so use ':visible' with bet-slip-* testids. The boosts strip appears only after all leagues have loaded (ready=allDone), about 3s. Env date is Oct 2026. To simulate boost_gone in the UI, route /api/bets and replace boost_id."
+}

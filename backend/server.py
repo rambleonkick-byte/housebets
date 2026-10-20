@@ -346,7 +346,7 @@ def _sgo_props(ev):
         p = players.get(ent, {})
         name = p.get("name") or p.get("nickname") or ent.replace("_", " ").title()
         out.append({"player": name, "player_id": ent, "stat": statID,
-                    "label": STAT_LABELS.get(statID, (statID or "").replace("_", " ").title()),
+                    "label": STAT_LABELS.get(statID, re.sub(r"(?<=[a-z])(?=[A-Z])", " ", (statID or "").replace("_", " ")).title()),
                     "line": g.get("line"), "over": g.get("over"), "under": g.get("under")})
     out.sort(key=lambda x: (x["player"], x["label"]))
     return out[:24]
@@ -1355,7 +1355,8 @@ async def _verify_selections(selections, accept_better=True):
             "changed": changed, "unavailable": gone})
 
 
-BOOST_TIERS = [("botd", "Bet of the Day", 0.15), ("boosted", "Boosted Odds", 0.20), ("golden", "Golden Boost", 0.30)]
+BOOST_TIERS = [("botd", "Bet of the Day", 0.15), ("golden", "Golden Boost", 0.30), ("boosted", "Boosted Odds", 0.20)]
+_BOOST_LOCK = {}
 
 
 def _boost_leg(ev, market, side, pick, line, odds):
@@ -1366,6 +1367,23 @@ def _boost_leg(ev, market, side, pick, line, odds):
 
 
 def _boost_legs(ev):
+    sigs = _BOOST_LOCK.get(("legs", ev["event_id"]))
+    if sigs:
+        legs = []
+        for sig, base in sigs:
+            price = _live_price(SimpleNamespace(**base), ev)
+            if not price or price <= 1:
+                break
+            legs.append({**base, "odds": float(price), "status_detail": ev.get("status_detail")})
+        if len(legs) == len(sigs):
+            return legs
+    legs = _fresh_boost_legs(ev)
+    if legs:
+        _BOOST_LOCK[("legs", ev["event_id"])] = [(_leg_sig(l), l) for l in legs]
+    return legs
+
+
+def _fresh_boost_legs(ev):
     mk = {m["market"]: m for m in ev.get("markets", [])}
     legs = []
     ml = [x for x in (mk.get("moneyline") or {}).get("selections", []) if x["side"] != "draw" and x.get("odds")]
@@ -1410,16 +1428,32 @@ def build_boosts():
                 cands.append((legs[2]["market"] != "prop", ev["start"], ev, legs))
     cands.sort(key=lambda x: (x[0], x[1]))
     picked, leagues = [], set()
+    by_id = {c[2]["event_id"]: c for c in cands}
+    locked = {}
+    for tier, *_ in BOOST_TIERS:
+        c = by_id.get(_BOOST_LOCK.get(("tier", tier)))
+        if c and c not in locked.values():
+            locked[tier] = c
+    for c in locked.values():
+        leagues.add(c[2]["league_key"])
+    free = [c for c in cands if c not in locked.values()]
+    need = len(BOOST_TIERS) - len(locked)
     for pass_ in (0, 1):
-        for c in cands:
-            if len(picked) == len(BOOST_TIERS):
+        for c in free:
+            if len(picked) == need:
                 break
             if c in picked or (pass_ == 0 and c[2]["league_key"] in leagues):
                 continue
             picked.append(c)
             leagues.add(c[2]["league_key"])
+    assigned, it = [], iter(picked)
+    for tier, label, pct in BOOST_TIERS:
+        c = locked.get(tier) or next(it, None)
+        if c:
+            _BOOST_LOCK[("tier", tier)] = c[2]["event_id"]
+            assigned.append(((tier, label, pct), c))
     out = []
-    for (tier, label, pct), (_, _, ev, legs) in zip(BOOST_TIERS, picked):
+    for (tier, label, pct), (_, _, ev, legs) in assigned:
         base, boosted = _boost_price(legs, pct)
         out.append({"id": f"{tier}:{ev['event_id']}", "tier": tier, "label": label, "pct": pct,
                     "event_id": ev["event_id"], "league_label": ev["league_label"], "starts_at": ev["start"],

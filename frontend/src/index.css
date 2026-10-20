@@ -92,9 +92,15 @@
 .flash-up { animation: flash-up 0.7s ease-out; }
 .flash-down { animation: flash-down 0.7s ease-out; }
 .live-dot { animation: pulse-live 1.2s ease-in-out infinite; }
-.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(231 22% 22%); border-radius: 4px; }
-.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+* { scrollbar-width: thin; scrollbar-color: #262B3D transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #262B3D; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #10B981; background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+.scrollbar-thin { scrollbar-width: thin; }
+.scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { border: 0; }
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .grain {

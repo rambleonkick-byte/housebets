@@ -26,12 +26,12 @@ export function BetSlipProvider({ children }) {
   useEffect(() => { localStorage.setItem("apex_accept_better", acceptBetter ? "1" : "0"); }, [acceptBetter]);
 
   const addSelection = useCallback((sel) => {
-    setBoost(null);
     setItems((prev) => {
       const id = selId(sel);
       // Clicking the same pick again toggles it off.
       if (prev.find((p) => selId(p) === id)) {
         toast("Removed from bet slip");
+        setBoost(null);
         return prev.filter((p) => selId(p) !== id);
       }
       // Block conflicting sides of the same underlying market.
@@ -41,6 +41,7 @@ export function BetSlipProvider({ children }) {
         return prev;
       }
       toast.success("Added to bet slip");
+      setBoost(null);
       setOpen(true);
       return [...prev, { ...sel, _id: id }];
     });
