@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Ticket, Trash2, X, Loader2, Zap } from "lucide-react";
+import { Ticket, Trash2, X, Loader2, Zap, Share2 } from "lucide-react";
+import { ShareSlipModal } from "@/components/ShareSlipModal";
 import { useBetSlip } from "@/context/BetSlipContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
@@ -99,6 +100,8 @@ export function BetSlip() {
   const [coin, setCoin] = useState("USDT");
   const [mode, setMode] = useState("single");
   const [loading, setLoading] = useState(false);
+  const [share, setShare] = useState(null);
+  const [sharing, setSharing] = useState(false);
 
   const isParlay = mode === "parlay" && items.length > 1;
   const parlayOdds = useMemo(() => computeParlayOdds(items), [items]);
@@ -111,6 +114,22 @@ export function BetSlip() {
   const payout = isParlay ? stakeNum * parlayOdds : singlePayout;
   const totalStake = isParlay ? stakeNum : stakeNum * items.length;
   const bal = user?.balances?.[coin] ?? 0;
+
+  const oddsLabel = isParlay ? "Combined odds" : "Single bets";
+  const oddsValue = isParlay ? fmtOdds(parlayOdds) : items.length === 1 ? fmtOdds(items[0].odds) : `×${items.length}`;
+
+  const shareSlip = async () => {
+    if (!user) { setAuthOpen(true); return; }
+    setSharing(true);
+    try {
+      const { data } = await api.post("/slips", { selections: items.map(shareSel), mode: isParlay ? "parlay" : "single" });
+      setShare({ code: data.code, groups, oddsLabel, oddsValue, count: items.length, by: user.name || "My" });
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const place = async () => {
     if (!user) { setAuthOpen(true); return; }
@@ -145,6 +164,12 @@ export function BetSlip() {
         <div className="flex items-center justify-between">
           <SlipLogo />
           <div className="flex items-center gap-1.5">
+            {items.length > 0 && (
+              <button data-testid="bet-slip-share" onClick={shareSlip} disabled={sharing} aria-label="Share slip"
+                className="h-7 px-2.5 rounded-full flex items-center gap-1 text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors disabled:opacity-60">
+                {sharing ? <Loader2 size={12} className="animate-spin" /> : <Share2 size={12} />} Share
+              </button>
+            )}
             {items.length > 0 && (
               <button data-testid="bet-slip-clear" onClick={clear} aria-label="Clear slip"
                 className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
@@ -199,11 +224,11 @@ export function BetSlip() {
         <div className="px-4 pb-4 pt-1 space-y-3">
           <div data-testid="bet-slip-combined" className="bg-[#12141C] border border-[#232838] rounded-2xl px-4 py-3.5 flex items-center justify-between">
             <div className="leading-tight">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{isParlay ? "Combined odds" : "Single bets"}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{oddsLabel}</p>
               <p className="text-[10px] uppercase tracking-wider text-zinc-600">{items.length} selection{items.length > 1 ? "s" : ""}</p>
             </div>
             <p className="font-mono text-2xl font-bold text-emerald-400" data-testid="bet-slip-combined-odds">
-              {isParlay ? fmtOdds(parlayOdds) : items.length === 1 ? fmtOdds(items[0].odds) : `×${items.length}`}
+              {oddsValue}
             </p>
           </div>
 
@@ -265,6 +290,7 @@ export function BetSlip() {
 
   return (
     <>
+      <ShareSlipModal share={share} onClose={() => setShare(null)} />
       <aside className="hidden lg:flex flex-col w-80 shrink-0 h-[calc(100vh-4rem)] sticky top-16 p-3">
         <div className="flex-1 min-h-0 bg-[#0D0F16] border border-[#1E2234] rounded-3xl overflow-hidden shadow-[0_20px_60px_-20px_rgba(0,0,0,0.8)]">
           {content}
@@ -298,5 +324,11 @@ function stripSel(s) {
     event_id: s.event_id, league: s.league, league_label: s.league_label,
     home: s.home, away: s.away, market: s.market, pick: s.pick, side: s.side,
     line: s.line ?? null, odds: s.odds,
+  };
+}
+
+function shareSel(s) {
+  return {
+    ...stripSel(s), home_name: s.home_name ?? null, away_name: s.away_name ?? null, status_detail: s.status_detail ?? null,
   };
 }

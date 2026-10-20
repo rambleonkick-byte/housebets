@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { MatchCard } from "@/components/MatchCard";
 import { BetSlip } from "@/components/BetSlip";
 import { CasinoStrip } from "@/components/CasinoStrip";
+import { useSharedSlipLoader } from "@/lib/slips";
 
 const HERO = "https://images.unsplash.com/photo-1679391029864-d46f366a456b?crop=entropy&cs=srgb&fm=jpg&w=1600&q=80";
 
@@ -26,6 +27,7 @@ export function Sportsbook() {
   }, []);
 
   useEffect(() => { loadSports(); loadOdds(); }, [loadSports, loadOdds]);
+  useSharedSlipLoader(events, loading);
   useEffect(() => {
     const t = setInterval(loadOdds, 45000);
     return () => clearInterval(t);

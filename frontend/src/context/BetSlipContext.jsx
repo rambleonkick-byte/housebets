@@ -45,10 +45,14 @@ export function BetSlipProvider({ children }) {
     setItems((prev) => prev.filter((p) => selId(p) !== id));
   }, []);
   const clear = useCallback(() => setItems([]), []);
+  const loadSlip = useCallback((sels) => {
+    setItems(sels.map((s) => ({ ...s, _id: selId(s) })));
+    setOpen(true);
+  }, []);
   const has = useCallback((sel) => items.some((p) => selId(p) === selId(sel)), [items]);
 
   return (
-    <BetSlipContext.Provider value={{ items, addSelection, removeSelection, clear, has, open, setOpen, selId }}>
+    <BetSlipContext.Provider value={{ items, addSelection, removeSelection, clear, has, open, setOpen, selId, loadSlip }}>
       {children}
     </BetSlipContext.Provider>
   );

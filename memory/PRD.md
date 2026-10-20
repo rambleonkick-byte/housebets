@@ -87,3 +87,9 @@
 - Slip is now a floating rounded card with the ApexOdds logo, glowing "Bet Slip" title, LIVE badge (when any leg is live), pill Single/Parlay toggle.
 - One card per game: full team names "Away vs Home", league · status/time, colored pick pills (totals lime, moneyline emerald, spread sky, props cyan), large odds on the right, SGP badge.
 - Footer: big "Combined odds · N selections" panel, coin pills, compact stake row (10/50/MAX), total stake + payout with USD, pill CTA. Selection meta now carries home_name/away_name/status_detail/live (MatchCard).
+
+## Shareable Slips (2026-06)
+- `POST /api/slips` (auth) saves selections + mode → short code; `GET /api/slips/{code}` public. Collection `shared_slips`.
+- Bet slip "Share" button → ShareSlipModal: ApexOdds-branded slip card, copy link (`/?slip=CODE`), Save image (PNG via html-to-image), native Share (mobile, attaches image when supported).
+- Opening a link loads picks into the viewer's slip, re-priced from the live feed (`lib/slips.js` refreshLeg); finished/missing legs dropped with a toast. URL param cleaned after load.
+- Known gap: `/api/bets` still trusts client-sent odds — should validate against live feed server-side.

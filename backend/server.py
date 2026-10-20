@@ -881,6 +881,45 @@ async def get_deposit_address(coin: str, user: dict = Depends(get_current_user))
     return _static_public(sa)
 
 
+class SharedLeg(BaseModel):
+    event_id: str
+    league: Optional[str] = None
+    league_label: Optional[str] = None
+    home: Optional[str] = None
+    away: Optional[str] = None
+    home_name: Optional[str] = None
+    away_name: Optional[str] = None
+    status_detail: Optional[str] = None
+    market: str
+    side: str
+    pick: str
+    line: Optional[float] = None
+    odds: float
+
+
+class SharedSlipInput(BaseModel):
+    selections: List[SharedLeg] = Field(min_length=1, max_length=20)
+    mode: str = "single"
+
+
+@api_router.post("/slips")
+async def create_shared_slip(body: SharedSlipInput, user: dict = Depends(get_current_user)):
+    code = secrets.token_urlsafe(6).replace("-", "x").replace("_", "y")
+    await db.shared_slips.insert_one({
+        "code": code, "user_id": user["id"], "by": (user.get("name") or "A player")[:40],
+        "mode": "parlay" if body.mode == "parlay" and len(body.selections) > 1 else "single",
+        "selections": [l.model_dump() for l in body.selections], "created_at": now_iso()})
+    return {"code": code}
+
+
+@api_router.get("/slips/{code}")
+async def get_shared_slip(code: str):
+    slip = await db.shared_slips.find_one({"code": code}, {"_id": 0, "user_id": 0})
+    if not slip:
+        raise HTTPException(status_code=404, detail="Slip not found")
+    return slip
+
+
 _ALERT_SYNC = {}
 
 
