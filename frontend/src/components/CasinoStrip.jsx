@@ -17,7 +17,7 @@ export function CasinoStrip() {
         </Link>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto scrollbar-thin pb-1 -mx-1 px-1">
+      <div data-testid="casino-strip-scroller" className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
         {CASINO_GAMES.map((g, i) => {
           const card = (
             <motion.div

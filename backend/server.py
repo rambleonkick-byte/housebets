@@ -1912,6 +1912,11 @@ async def _bj_finish(g):
         payout += g["insurance"]["payout"]
     payout += g["sides"]["pp"]["payout"] + g["sides"]["t213"]["payout"]
     g["status"], g["total_payout"] = "done", round(payout, 8)
+
+
+async def _bj_settle(g):
+    """Credit and record a finished hand; call only after the hand state is durably saved."""
+    d, payout = g["dealer"], g["total_payout"]
     if payout > 0:
         await _adjust(g["user_id"], g["coin"], payout)
     mult = payout / g["total_stake"] if g["total_stake"] else 0
@@ -1932,10 +1937,12 @@ def _bj_advance(g):
     return True
 
 
-async def _bj_save(g):
-    g["lock"] = False
+async def _bj_save(g, token):
+    g["lock"], g["lock_at"] = None, None
     g["open"] = g["status"] != "done"
-    await db.bj_games.replace_one({"id": g["id"]}, g)
+    res = await db.bj_games.replace_one({"id": g["id"], "lock": token}, g)
+    if not res.matched_count:
+        raise HTTPException(status_code=409, detail="Hand is busy, try again")
 
 
 @api_router.post("/casino/blackjack/deal")
@@ -1974,25 +1981,33 @@ async def bj_deal(body: BlackjackDealInput, user: dict = Depends(get_current_use
     try:
         await db.bj_games.insert_one(dict(g))
     except DuplicateKeyError:
-        await _adjust(user["id"], body.coin, total - g.get("total_payout", 0))
+        await _adjust(user["id"], body.coin, total)
         raise HTTPException(status_code=400, detail="Finish your current hand first")
+    if g["status"] == "done":
+        await _bj_settle(g)
     return _bj_public(g, await _balances(user["id"]))
 
 
 @api_router.post("/casino/blackjack/action")
 async def bj_action(body: BlackjackActionInput, user: dict = Depends(get_current_user)):
     # claim the hand atomically so parallel requests can't double-apply moves or payouts
-    g = await db.bj_games.find_one_and_update({"id": body.game_id, "user_id": user["id"], "lock": {"$ne": True}},
-                                              {"$set": {"lock": True}}, projection={"_id": 0})
+    token = str(uuid.uuid4())
+    stale = (datetime.now(timezone.utc) - timedelta(seconds=15)).isoformat()
+    g = await db.bj_games.find_one_and_update(
+        {"id": body.game_id, "user_id": user["id"],
+         "$or": [{"lock": {"$in": [None, False]}}, {"lock_at": {"$lt": stale}}]},
+        {"$set": {"lock": token, "lock_at": now_iso()}}, projection={"_id": 0}, return_document=ReturnDocument.AFTER)
     if not g:
+        if not await db.bj_games.find_one({"id": body.game_id, "user_id": user["id"]}, {"_id": 1}):
+            raise HTTPException(status_code=404, detail="Hand not found")
         raise HTTPException(status_code=409, detail="Hand is busy, try again")
     try:
-        return await _bj_apply(g, body.action, user)
+        return await _bj_apply(g, body.action, user, token)
     finally:
-        await db.bj_games.update_one({"id": body.game_id, "lock": True}, {"$set": {"lock": False}})
+        await db.bj_games.update_one({"id": body.game_id, "lock": token}, {"$set": {"lock": None, "lock_at": None}})
 
 
-async def _bj_apply(g, a, user):
+async def _bj_apply(g, a, user, token):
     if a not in _bj_actions(g):
         raise HTTPException(status_code=400, detail="That move isn't available")
     if a in ("insurance", "no_insurance"):
@@ -2036,7 +2051,9 @@ async def _bj_apply(g, a, user):
                 h["done"] = second["done"] = True
         if _bj_advance(g):
             await _bj_finish(g)
-    await _bj_save(g)
+    await _bj_save(g, token)
+    if g["status"] == "done":
+        await _bj_settle(g)
     return _bj_public(g, await _balances(user["id"]))
 
 

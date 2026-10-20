@@ -106,6 +106,7 @@ export function Blackjack() {
     api.get("/casino/blackjack/current").then(({ data }) => {
       if (!data.game) return;
       setGame(data.game); g.setCoin(data.game.coin); g.setStake(String(data.game.hands[0].bet));
+      setSides({ side_pp: String(data.game.sides.pp.bet || ""), side_213: String(data.game.sides.t213.bet || ""), side_bust: String(data.game.sides.bust.bet || "") });
     }).catch(() => {});
   }, [g.user]);
 
@@ -168,7 +169,7 @@ export function Blackjack() {
                 </div>
               ))}
             </div>
-            <p className="mt-1.5 text-[11px] font-mono text-slate-500" data-testid="bj-total-bet">Total bet {fmtCrypto(g.stakeNum + sideTotal, g.coin)} {g.coin}</p>
+            <p className="mt-1.5 text-[11px] font-mono text-slate-500" data-testid="bj-total-bet">Total bet {fmtCrypto(inPlay ? game.total_stake : g.stakeNum + sideTotal, g.coin)} {g.coin}</p>
           </div>
           {game?.status === "insurance" ? (
             <div className="space-y-2" data-testid="bj-insurance-prompt">
