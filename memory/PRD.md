@@ -78,3 +78,7 @@
 ## Withdrawal Alerts (2026-06)
 - `/api/wallet/deposit-alerts` now also returns `withdrawals` alerts. Stages: `sent` (approved & broadcast: processing/confirming), `confirmed`, `refunded` (rejected/failed). Each withdrawal stores `notified_stage`; an alert fires once per stage change. In-flight payouts are synced with OxaPay (throttled 30s/user). Existing withdrawals backfilled at startup.
 - Same global poller shows a toast per stage (amber sent / green confirmed / red refunded) with amount, ≈USD and explorer tx link. Verified with seeded confirmed withdrawal (cleaned up).
+
+## Notification Center (2026-06)
+- `notifications` collection (unique `key`: dep:<tx_hash> / wd:<id>:<stage>), saved whenever a deposit/withdrawal alert fires. `GET /api/notifications` (latest 50 + unread count), `POST /api/notifications/read-all`. One-time startup backfill from past deposits/withdrawals (marked read).
+- Header bell (`NotificationBell.jsx`) with unread badge; popover lists history (icon/tone per stage, amount, time-ago, explorer link). Closing the panel marks all read. Refreshes when the alert poller finds new items. Verified with seeded deposit + withdrawal (cleaned up).

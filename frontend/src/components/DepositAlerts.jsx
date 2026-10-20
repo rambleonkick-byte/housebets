@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Undo2, ExternalLink } from "lucide-react";
 import { api, COIN_META, explorerUrl } from "@/lib/api";
@@ -6,12 +7,12 @@ import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 
-const WD_STAGE = {
+export const WD_STAGE = {
   sent: { title: "Withdrawal sent", sub: "Approved & broadcast on-chain", Icon: ArrowUpFromLine, tone: "amber" },
   confirmed: { title: "Withdrawal confirmed", sub: "Delivered to your wallet", Icon: CheckCircle2, tone: "emerald" },
   refunded: { title: "Withdrawal refunded", sub: "Returned to your balance", Icon: Undo2, tone: "red" },
 };
-const TONE = {
+export const TONE = {
   emerald: { border: "border-emerald-500/40", glow: "rgba(16,185,129,0.5)", bg: "bg-emerald-500/15", text: "text-emerald-400" },
   amber: { border: "border-amber-500/40", glow: "rgba(245,158,11,0.45)", bg: "bg-amber-500/15", text: "text-amber-400" },
   red: { border: "border-red-500/40", glow: "rgba(239,68,68,0.45)", bg: "bg-red-500/15", text: "text-red-400" },
@@ -49,6 +50,7 @@ function AlertToast({ a, kind, title, sub, Icon, tone, sign }) {
 
 export function DepositAlerts() {
   const { user, setBalances } = useAuth();
+  const qc = useQueryClient();
   useEffect(() => {
     if (!user) return;
     const poll = async () => {
@@ -57,6 +59,7 @@ export function DepositAlerts() {
         const wds = data.withdrawals || [];
         if (!data.alerts.length && !wds.length) return;
         if (data.balances) setBalances(data.balances);
+        qc.invalidateQueries({ queryKey: ["notifications"] });
         data.alerts.forEach((a) => toast.custom(() => (
           <AlertToast a={a} kind="deposit" title="Deposit received" Icon={ArrowDownToLine} tone="emerald" sign="+" />
         ), { duration: 12000 }));

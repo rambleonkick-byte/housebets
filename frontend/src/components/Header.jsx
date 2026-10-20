@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { usdValue } from "@/lib/format";
 import { usePrices } from "@/lib/prices";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export function Header({ onWallet, onHistory, onAdmin }) {
   const { user, logout, setAuthOpen } = useAuth();
@@ -51,6 +52,7 @@ export function Header({ onWallet, onHistory, onAdmin }) {
                 <Wallet size={16} className="text-emerald-400" />
                 <span data-testid="header-usd-balance" className="font-mono text-sm font-semibold">${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </button>
+              <NotificationBell />
               <button data-testid="header-history-button" onClick={onHistory}
                 className="hidden sm:flex items-center gap-2 text-zinc-300 hover:text-white px-2 py-2 transition-colors">
                 <History size={18} />

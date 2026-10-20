@@ -884,6 +884,31 @@ async def get_deposit_address(coin: str, user: dict = Depends(get_current_user))
 _ALERT_SYNC = {}
 
 
+async def _save_notification(user_id, kind, a, stage=None, key_id=None, created_at=None):
+    from pymongo.errors import DuplicateKeyError
+    key = f"wd:{key_id}:{stage}" if kind == "withdrawal" else f"dep:{a.get('tx_hash')}"
+    try:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "key": key, "user_id": user_id, "kind": kind, "stage": stage,
+            "coin": a.get("coin"), "amount": a.get("amount"), "net": a.get("net") or a.get("network"),
+            "tx_hash": a.get("tx_hash"), "read": False, "created_at": created_at or now_iso()})
+    except DuplicateKeyError:
+        pass
+
+
+@api_router.get("/notifications")
+async def list_notifications(user: dict = Depends(get_current_user)):
+    items = await db.notifications.find({"user_id": user["id"]}, {"_id": 0, "key": 0}).sort("created_at", -1).to_list(50)
+    unread = await db.notifications.count_documents({"user_id": user["id"], "read": False})
+    return {"items": items, "unread": unread}
+
+
+@api_router.post("/notifications/read-all")
+async def read_all_notifications(user: dict = Depends(get_current_user)):
+    await db.notifications.update_many({"user_id": user["id"], "read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
 def _wd_stage(w):
     s = (w.get("status") or "").lower()
     if w.get("refunded") or s in PAYOUT_FAILED:
@@ -937,6 +962,10 @@ async def deposit_alerts(user: dict = Depends(get_current_user)):
     if alerts:
         await db.static_deposits.update_many({"tx_hash": {"$in": [a["tx_hash"] for a in alerts]}},
                                              {"$set": {"notified": True}})
+    for a in alerts:
+        await _save_notification(user["id"], "deposit", a)
+    for w in withdrawals:
+        await _save_notification(user["id"], "withdrawal", w, stage=w["stage"], key_id=w["id"])
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"alerts": [{k: a.get(k) for k in ("tx_hash", "coin", "net", "amount", "created_at")} for a in alerts],
             "withdrawals": withdrawals, "balances": (wallet or {}).get("balances")}
@@ -1604,6 +1633,15 @@ async def startup():
     await db.static_deposits.update_many({"notified": {"$exists": False}}, {"$set": {"notified": True}})
     async for w in db.withdrawals.find({"notified_stage": {"$exists": False}}, {"id": 1, "status": 1, "refunded": 1}):
         await db.withdrawals.update_one({"id": w["id"]}, {"$set": {"notified_stage": _wd_stage(w)}})
+    await db.notifications.create_index("key", unique=True)
+    await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+    if not await db.notifications.estimated_document_count():
+        async for d in db.static_deposits.find({"notified": True}):
+            await _save_notification(d["user_id"], "deposit", d, created_at=d.get("created_at"))
+        async for w in db.withdrawals.find({"notified_stage": {"$ne": None}}):
+            await _save_notification(w["user_id"], "withdrawal", w, stage=w["notified_stage"], key_id=w["id"],
+                                     created_at=w.get("decided_at") or w.get("created_at"))
+        await db.notifications.update_many({}, {"$set": {"read": True}})
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@apexodds.io").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})
