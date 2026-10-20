@@ -120,8 +120,8 @@ export function BigWin({ win, onClose }) {
       {win && (
         <motion.div data-testid="big-win-overlay" onClick={onClose}
           className="absolute inset-0 z-30 flex items-center justify-center bg-black/45 backdrop-blur-[2px] cursor-pointer"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <motion.div initial={{ scale: 0.7, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0 } }}>
+          <motion.div initial={{ scale: 0.7, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0 } }}
             transition={{ type: "spring", damping: 14, stiffness: 260 }}
             className="relative min-w-[200px] text-center rounded-2xl border-2 border-emerald-400 bg-[#12141C]/95 px-8 py-5 shadow-[0_0_60px_rgba(16,185,129,0.45)] overflow-hidden">
             <div className="absolute -inset-10 bg-gradient-to-r from-emerald-500/20 via-teal-400/25 to-emerald-500/20 blur-2xl pointer-events-none" />

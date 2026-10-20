@@ -59,6 +59,7 @@ export function Keno() {
   };
 
   const play = async () => {
+    setWin(null);
     if (!g.user) return g.setAuthOpen(true);
     if (picks.length === 0) return toast.error("Pick 1–10 numbers");
     if (g.stakeNum <= 0) return toast.error("Enter a bet amount");

@@ -40,6 +40,7 @@ export function Plinko() {
   const mults = PLINKO_MULT[rows][risk];
 
   const play = async () => {
+    setWin(null);
     if (!g.user) return g.setAuthOpen(true);
     if (g.stakeNum <= 0) return toast.error("Enter a bet amount");
     if (g.stakeNum > g.balance) return toast.error("Insufficient balance");

@@ -23,6 +23,7 @@ export function Mines() {
   const closeWin = useCallback(() => setWin(null), []);
 
   const start = async () => {
+    setWin(null);
     if (!g.user) return g.setAuthOpen(true);
     if (g.stakeNum <= 0) return toast.error("Enter a bet amount");
     if (g.stakeNum > g.balance) return toast.error("Insufficient balance");
