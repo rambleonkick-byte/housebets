@@ -508,13 +508,43 @@ async def _enrich_ufc(events):
                        "bout_order": info["bout_order"], "main_event": info["main_event"]})
 
 
-async def fetch_sgo_league(meta):
+_SGO_REFRESHING = set()
+
+
+async def fetch_sgo_league(meta, max_age=None):
+    """Stale-while-revalidate: return last odds instantly, refresh in the background once expired."""
     if not SGO_KEY:
         return []
     key = meta["id"]
     cached = _SGO_CACHE.get(key)
-    if cached and (datetime.now(timezone.utc).timestamp() - cached["ts"]) < cached["ttl"]:
+    if not cached:
+        doc = await db.odds_cache.find_one({"_id": key})
+        if doc:
+            cached = _SGO_CACHE[key] = {"ts": doc["ts"], "ttl": doc["ttl"], "data": doc["data"]}
+    if not cached:
+        return await _refresh_sgo_league(meta)
+    age = datetime.now(timezone.utc).timestamp() - cached["ts"]
+    if age < cached["ttl"]:
         return cached["data"]
+    if max_age is not None and age > max_age:
+        return await _refresh_sgo_league(meta)
+    if key not in _SGO_REFRESHING:
+        _SGO_REFRESHING.add(key)
+        asyncio.create_task(_refresh_sgo_league(meta))
+    return cached["data"]
+
+
+async def _refresh_sgo_league(meta):
+    key = meta["id"]
+    try:
+        return await _do_refresh_sgo_league(meta)
+    finally:
+        _SGO_REFRESHING.discard(key)
+
+
+async def _do_refresh_sgo_league(meta):
+    key = meta["id"]
+    prev = (_SGO_CACHE.get(key) or {}).get("data") or []
     params = {"apiKey": SGO_KEY, "leagueID": key, "oddsAvailable": "true", "limit": 15}
     events = []
     ttl = 300
@@ -523,8 +553,8 @@ async def fetch_sgo_league(meta):
             r = await hc.get(f"{SGO_API}/events", params=params)
         if r.status_code != 200:
             logger.warning(f"SGO {key} -> {r.status_code}")
-            _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": 30, "data": []}
-            return []
+            _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": 30, "data": prev}
+            return prev
         for ev in (r.json().get("data") or [])[:15]:
             teams = ev.get("teams") or {}
             home, away = teams.get("home"), teams.get("away")
@@ -553,12 +583,18 @@ async def fetch_sgo_league(meta):
             })
     except Exception as e:
         logger.warning(f"SGO fetch failed for {key}: {e}")
-        ttl = 30
+        _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": 30, "data": prev}
+        return prev
     if key == "UFC" and events:
         await _enrich_ufc(events)
         if not any(e.get("card_name") for e in events):
             ttl = 60
-    _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": ttl, "data": events}
+    entry = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": ttl, "data": events}
+    _SGO_CACHE[key] = entry
+    try:
+        await db.odds_cache.replace_one({"_id": key}, dict(entry), upsert=True)
+    except Exception as e:
+        logger.warning(f"odds cache persist failed {key}: {e}")
     return events
 
 
@@ -1321,7 +1357,7 @@ def _market_key(sel) -> str:
 async def _find_event(event_id, league):
     metas = [m for m in SGO_LEAGUES if m["group"] == league] or SGO_LEAGUES
     for m in metas:
-        for ev in await fetch_sgo_league(m):
+        for ev in await fetch_sgo_league(m, max_age=600):
             if ev["event_id"] == event_id:
                 return ev
     return None

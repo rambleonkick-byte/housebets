@@ -178,3 +178,7 @@
 ## Sports Hero Redesign (2026-06)
 - `HeroCarousel.jsx`: "Stadium night lights" carousel. Opens on a welcome slide ("Under the lights. On the line.", a Join now button when signed out, live and market counts), then one featured-match slide each for NFL, NBA, UFC and Football, built from real events (live game first, then the UFC main event, then the earliest game). Slides show team logos (fighter headshots and records for UFC), a countdown or LIVE score, and moneyline odds you can tap to bet, ordered away/draw/home. The slide photo slowly zooms; slides auto-rotate every 6.5s and pause on hover. Arrows, dots with a progress bar and mobile swipe all work.
 - `LiveScoresTicker.jsx`: scrolling strip of live scores and upcoming kick-off times (24 games); pauses on hover.
+
+## Odds Speed (2026-06)
+- `fetch_sgo_league` now works as stale-while-revalidate. Once the 5-min freshness window passes, it returns the last odds immediately and refreshes them in the background (`_SGO_REFRESHING` stops duplicate refreshes running at once). Odds are saved to `db.odds_cache`, so a server restart loads them straight from the database. If SportsGameOdds fails, the previous odds are kept instead of an empty list. Bet checks (`_find_event`) force a fresh fetch if the saved odds are more than 10 min old.
+- League responses went from 2–3.5s (when the cache had expired) to about 0.15–0.2s.
