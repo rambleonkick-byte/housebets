@@ -741,7 +741,7 @@ async def oxapay_invoice(body: WalletTxInput, user: dict = Depends(get_current_u
     base = os.environ.get("FRONTEND_URL", "")
     payload = {
         "amount": body.amount, "currency": "USD", "pay_currency": body.coin,
-        "network": COIN_NETWORK.get(body.coin), "lifetime": 120, "fee_paid_by_payer": 1,
+        "network": COIN_NETWORK.get(body.coin), "lifetime": 120, "fee_paid_by_payer": 0,
         "under_paid_coverage": 2.5,
         "callback_url": f"{base}/api/oxapay/webhook",
         "order_id": order_id, "description": f"ApexOdds deposit (${body.amount} in {body.coin})",

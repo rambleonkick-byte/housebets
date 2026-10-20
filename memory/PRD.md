@@ -56,3 +56,6 @@
 ## Pending
 - Withdrawal alert email recipient still not set (user to provide later).
 - Next: Crash game (solo rounds default), Prop search & filters, Deposit countdown.
+
+## Fee-free Deposits (2026-06)
+- OxaPay white-label invoices now use `fee_paid_by_payer: 0` — the merchant absorbs the OxaPay gateway fee; players send exactly the USD-equivalent amount (verified: $50 USDT invoice → pay_amount 50.0).
