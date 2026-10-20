@@ -421,19 +421,43 @@ def _sgo_markets(ev, draw):
             markets.append({"market": "distance", "label": "Goes the Distance", "selections": [
                 {"side": "yes", "pick": "Fight goes the distance", "label": "Yes", "odds": yo, "line": None},
                 {"side": "no", "pick": "Fight doesn't go the distance", "label": "No", "odds": no, "line": None}]})
+    main = {(x["market"], s["side"], s["line"]): s["odds"] for x in markets if x["market"] in ("spread", "total")
+            for s in x["selections"]}
     alt_sp = _alt_ladder(odds.get("points-home-game-sp-home"), odds.get("points-away-game-sp-away"), "spread", negate=True)
+    alt_sp = _smooth(alt_sp, main, "spread", ("home", "away"), mirror=True)
     if len(alt_sp) > 1:
         markets.append({"market": "alt_spread", "label": "Alternate Spread", "selections": [
             sel for ln, h, a in alt_sp for sel in (
                 [{"side": "home", "pick": f"{ha} {ln:+g}", "label": f"{ha} {ln:+g}", "odds": h, "line": ln}] if h else []) + (
                 [{"side": "away", "pick": f"{aa} {-ln:+g}", "label": f"{aa} {-ln:+g}", "odds": a, "line": -ln}] if a else [])]})
     alt_tot = _alt_ladder(odds.get("points-all-game-ou-over"), odds.get("points-all-game-ou-under"), "overUnder")
+    alt_tot = _smooth(alt_tot, main, "total", ("over", "under"))
     if len(alt_tot) > 1:
         markets.append({"market": "alt_total", "label": "Alternate Total", "selections": [
             sel for ln, o, u in alt_tot for sel in (
                 [{"side": "over", "pick": f"Over {ln:g}", "label": f"O {ln:g}", "odds": o, "line": ln}] if o else []) + (
                 [{"side": "under", "pick": f"Under {ln:g}", "label": f"U {ln:g}", "odds": u, "line": ln}] if u else [])]})
     return markets
+
+
+def _smooth(ladder, main, mkt, sides, mirror=False):
+    """Use the main-market price where lines match, and keep prices monotonic
+    (an easier line never pays more than a harder one). Clamps downward only."""
+    a_side, b_side = sides
+    rows = [[ln, main.get((mkt, a_side, ln), a), main.get((mkt, b_side, -ln if mirror else ln), b)] for ln, a, b in ladder]
+    # ascending line: side A (home / over) gets easier for spreads, harder for totals
+    a_easier_up = mirror
+    best = None
+    for r in (rows if a_easier_up else reversed(rows)):
+        if r[1]:
+            best = r[1] if best is None else min(best, r[1])
+            r[1] = best
+    best = None
+    for r in (reversed(rows) if a_easier_up else rows):
+        if r[2]:
+            best = r[2] if best is None else min(best, r[2])
+            r[2] = best
+    return [tuple(r) for r in rows]
 
 
 def _book_lines(o, field):
@@ -1400,7 +1424,7 @@ def _market_key(sel) -> str:
     if sel.market == "prop":
         parts = str(sel.side).split(":")
         return f"{sel.event_id}:prop:{':'.join(parts[:2])}"
-    return f"{sel.event_id}:{sel.market}"
+    return f"{sel.event_id}:{str(sel.market).replace('alt_', '')}"
 
 
 async def _find_event(event_id, league):
@@ -1440,11 +1464,11 @@ async def _verify_selections(selections, accept_better=True):
         ev = await _find_event(sel.event_id, sel.league)
         price = _live_price(sel, ev) if ev and ev.get("state") != "post" else None
         if not price or price <= 1:
-            gone.append({"event_id": sel.event_id, "market": sel.market, "side": sel.side, "pick": sel.pick})
+            gone.append({"event_id": sel.event_id, "market": sel.market, "side": sel.side, "line": sel.line, "pick": sel.pick})
             continue
         price = float(price)
         if round(price, 2) < round(sel.odds, 2) or (not accept_better and round(price, 2) != round(sel.odds, 2)):
-            changed.append({"event_id": sel.event_id, "market": sel.market, "side": sel.side, "odds": price})
+            changed.append({"event_id": sel.event_id, "market": sel.market, "side": sel.side, "line": sel.line, "odds": price})
         sel.odds = price
     if gone or changed:
         raise HTTPException(status_code=409, detail={

@@ -1,0 +1,41 @@
+{
+  "summary": "Alternate spread/total feature tested end-to-end. Backend: 15/15 pytest pass (alt_spread/alt_total in NFL/NBA/EPL, no quarter lines, home/away mirror, unique side+line, gzip Content-Encoding, single + parlay with alt legs placed, tampered alt odds -> 409 with changed[], nonexistent alt line -> 409 unavailable[], two alt lines on same market in one parlay -> 400, bets history contains alt legs, settle_selection alt_spread/alt_total incl. whole-number push). Frontend: sliders render on every MatchCard starting at main line, keyboard (Arrow/Home/End) and mouse drag (mobile 390px) update line value + odds buttons, 'Not offered' shown when a side is missing, add/replace ('Alternate line updated')/toggle-off work, parlay (alt_spread+alt_total+ML) and single (alt_total) placed through UI with balance update and My Bets showing legs. Regression OK: main spread/total/ML buttons, player props toggle, boosts strip, UFC cards (no alt sliders, More markets shows only rounds/distance). One real bug found: 409 price-change/unavailable handling does not update alt legs in the slip.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/odds", "issue": "Same line priced differently in main vs alt market (alt uses median across books, main uses consensus): e.g. BOS -5.5 main 1.87 vs alt 1.93; CL Over 6.5 main 5.01 vs alt 6.00; O 222.5 1.85 vs 1.83. User can cherry-pick the better price for the identical bet."},
+      {"endpoint": "POST /api/bets", "issue": "_market_key treats 'spread' and 'alt_spread' (and total/alt_total) as different markets, so a parlay can combine NYK -4.5 (main) + NYK -6 (alt) or even the identical line from both markets on the same game. Verified in UI slip (SGP accepted). Consider keying alt_spread->spread and alt_total->total for conflict detection."},
+      {"endpoint": "GET /api/odds (_alt_ladder)", "issue": "Median-per-line can produce non-monotonic ladders (NFL CHI -27 @21.0 vs CHI -27.5 @19.0, easier line paying more). Consider sanity filter/monotonic smoothing."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Bet placement 409 (odds changed / line pulled) with alt legs", "issue": "BetSlipContext.applyServerPrices builds key `${event_id}:${market}:${side}` but selId() for alt_ markets appends `:${line}`, and backend 'changed'/'unavailable' entries carry no line. Result: for alt legs the slip is NOT repriced and pulled alt lines are NOT removed; user sees the warning toast but resubmitting loops on 409. Reproduced by intercepting POST /api/bets with a 409 changed payload: alt_total leg stayed 1.93 (no prev-odds / changed note) while a main total leg updated 1.89->1.50 correctly. Fix: include `line` in backend changed/unavailable dicts and use selId() in applyServerPrices.", "affected_selectors": ["slip-odds-*", "slip-prev-odds-*", "bet-slip-odds-changed-note"]}
+    ],
+    "design_issues": [
+      {"screen": "MatchCard Alternate Total (soccer/hockey)", "issues": ["Value label always says 'pts' (e.g. '3.5 pts', '6.5 pts') even for goal-based sports; use 'goals' or just the number"]},
+      {"screen": "AltLineSlider mobile", "issues": ["With 80-100 lines (NBA/NFL) a short drag jumps ~10 lines; consider +/- step buttons beside the slider for fine control"]},
+      {"screen": "Live games", "issues": ["Alt total slider on live CL game (score 4-2) ranged 6.5-9.5 with odds consistent; fine, but min line label can sit below current total on live events if feed lags"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_alt_lines.py", "/app/test_reports/pytest/pytest_alt_lines.xml"],
+  "action_items": [
+    "Fix applyServerPrices key mismatch for alt_ legs (include line in backend _verify_selections changed/unavailable and match via selId) so 409 repricing/removal works for alternate lines",
+    "Treat spread/alt_spread and total/alt_total as the same underlying market for conflict detection (backend _market_key and frontend baseKey) to block correlated/duplicate legs",
+    "Align alt price for the main line with the main market price (or hide the main line from the alt ladder) to avoid two prices for one bet",
+    "Optional: unit label 'goals' for soccer/hockey alt totals; +/- step buttons on slider"
+  ],
+  "critical_code_review_comments": [
+    "BetSlipContext.applyServerPrices: `key` omits line while selId includes it for alt_ markets -> alt legs never matched",
+    "server._market_key: 'alt_spread' vs 'spread' are separate keys -> same-game duplicate exposure",
+    "server.py is 2840+ lines; should be split into modules (odds feed, bets, casino, wallet)",
+    "UfcEventCard correctly filters alt_ markets; MatchCard excludes alt_ from generic markets list - good"
+  ],
+  "updated_files": ["/app/backend/tests/test_alt_lines.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "~92% (all alt slider/slip/placement flows pass; 409 alt repricing fails)"},
+  "seed_data_creation": "Created test users (test_alt_*@apexodds.io via pytest fixture, test_altui@apexodds.io for UI) with 1000 USDT; all users, wallets, bets, transactions deleted afterwards. DB users now: admin@apexodds.io, dhensley727@icloud.com only. Note: 40 pre-existing orphan casino_games docs (user_id not matching any user) were present and left untouched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Alt markets: event.markets contains alt_spread (home line L, away line -L) and alt_total. UI: alt-slider-<eid>-alt_spread/alt_total, thumb is [role=slider] (focus + ArrowLeft/Right), alt-line-value-<eid>-<market>, odds buttons odds-button-<eid>-alt_spread-home|away / alt_total-over|under. Bet slip testids are duplicated (desktop + mobile drawer) - use .first. Single/parlay toggle only shown when >1 item. To reproduce 409 alt bug: page.route('**/api/bets') returning 409 detail {changed:[{event_id,market:'alt_total',side:'over',odds:1.5}],unavailable:[]}. pytest test_alt_lines.py self-cleans its user."
+}

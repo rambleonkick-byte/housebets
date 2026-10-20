@@ -18,7 +18,7 @@ function baseKey(s) {
     const parts = String(s.side).split(":"); // stat:player_id:over|under
     return `${s.event_id}:prop:${parts[0]}:${parts[1]}`;
   }
-  return `${s.event_id}:${s.market}`;
+  return `${s.event_id}:${String(s.market).replace("alt_", "")}`;
 }
 
 export function BetSlipProvider({ children }) {
@@ -82,7 +82,7 @@ export function BetSlipProvider({ children }) {
   }, []);
 
   const applyServerPrices = useCallback(({ changed = [], unavailable = [] }) => {
-    const key = (x) => `${x.event_id}:${x.market}:${x.side}`;
+    const key = selId;
     const gone = new Set(unavailable.map(key));
     const upd = new Map(changed.map((c) => [key(c), c.odds]));
     setItems((prev) => prev.filter((p) => !gone.has(selId(p)))
