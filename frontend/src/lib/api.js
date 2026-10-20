@@ -23,4 +23,4 @@ export const COIN_META = {
   SOL: { name: "Solana", color: "#14F195" },
 };
 
-export const COIN_NETWORK = { BTC: "BTC", ETH: "ERC20", USDT: "TRC20", SOL: "SOL" };
+export const COIN_NETWORK = { BTC: "BTC", ETH: "ERC20", USDT: "ERC20", SOL: "SOL" };

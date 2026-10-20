@@ -72,7 +72,7 @@ logger = logging.getLogger("apexodds")
 
 STARTING_BALANCES = {"BTC": 0.0, "ETH": 0.0, "USDT": 0.0, "SOL": 0.0}
 COIN_USD = {"BTC": 64000.0, "ETH": 3400.0, "USDT": 1.0, "SOL": 150.0}
-COIN_NETWORK = {"BTC": "BTC", "ETH": "ERC20", "USDT": "TRC20", "SOL": "SOL"}
+COIN_NETWORK = {"BTC": "BTC", "ETH": "ERC20", "USDT": "ERC20", "SOL": "SOL"}
 
 # ----------------------------------------------------------------------------
 # Models
@@ -848,7 +848,9 @@ async def get_deposit_address(coin: str, user: dict = Depends(get_current_user))
     coin = coin.upper()
     if coin not in STARTING_BALANCES:
         raise HTTPException(status_code=400, detail="Unsupported coin")
-    sa = await db.static_addresses.find_one({"user_id": user["id"], "coin": coin})
+    net = COIN_NETWORK.get(coin)
+    sel = {"user_id": user["id"], "coin": coin, "net": net}
+    sa = await db.static_addresses.find_one(sel)
     if sa:
         return _static_public(sa)
     if not OXAPAY_KEY:
@@ -870,17 +872,18 @@ async def get_deposit_address(coin: str, user: dict = Depends(get_current_user))
         logger.warning(f"OxaPay static-address rejected: {r.status_code} {result}")
         raise HTTPException(status_code=502, detail=(result.get("message") or "Gateway error creating address"))
     d = result["data"]
-    sa = {"user_id": user["id"], "coin": coin, "address": d.get("address"), "network": d.get("network"),
+    sa = {"user_id": user["id"], "coin": coin, "net": net, "address": d.get("address"), "network": d.get("network"),
           "memo": d.get("memo") or "", "qr_code": d.get("qr_code"), "track_id": str(d.get("track_id")),
           "created_at": now_iso()}
-    await db.static_addresses.update_one({"user_id": user["id"], "coin": coin}, {"$setOnInsert": sa}, upsert=True)
-    sa = await db.static_addresses.find_one({"user_id": user["id"], "coin": coin})
+    await db.static_addresses.update_one(sel, {"$setOnInsert": sa}, upsert=True)
+    sa = await db.static_addresses.find_one(sel)
     return _static_public(sa)
 
 
 @api_router.post("/wallet/deposit-address/{coin}/check")
 async def check_deposit_address(coin: str, user: dict = Depends(get_current_user)):
-    sa = await db.static_addresses.find_one({"user_id": user["id"], "coin": coin.upper()})
+    coin = coin.upper()
+    sa = await db.static_addresses.find_one({"user_id": user["id"], "coin": coin, "net": COIN_NETWORK.get(coin)})
     if not sa:
         raise HTTPException(status_code=404, detail="No deposit address yet")
     credited = 0.0
@@ -1529,7 +1532,13 @@ async def root():
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.static_deposits.create_index("tx_hash", unique=True)
-    await db.static_addresses.create_index([("user_id", 1), ("coin", 1)], unique=True)
+    try:
+        await db.static_addresses.drop_index("user_id_1_coin_1")
+    except Exception:
+        pass
+    for c, n in {"BTC": "BTC", "ETH": "ERC20", "USDT": "TRC20", "SOL": "SOL"}.items():
+        await db.static_addresses.update_many({"coin": c, "net": {"$exists": False}}, {"$set": {"net": n}})
+    await db.static_addresses.create_index([("user_id", 1), ("coin", 1), ("net", 1)], unique=True)
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@apexodds.io").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})

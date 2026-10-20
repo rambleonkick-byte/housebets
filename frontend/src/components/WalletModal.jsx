@@ -13,7 +13,7 @@ const COINS = ["BTC", "ETH", "USDT", "SOL"];
 const EXPLORER = {
   BTC: (h) => `https://blockchair.com/bitcoin/transaction/${h}`,
   ETH: (h) => `https://etherscan.io/tx/${h}`,
-  USDT: (h) => `https://tronscan.org/#/transaction/${h}`,
+  USDT: (h) => `https://etherscan.io/tx/${h}`,
   SOL: (h) => `https://solscan.io/tx/${h}`,
 };
 const PAYOUT_TERMINAL = ["confirmed", "failed", "rejected", "canceled", "cancelled"];

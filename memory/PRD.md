@@ -65,3 +65,7 @@
 - `GET /api/wallet/deposit-address/{coin}` (get-or-create), `POST /api/wallet/deposit-address/{coin}/check` (polls OxaPay `/payment/{track_id}` txs). Webhook handles `type=static_address`: credits each confirmed tx once (idempotent via unique `static_deposits.tx_hash`), crediting `sent_amount` (fee-free for player).
 - Deposit tab: shows QR + permanent address + network, auto-polls every 10s. Verified: same address returned on repeat, signed webhook credited 5 USDT once (duplicate ignored).
 - Note: OxaPay revokes static addresses with no transactions for 6 months.
+
+## USDT on Ethereum (2026-06)
+- USDT network switched TRC20 → ERC20 (backend + frontend COIN_NETWORK, explorer → Etherscan). Applies to deposits and withdrawals.
+- static_addresses now keyed by (user_id, coin, net); old Tron USDT addresses kept (net=TRC20) so any late deposits to them still credit via webhook. New USDT addresses are ERC20 (verified 0x… address, persistent).
