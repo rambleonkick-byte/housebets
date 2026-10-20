@@ -27,7 +27,6 @@ export function AuthProvider({ children }) {
   };
   const register = async (name, email, password, ref_code) => {
     const { data } = await api.post("/auth/register", { name, email, password, ref_code: ref_code || null });
-    localStorage.removeItem("apex_ref");
     setUser(data);
     return data;
   };

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Copy, Users, Coins, TrendingUp, Gift, Pencil, Check, Loader2, Link2 } from "lucide-react";
+import { Copy, Users, Coins, TrendingUp, Gift, Pencil, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -31,7 +31,6 @@ function CodeCard({ data, onSaved }) {
   const [edit, setEdit] = useState(false);
   const [code, setCode] = useState(data.code);
   const [saving, setSaving] = useState(false);
-  const link = `${window.location.origin}/?ref=${data.code}`;
   const save = async () => {
     setSaving(true);
     try { await api.put("/affiliate/code", { code }); toast.success("Code updated"); setEdit(false); onSaved(); }
@@ -63,19 +62,14 @@ function CodeCard({ data, onSaved }) {
           </>
         )}
       </div>
-      <div className="mt-5 flex items-center gap-2 bg-[#090A0F] border border-[#2A2F45] rounded-xl pl-3 pr-1.5 py-1.5 max-w-xl">
-        <Link2 size={14} className="text-zinc-500 shrink-0" />
-        <span data-testid="aff-link" className="font-mono text-xs text-zinc-300 truncate flex-1">{link}</span>
-        <button data-testid="aff-copy-link" onClick={() => copy(link, "Link")}
-          className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold px-3 py-2 rounded-lg transition-colors">Copy link</button>
-      </div>
+      <p className="mt-4 text-xs text-zinc-400" data-testid="aff-code-hint">Players enter this code when they sign up.</p>
     </div>
   );
 }
 
 function PlayersTable({ players, rates }) {
   if (!players.length) {
-    return <p data-testid="aff-no-players" className="text-sm text-zinc-500 py-10 text-center">No referred players yet. Share your link to start earning.</p>;
+    return <p data-testid="aff-no-players" className="text-sm text-zinc-500 py-10 text-center">No referred players yet. Share your code to start earning.</p>;
   }
   return (
     <div className="overflow-x-auto scrollbar-thin">
@@ -128,7 +122,7 @@ export default function Affiliate() {
       <div className="max-w-3xl mx-auto px-4 py-20 text-center" data-testid="aff-signed-out">
         <Gift size={40} className="mx-auto text-emerald-400 mb-4" />
         <h1 className="font-display text-4xl sm:text-5xl font-black tracking-tight">Earn 10% of every player you bring</h1>
-        <p className="text-zinc-400 mt-3">Sign in to get your affiliate code and referral link.</p>
+        <p className="text-zinc-400 mt-3">Sign in to get your affiliate code.</p>
         <button data-testid="aff-signin" onClick={() => setAuthOpen(true)} className="mt-6 bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-6 py-3 rounded-full">Sign in</button>
       </div>
     );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Mail, Lock, User, Loader2, Gift } from "lucide-react";
 import { useAuth, formatApiErrorDetail } from "@/context/AuthContext";
@@ -12,17 +12,7 @@ export function AuthModal() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [ref, setRef] = useState(() => localStorage.getItem("apex_ref") || "");
-
-  useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("ref");
-    if (code) {
-      localStorage.setItem("apex_ref", code.toUpperCase());
-      setRef(code.toUpperCase());
-      setMode("register");
-      setAuthOpen(true);
-    }
-  }, [setAuthOpen]);
+  const [ref, setRef] = useState("");
 
   const submit = async (e) => {
     e.preventDefault();

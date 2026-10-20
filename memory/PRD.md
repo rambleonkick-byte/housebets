@@ -172,4 +172,4 @@
 - Every user gets an affiliate code (6-char hex, can be customized to 4-16 alnum/_-). The referral link /?ref=CODE opens the register form with the code filled in; the code can also be typed in at sign-up (an invalid code returns 400).
 - Commission is 10% of NGR (stakes minus payouts) per referred player per coin, from settled sports bets (cashout_amount/payout) and casino_games. A per-player high-water mark in `affiliate_ledger` carries losses forward, with no clawback.
 - `GET /api/affiliate` works out new commission whenever the panel loads; `POST /api/affiliate/claim` moves the available balance to the wallet (transaction type "affiliate"); `PUT /api/affiliate/code`; `GET /api/affiliate/check/{code}`.
-- The /affiliate page has the code card, a copy link button, stats (referrals, ready to claim, lifetime earned) and a masked players table. A header nav link was added.
+- The /affiliate page has the code card, stats (referrals, ready to claim, lifetime earned) and a masked players table. A header nav link was added.
