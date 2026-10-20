@@ -1765,6 +1765,269 @@ async def mines_cashout(body: MinesActionInput, user: dict = Depends(get_current
             "balances": await _balances(user["id"])}
 
 
+# --- Blackjack (6-deck shoe, dealer stands on all 17, BJ 3:2, side bets) ---
+BJ_RANKS = "A23456789TJQK"
+BJ_SUITS = "SHDC"
+PP_PAY = {"perfect": 25, "colored": 12, "mixed": 6}
+T213_PAY = {"suited_trips": 100, "straight_flush": 40, "trips": 30, "straight": 10, "flush": 5}
+BUST_PAY = {3: 1, 4: 2, 5: 9, 6: 50, 7: 100}
+
+
+class BlackjackDealInput(BaseModel):
+    coin: str
+    stake: float = Field(gt=0, allow_inf_nan=False)
+    side_pp: float = Field(default=0, ge=0, allow_inf_nan=False)
+    side_213: float = Field(default=0, ge=0, allow_inf_nan=False)
+    side_bust: float = Field(default=0, ge=0, allow_inf_nan=False)
+
+
+class BlackjackActionInput(BaseModel):
+    game_id: str
+    action: str
+
+
+def bj_shoe(ss, cs, nonce, decks=6):
+    deck = [r + su for _ in range(decks) for su in BJ_SUITS for r in BJ_RANKS]
+    for i in range(len(deck) - 1, 0, -1):
+        j = int(rfloat(ss, cs, nonce, i) * (i + 1))
+        deck[i], deck[j] = deck[j], deck[i]
+    return deck
+
+
+def bj_value(cards):
+    total, aces = 0, 0
+    for c in cards:
+        r = c[0]
+        total += 11 if r == "A" else 10 if r in "TJQK" else int(r)
+        aces += r == "A"
+    while total > 21 and aces:
+        total -= 10
+        aces -= 1
+    return total, aces > 0
+
+
+def bj_is_bj(cards):
+    return len(cards) == 2 and bj_value(cards)[0] == 21
+
+
+def _red(c):
+    return c[1] in "HD"
+
+
+def bj_pp(a, b):
+    if a[0] != b[0]:
+        return None
+    if a[1] == b[1]:
+        return "perfect"
+    return "colored" if _red(a) == _red(b) else "mixed"
+
+
+def bj_213(cards):
+    ranks = sorted("A23456789TJQK".index(c[0]) for c in cards)
+    suited = len({c[1] for c in cards}) == 1
+    trips = len({c[0] for c in cards}) == 1
+    straight = (ranks[2] - ranks[0] == 2 and len(set(ranks)) == 3) or ranks == [0, 11, 12]
+    if trips and suited:
+        return "suited_trips"
+    if straight and suited:
+        return "straight_flush"
+    if trips:
+        return "trips"
+    if straight:
+        return "straight"
+    if suited:
+        return "flush"
+    return None
+
+
+def _bj_draw(g):
+    c = g["deck"][g["pos"]]
+    g["pos"] += 1
+    return c
+
+
+def _bj_actions(g):
+    if g["status"] == "insurance":
+        return ["insurance", "no_insurance"]
+    if g["status"] != "active":
+        return []
+    h = g["hands"][g["active"]]
+    acts = ["hit", "stand"]
+    if len(h["cards"]) == 2 and not h.get("split_aces"):
+        acts.append("double")
+        if h["cards"][0][0] == h["cards"][1][0] and len(g["hands"]) < 4:
+            acts.append("split")
+    return acts
+
+
+def _bj_public(g, balances=None):
+    done = g["status"] == "done"
+    dealer = g["dealer"] if done or g.get("dealer_revealed") else [g["dealer"][0], "XX"]
+    out = {
+        "game_id": g["id"], "status": g["status"], "coin": g["coin"], "active": g["active"],
+        "hands": [{**{k: h.get(k) for k in ("cards", "bet", "doubled", "result", "payout")},
+                   "value": bj_value(h["cards"])[0], "soft": bj_value(h["cards"])[1]} for h in g["hands"]],
+        "dealer": dealer, "dealer_value": bj_value([c for c in dealer if c != "XX"])[0],
+        "sides": g["sides"], "insurance": g.get("insurance"), "actions": _bj_actions(g),
+        "total_stake": g["total_stake"], "total_payout": g.get("total_payout", 0),
+        "fair": {"nonce": g["nonce"], "server_seed_hash": g["server_seed_hash"], "client_seed": g["client_seed"]},
+    }
+    if balances is not None:
+        out["balances"] = balances
+    return out
+
+
+async def _bj_finish(g):
+    d = g["dealer"]
+    live = [h for h in g["hands"] if bj_value(h["cards"])[0] <= 21]
+    dealer_bj = bj_is_bj(d)
+    natural = len(g["hands"]) == 1 and bj_is_bj(g["hands"][0]["cards"])
+    if (live and not natural and not dealer_bj) or g["sides"]["bust"]["bet"] > 0:
+        while bj_value(d)[0] < 17:
+            d.append(_bj_draw(g))
+    dv = bj_value(d)[0]
+    payout = 0.0
+    for h in g["hands"]:
+        pv = bj_value(h["cards"])[0]
+        if pv > 21:
+            h["result"], h["payout"] = "bust", 0.0
+        elif natural and not dealer_bj:
+            h["result"], h["payout"] = "blackjack", round(h["bet"] * 2.5, 8)
+        elif dealer_bj:
+            h["result"], h["payout"] = ("push", h["bet"]) if natural else ("lose", 0.0)
+        elif dv > 21 or pv > dv:
+            h["result"], h["payout"] = "win", round(h["bet"] * 2, 8)
+        elif pv == dv:
+            h["result"], h["payout"] = "push", h["bet"]
+        else:
+            h["result"], h["payout"] = "lose", 0.0
+        payout += h["payout"]
+    bust = g["sides"]["bust"]
+    if bust["bet"] > 0:
+        mult = BUST_PAY.get(len(d), 250) if dv > 21 else 0
+        bust.update(result=f"Dealer bust · {len(d)} cards" if mult else None, payout=round(bust["bet"] * (mult + 1), 8) if mult else 0.0)
+        payout += bust["payout"]
+    if g.get("insurance") and g["insurance"]["bet"] > 0:
+        g["insurance"]["payout"] = round(g["insurance"]["bet"] * 3, 8) if dealer_bj else 0.0
+        payout += g["insurance"]["payout"]
+    payout += g["sides"]["pp"]["payout"] + g["sides"]["t213"]["payout"]
+    g["status"], g["total_payout"] = "done", round(payout, 8)
+    if payout > 0:
+        await _adjust(g["user_id"], g["coin"], payout)
+    mult = payout / g["total_stake"] if g["total_stake"] else 0
+    await _record_game(g["user_id"], "blackjack", g["coin"], g["total_stake"], mult, payout, payout > g["total_stake"],
+                       {"player": [h["cards"] for h in g["hands"]], "dealer": d, "results": [h["result"] for h in g["hands"]]},
+                       {"nonce": g["nonce"], "server_seed_hash": g["server_seed_hash"], "client_seed": g["client_seed"]})
+
+
+def _bj_advance(g):
+    """Move to next unfinished hand; returns True when all player hands are done."""
+    while g["active"] < len(g["hands"]):
+        h = g["hands"][g["active"]]
+        if not h.get("done") and bj_value(h["cards"])[0] < 21:
+            return False
+        h["done"] = True
+        g["active"] += 1
+    g["active"] = len(g["hands"]) - 1
+    return True
+
+
+async def _bj_save(g):
+    await db.bj_games.replace_one({"id": g["id"]}, g)
+
+
+@api_router.post("/casino/blackjack/deal")
+async def bj_deal(body: BlackjackDealInput, user: dict = Depends(get_current_user)):
+    if body.coin not in STARTING_BALANCES:
+        raise HTTPException(status_code=400, detail="Invalid coin")
+    if await db.bj_games.find_one({"user_id": user["id"], "status": {"$in": ["active", "insurance"]}}):
+        raise HTTPException(status_code=400, detail="Finish your current hand first")
+    total = round(body.stake + body.side_pp + body.side_213 + body.side_bust, 8)
+    res = await db.wallets.update_one({"user_id": user["id"], f"balances.{body.coin}": {"$gte": total}},
+                                      {"$inc": {f"balances.{body.coin}": -total}})
+    if not res.modified_count:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+    ss, cs, nonce = await next_fair(user["id"])
+    g = {"id": str(uuid.uuid4()), "user_id": user["id"], "coin": body.coin, "deck": bj_shoe(ss, cs, nonce), "pos": 0,
+         "nonce": nonce, "server_seed_hash": sha256_hex(ss), "client_seed": cs, "total_stake": total,
+         "hands": [{"cards": [], "bet": body.stake, "doubled": False}], "dealer": [], "active": 0, "status": "active",
+         "created_at": now_iso()}
+    for _ in range(2):
+        g["hands"][0]["cards"].append(_bj_draw(g))
+        g["dealer"].append(_bj_draw(g))
+    p, up = g["hands"][0]["cards"], g["dealer"][0]
+    pp = bj_pp(*p) if body.side_pp else None
+    t = bj_213(p + [up]) if body.side_213 else None
+    g["sides"] = {
+        "pp": {"bet": body.side_pp, "result": pp, "payout": round(body.side_pp * (PP_PAY[pp] + 1), 8) if pp else 0.0},
+        "t213": {"bet": body.side_213, "result": t, "payout": round(body.side_213 * (T213_PAY[t] + 1), 8) if t else 0.0},
+        "bust": {"bet": body.side_bust, "result": None, "payout": 0.0},
+    }
+    if up[0] == "A" and not bj_is_bj(p):
+        g["status"] = "insurance"
+    elif bj_is_bj(p) or (up[0] in "ATJQK" and bj_is_bj(g["dealer"])):
+        await _bj_finish(g)
+    await db.bj_games.insert_one(dict(g))
+    return _bj_public(g, await _balances(user["id"]))
+
+
+@api_router.post("/casino/blackjack/action")
+async def bj_action(body: BlackjackActionInput, user: dict = Depends(get_current_user)):
+    g = await db.bj_games.find_one({"id": body.game_id, "user_id": user["id"]}, {"_id": 0})
+    if not g or body.action not in _bj_actions(g):
+        raise HTTPException(status_code=400, detail="That move isn't available")
+    a = body.action
+    if a in ("insurance", "no_insurance"):
+        if a == "insurance":
+            ins = round(g["hands"][0]["bet"] / 2, 8)
+            res = await db.wallets.update_one({"user_id": user["id"], f"balances.{g['coin']}": {"$gte": ins}},
+                                              {"$inc": {f"balances.{g['coin']}": -ins}})
+            if not res.modified_count:
+                raise HTTPException(status_code=400, detail="Insufficient balance for insurance")
+            g["insurance"] = {"bet": ins, "payout": 0.0}
+            g["total_stake"] = round(g["total_stake"] + ins, 8)
+        g["status"] = "active"
+        if bj_is_bj(g["dealer"]):
+            g["dealer_revealed"] = True
+            await _bj_finish(g)
+    else:
+        h = g["hands"][g["active"]]
+        if a in ("double", "split"):
+            extra = h["bet"]
+            res = await db.wallets.update_one({"user_id": user["id"], f"balances.{g['coin']}": {"$gte": extra}},
+                                              {"$inc": {f"balances.{g['coin']}": -extra}})
+            if not res.modified_count:
+                raise HTTPException(status_code=400, detail="Insufficient balance")
+            g["total_stake"] = round(g["total_stake"] + extra, 8)
+        if a == "hit":
+            h["cards"].append(_bj_draw(g))
+        elif a == "stand":
+            h["done"] = True
+        elif a == "double":
+            h["bet"] = round(h["bet"] * 2, 8)
+            h["doubled"] = True
+            h["cards"].append(_bj_draw(g))
+            h["done"] = True
+        elif a == "split":
+            aces = h["cards"][0][0] == "A"
+            second = {"cards": [h["cards"].pop(), _bj_draw(g)], "bet": h["bet"], "doubled": False, "split_aces": aces}
+            h["cards"].append(_bj_draw(g))
+            h["split_aces"] = aces
+            g["hands"].insert(g["active"] + 1, second)
+            if aces:
+                h["done"] = second["done"] = True
+        if _bj_advance(g):
+            await _bj_finish(g)
+    await _bj_save(g)
+    return _bj_public(g, await _balances(user["id"]))
+
+
+@api_router.get("/casino/blackjack/current")
+async def bj_current(user: dict = Depends(get_current_user)):
+    g = await db.bj_games.find_one({"user_id": user["id"], "status": {"$in": ["active", "insurance"]}}, {"_id": 0})
+    return {"game": _bj_public(g) if g else None}
+
+
 @api_router.get("/casino/history")
 async def casino_history(user: dict = Depends(get_current_user)):
     rows = await db.casino_games.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(40)

@@ -59,6 +59,18 @@ export async function verifyGame(game, serverSeed, clientSeed, nonce, detail) {
       const pos = await pickDistinct(range(0, 25), detail.mines, serverSeed, clientSeed, nonce);
       return { computed: `mines @ ${pos.sort((a, b) => a - b).join(",")}`, matches: true };
     }
+    if (game === "blackjack") {
+      const deck = [];
+      for (let d = 0; d < 6; d++) for (const su of "SHDC") for (const r of "A23456789TJQK") deck.push(r + su);
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor((await rfloat(serverSeed, clientSeed, nonce, i)) * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      const dealt = [deck[0], deck[2], deck[1], deck[3]];
+      const actual = [detail.player[0][0], detail.player[0][1] ?? detail.player[1]?.[0], detail.dealer[0], detail.dealer[1]];
+      const ok = detail.player.length > 1 ? dealt[0] === actual[0] && dealt[2] === actual[2] && dealt[3] === actual[3] : JSON.stringify(dealt) === JSON.stringify(actual);
+      return { computed: `opening ${dealt.join(" ")}`, matches: ok };
+    }
     return { computed: "unsupported", matches: false };
   } catch {
     return { computed: "error", matches: false };

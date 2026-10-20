@@ -7,7 +7,7 @@ import { verifyGame, sha256Hex } from "@/lib/fairness";
 import { Usd } from "@/components/Usd";
 import { toast } from "sonner";
 
-const GAME_COLORS = { limbo: "#10B981", dice: "#627EEA", plinko: "#8B5CF6", keno: "#22C55E", mines: "#F59E0B" };
+const GAME_COLORS = { limbo: "#10B981", dice: "#627EEA", plinko: "#8B5CF6", keno: "#22C55E", mines: "#F59E0B", blackjack: "#14B8A6" };
 
 export function CasinoHistoryModal({ open, onClose }) {
   const [tab, setTab] = useState("history");

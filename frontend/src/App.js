@@ -13,6 +13,7 @@ import { DepositAlerts } from "@/components/DepositAlerts";
 import { Sportsbook } from "@/pages/Sportsbook";
 import { Casino } from "@/pages/Casino";
 import { Limbo } from "@/pages/games/Limbo";
+import { Blackjack } from "@/pages/games/Blackjack";
 import { Mines } from "@/pages/games/Mines";
 import { Plinko } from "@/pages/games/Plinko";
 import { Keno } from "@/pages/games/Keno";
@@ -39,6 +40,7 @@ function Shell() {
           <Route path="/casino/plinko" element={<Plinko />} />
           <Route path="/casino/keno" element={<Keno />} />
           <Route path="/casino/dice" element={<Dice />} />
+          <Route path="/casino/blackjack" element={<Blackjack />} />
         </Routes>
       </div>
       <AuthModal />
