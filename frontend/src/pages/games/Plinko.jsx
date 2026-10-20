@@ -1,103 +1,117 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
-import { BetControls, useGameBase, GameLayout } from "@/components/casino/GameKit";
+import { BetControls, useGameBase, GameLayout, PlayButton, PILL_BTN, FieldLabel } from "@/components/casino/GameKit";
 import { toast } from "sonner";
 
 const RISKS = ["low", "medium", "high"];
 const ROWS = [8, 12, 16];
-const MULT_COLOR = (m) => (m >= 10 ? "#F59E0B" : m >= 2 ? "#22C55E" : m >= 1 ? "#10B981" : "#EF4444");
+const PLINKO_MULT = {
+  8: { low: [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6], medium: [13, 3, 1.3, 0.7, 0.4, 0.7, 1.3, 3, 13], high: [29, 4, 1.5, 0.3, 0.2, 0.3, 1.5, 4, 29] },
+  12: { low: [10, 3, 1.6, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 1.6, 3, 10], medium: [24, 5, 3, 1.6, 1, 0.5, 0.3, 0.5, 1, 1.6, 3, 5, 24], high: [58, 8, 3, 2, 0.5, 0.2, 0.2, 0.2, 0.5, 2, 3, 8, 58] },
+  16: { low: [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, 0.5, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16], medium: [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110], high: [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000] },
+};
+// warm heat-map from centre (yellow) to edges (red)
+const bucketColor = (i, n) => {
+  const d = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);
+  const hue = 50 - d * 50;
+  return { bg: `hsl(${hue} 95% 55%)`, shadow: `hsl(${hue} 90% 32%)` };
+};
+const DROP_MS = 1400;
+
+// random left/right path that lands in `bucket` after `rows` pegs
+function pathTo(bucket, rows) {
+  const moves = Array.from({ length: rows }, (_, i) => (i < bucket ? 1 : 0)).sort(() => Math.random() - 0.5);
+  const xs = [0];
+  moves.forEach((m) => xs.push(xs[xs.length - 1] + (m ? 0.5 : -0.5)));
+  return xs;
+}
 
 export function Plinko() {
   const g = useGameBase();
   const [risk, setRisk] = useState("medium");
   const [rows, setRows] = useState(12);
   const [loading, setLoading] = useState(false);
-  const [buckets, setBuckets] = useState([]);
-  const [ballCol, setBallCol] = useState(null);
-  const [hits, setHits] = useState({});
+  const [ball, setBall] = useState(null);
+  const [landed, setLanded] = useState(null);
+  const [win, setWin] = useState(null);
+  const closeWin = useCallback(() => setWin(null), []);
+  const mults = PLINKO_MULT[rows][risk];
 
   const play = async () => {
     if (!g.user) return g.setAuthOpen(true);
     if (g.stakeNum <= 0) return toast.error("Enter a bet amount");
     if (g.stakeNum > g.balance) return toast.error("Insufficient balance");
-    setLoading(true);
+    setLoading(true); setLanded(null);
     try {
       const { data } = await api.post("/casino/plinko", { coin: g.coin, stake: g.stakeNum, risk, rows });
-      setBallCol(data.bucket);
+      setBall({ id: Date.now(), xs: pathTo(data.bucket, rows) });
       setTimeout(() => {
-        g.setBalances(data.balances);
-        setHits((h) => ({ ...h, [data.bucket]: (h[data.bucket] || 0) + 1, t: Date.now() }));
-        if (data.multiplier >= 1) toast.success(`${data.multiplier}× — ${data.payout} ${g.coin}`);
-        else toast.error(`${data.multiplier}× — ${data.payout} ${g.coin}`);
+        g.setBalances(data.balances); setLanded(data.bucket);
+        if (data.multiplier > 1) setWin({ multiplier: data.multiplier, payout: data.payout, coin: g.coin });
+        else toast(`${data.multiplier}× — ${data.payout} ${g.coin}`);
         setLoading(false);
-      }, 900);
+      }, DROP_MS);
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
       setLoading(false);
     }
   };
 
-  // local multiplier labels (visual only; payout from server)
-  const PLINKO_MULT = {
-    8: { low: [5.6,2.1,1.1,1,0.5,1,1.1,2.1,5.6], medium:[13,3,1.3,0.7,0.4,0.7,1.3,3,13], high:[29,4,1.5,0.3,0.2,0.3,1.5,4,29] },
-    12:{ low:[10,3,1.6,1.4,1.1,1,0.5,1,1.1,1.4,1.6,3,10], medium:[24,5,3,1.6,1,0.5,0.3,0.5,1,1.6,3,5,24], high:[58,8,3,2,0.5,0.2,0.2,0.2,0.5,2,3,8,58] },
-    16:{ low:[16,9,2,1.4,1.4,1.2,1.1,1,0.5,1,1.1,1.2,1.4,1.4,2,9,16], medium:[110,41,10,5,3,1.5,1,0.5,0.3,0.5,1,1.5,3,5,10,41,110], high:[1000,130,26,9,4,2,0.2,0.2,0.2,0.2,0.2,2,4,9,26,130,1000] },
-  };
-  const mults = PLINKO_MULT[rows][risk];
-
+  const gap = rows === 16 ? 22 : rows === 12 ? 28 : 38;
   return (
-    <GameLayout title="Plinko" tag="House Game · drop & win"
+    <GameLayout title="Plinko" tag="drop & win" win={win} onWinClose={closeWin}
       controls={
         <BetControls {...g} disabled={loading}>
           <div>
-            <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 mb-1.5">Risk</p>
+            <FieldLabel>Risk</FieldLabel>
             <div className="flex gap-1.5">
               {RISKS.map((r) => (
-                <button key={r} data-testid={`plinko-risk-${r}`} disabled={loading} onClick={() => setRisk(r)}
-                  className={`flex-1 text-xs font-medium py-2 rounded-md capitalize border transition-colors disabled:opacity-50 ${
-                    risk === r ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#2A2F45] text-zinc-400"
-                  }`}>{r}</button>
+                <button key={r} data-testid={`plinko-risk-${r}`} disabled={loading} onClick={() => setRisk(r)} className={PILL_BTN(risk === r) + " capitalize"}>{r}</button>
               ))}
             </div>
           </div>
           <div>
-            <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 mb-1.5">Rows</p>
+            <FieldLabel>Rows</FieldLabel>
             <div className="flex gap-1.5">
               {ROWS.map((r) => (
-                <button key={r} data-testid={`plinko-rows-${r}`} disabled={loading} onClick={() => setRows(r)}
-                  className={`flex-1 text-xs font-mono py-2 rounded-md border transition-colors disabled:opacity-50 ${
-                    rows === r ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#2A2F45] text-zinc-400"
-                  }`}>{r}</button>
+                <button key={r} data-testid={`plinko-rows-${r}`} disabled={loading} onClick={() => setRows(r)} className={PILL_BTN(rows === r) + " font-mono"}>{r}</button>
               ))}
             </div>
           </div>
-          <button data-testid="plinko-play-button" onClick={play} disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-lg transition-colors disabled:opacity-60">
-            {loading && <Loader2 size={16} className="animate-spin" />} Drop Ball
-          </button>
+          <PlayButton data-testid="plinko-play-button" onClick={play} loading={loading}>Drop ball</PlayButton>
         </BetControls>
       }>
-      <div className="flex-1 flex flex-col justify-between" data-testid="plinko-board">
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
+      <div className="flex-1 flex flex-col items-center justify-end gap-3" data-testid="plinko-board">
+        <div className="relative" style={{ width: gap * (rows + 2), height: gap * rows }}>
           {Array.from({ length: rows }).map((_, r) => (
-            <div key={r} className="flex gap-2 sm:gap-2.5">
+            <div key={r} className="absolute left-1/2 -translate-x-1/2 flex" style={{ top: r * gap + gap / 2, gap: gap - 8 }}>
               {Array.from({ length: r + 3 }).map((_, c) => (
-                <span key={c} className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                <span key={c} className="w-2 h-2 rounded-full bg-slate-200 shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
               ))}
             </div>
           ))}
+          {ball && (
+            <motion.span key={ball.id} data-testid="plinko-ball"
+              className="absolute w-3.5 h-3.5 -ml-[7px] rounded-full bg-gradient-to-br from-yellow-200 to-amber-500 shadow-[0_0_14px_rgba(251,191,36,0.9)] z-10"
+              style={{ left: "50%" }}
+              initial={{ x: 0, y: 0 }}
+              animate={{ x: ball.xs.map((x) => x * gap), y: ball.xs.map((_, i) => i * gap + gap / 2 - 10) }}
+              transition={{ duration: DROP_MS / 1000, ease: "easeIn" }} />
+          )}
         </div>
-        <div className="flex gap-1 justify-center flex-wrap">
-          {mults.map((m, i) => (
-            <motion.div key={i} data-testid={`plinko-bucket-${i}`}
-              animate={ballCol === i && loading ? { y: [-6, 0], scale: [1.15, 1] } : {}}
-              className="flex-1 min-w-[26px] text-center py-1 rounded font-mono text-[10px] sm:text-xs font-bold"
-              style={{ background: `${MULT_COLOR(m)}22`, color: MULT_COLOR(m) }}>
-              {m}×
-            </motion.div>
-          ))}
+        <div className="flex justify-center" style={{ gap: 4, width: gap * (rows + 1) }}>
+          {mults.map((m, i) => {
+            const c = bucketColor(i, mults.length);
+            return (
+              <motion.div key={`${rows}-${risk}-${i}`} data-testid={`plinko-bucket-${i}`}
+                animate={landed === i ? { y: [0, 6, 0] } : { y: 0 }} transition={{ duration: 0.35 }}
+                className="flex-1 text-center py-1.5 rounded-md font-mono text-[9px] sm:text-[11px] font-black text-slate-950"
+                style={{ background: c.bg, boxShadow: `0 4px 0 ${c.shadow}${landed === i ? `, 0 0 18px ${c.bg}` : ""}` }}>
+                {m}×
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </GameLayout>

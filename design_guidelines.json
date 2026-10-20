@@ -1,70 +1,114 @@
 {
-  "project_title": "ApexOdds Crypto Sportsbook",
-  "archetype": "Architectural High-Density Dark Terminal (Archetype 7 meets Archetype 4)",
-  "theme": "dark",
-  "instructions_to_main_agent": "Build a high-density, performance-driven dark crypto sportsbook UI. Use React, Tailwind CSS v4, Lucide icons, Framer Motion, and custom sleek elements. The main layout consists of a top persistent nav header, left sports/league navigation drawer/sidebar, central high-density odds & live scores feed, and a sticky or collapsible right-side dynamic bet slip / active bets drawer. Ensure instant odds update feedback, clear bet slip calculations (Singles/Parlay), real-time simulated crypto wallet management (BTC, ETH, USDT, SOL), simulated transaction histories, and live score updates. All interactive elements MUST have explicit data-testid attributes. Ensure full support for .js / .jsx code files.",
+  "theme": "Dark Theme (Stake-inspired ApexOdds Originals)",
   "typography": {
-    "heading_font": "Cabinet Grotesk / Outfit / Unbounded style (sans-serif display, high intensity, tracking-tight)",
-    "body_font": "Inter / System Sans with JetBrains Mono for all numeric odds, balances, multipliers, and timestamps",
-    "hierarchy": {
-      "hero_title": "text-4xl sm:text-5xl font-black tracking-tight",
-      "section_title": "text-xl sm:text-2xl font-bold tracking-tight uppercase",
-      "card_title": "text-base font-semibold tracking-normal",
-      "odds_number": "font-mono font-bold text-base md:text-lg tracking-wider",
-      "body": "text-sm font-normal text-zinc-300",
-      "label_overline": "text-xs font-mono uppercase tracking-[0.2em] text-emerald-400"
-    }
+    "font_family_display": "font-display, system-ui, sans-serif",
+    "font_family_mono": "font-mono, monospace",
+    "headings": {
+      "h1": "text-3xl md:text-4xl font-black font-display tracking-tight text-white drop-shadow-sm",
+      "h2": "text-xl md:text-2xl font-bold font-display tracking-tight text-white",
+      "h3": "text-lg font-bold font-display text-slate-200",
+      "h4": "text-sm font-semibold text-slate-400 uppercase tracking-wider"
+    },
+    "body": "text-sm font-medium text-slate-300 leading-normal",
+    "mono_values": "font-mono font-bold tracking-wide"
   },
   "colors": {
-    "background_base": "#090A0F",
-    "surface_dark": "#12141C",
-    "surface_card": "#181B26",
-    "surface_hover": "#222636",
-    "border_subtle": "#2A2F45",
-    "border_active": "#10B981",
-    "primary_accent": "#10B981",
-    "primary_accent_hover": "#059669",
-    "secondary_gold": "#F59E0B",
-    "odds_up_green": "#22C55E",
-    "odds_down_red": "#EF4444",
-    "text_main": "#F4F4F5",
-    "text_muted": "#A1A1AA",
-    "forbidden_colors": [
-      "#7351B7",
-      "#1B93A4"
-    ]
+    "background": "#090A0F",
+    "panel_background": "#12141C",
+    "panel_border": "#2A2F45",
+    "primary_emerald": "#10B981",
+    "primary_emerald_hover": "#059669",
+    "primary_emerald_active": "#047857",
+    "tile_idle_bg": "#1A1D28",
+    "tile_idle_border": "#2E344A",
+    "tile_idle_shadow": "shadow-[inset_0_2px_0_rgba(255,255,255,0.07),0_4px_8px_rgba(0,0,0,0.5),0_1px_0_#11141F]",
+    "tile_picked_bg": "#252B3E",
+    "tile_picked_border": "#3B82F6",
+    "tile_hit_bg": "linear-gradient(135deg, #34D399 0%, #10B981 50%, #059669 100%)",
+    "tile_miss_bg": "#1E1A22",
+    "tile_miss_border": "#EF4444",
+    "big_win_card_bg": "rgba(18, 20, 28, 0.92)",
+    "big_win_card_border": "rgba(16, 185, 129, 0.4)",
+    "text_main": "#F8FAFC",
+    "text_muted": "#94A3B8"
   },
-  "layout_and_grid": {
-    "app_structure": "3-Column Terminal Layout: Left Sidebar (Sports Categories & Leagues, 240px wide), Center Feed (Main Odds Grid, Live Matches, Hero Highlights, flex-1), Right Drawer (Dynamic Bet Slip, Multiplier Calculator, Wallet Quick Deposit, 320px wide)",
-    "spacing_philosophy": "High Density layout with clean 1px borders (border-zinc-800) and optical padding (p-3 to p-6). Avoid cramped collision by keeping 12px min padding on interactive cells.",
-    "odds_buttons_grid": "3-Column layout for 1X2 (Home / Draw / Away) or 2-Column for Spread/Totals with monospaced odds, interactive click to add to slip."
+  "component_styles": {
+    "board_container": "bg-[#090A0F]/80 backdrop-blur-md border border-[#2A2F45] rounded-2xl p-4 md:p-6 shadow-2xl relative overflow-hidden flex flex-col justify-between items-center min-h-[460px]",
+    "control_panel": "bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5 flex flex-col gap-4 shadow-xl text-slate-200",
+    "control_panel_input": "bg-[#090A0F] border border-[#2A2F45] focus:border-[#10B981] text-white font-mono rounded-lg px-3 py-2 text-sm transition-colors outline-none w-full",
+    "coin_selector_button": "px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1A1D28] hover:bg-[#252A3B] border border-[#2A2F45] text-slate-300 transition-all cursor-pointer flex items-center gap-1.5",
+    "quick_bet_multiplier_btn": "px-2.5 py-1 text-xs font-mono font-bold rounded bg-[#1A1D28] hover:bg-[#2A2F45] text-slate-300 border border-[#2A2F45] transition-colors cursor-pointer",
+    "primary_button": "w-full py-3.5 px-6 rounded-xl font-bold font-display text-base text-slate-950 bg-[#10B981] hover:bg-[#34D399] active:scale-[0.98] transition-all shadow-[0_4px_20px_rgba(16,185,129,0.35)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider",
+    "3d_beveled_tile": {
+      "base": "relative rounded-xl font-mono font-bold text-base md:text-lg flex items-center justify-center transition-all duration-150 select-none cursor-pointer border-t border-l border-white/10 border-b-2 border-r-2 border-black/40 shadow-[0_4px_6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] active:translate-y-0.5 active:shadow-none",
+      "idle": "bg-[#1A1D28] text-slate-300 border-[#2E344A] hover:bg-[#252A3B] hover:border-[#3E4663] hover:text-white",
+      "picked": "bg-[#1E293B] text-sky-400 border-sky-500 shadow-[0_0_15px_rgba(56,189,248,0.3),inset_0_1px_0_rgba(255,255,255,0.2)]",
+      "hit": "bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700 text-slate-950 font-black border-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.6),inset_0_2px_4px_rgba(255,255,255,0.6)] animate-pulse-subtle",
+      "miss": "bg-[#25151A] text-red-400 border-red-900/80 opacity-90 shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]",
+      "disabled": "opacity-50 cursor-not-allowed pointer-events-none"
+    },
+    "payout_table_bar": {
+      "container": "w-full bg-[#12141C] border border-[#2A2F45] rounded-xl p-2 flex items-center justify-between gap-1 overflow-x-auto shadow-inner",
+      "column_idle": "flex-1 min-w-[50px] py-1.5 px-2 rounded-lg text-center flex flex-col items-center justify-center bg-[#1A1D28] border border-transparent transition-all",
+      "column_highlighted": "flex-1 min-w-[50px] py-1.5 px-2 rounded-lg text-center flex flex-col items-center justify-center bg-[#10B981]/20 border border-[#10B981] text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)] scale-105 font-bold"
+    },
+    "big_win_overlay_card": {
+      "overlay": "absolute inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center animate-fade-in p-4",
+      "card": "bg-[#12141C]/95 border-2 border-[#10B981] rounded-2xl p-6 md:p-8 text-center shadow-[0_0_50px_rgba(16,185,129,0.4)] transform animate-bounce-short max-w-sm w-full relative overflow-hidden",
+      "glow_bg": "absolute -inset-10 bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/20 blur-xl pointer-events-none"
+    },
+    "keno": {
+      "grid": "grid grid-cols-8 gap-2.5 w-full max-w-lg mx-auto"
+    },
+    "mines": {
+      "grid": "grid grid-cols-5 gap-3 w-full max-w-md mx-auto aspect-square",
+      "gem": "bg-gradient-to-br from-emerald-400 via-teal-500 to-emerald-700 shadow-[0_0_25px_rgba(16,185,129,0.7)] text-emerald-950 font-black",
+      "mine": "bg-gradient-to-br from-red-500 via-rose-700 to-red-900 shadow-[0_0_25px_rgba(239,68,68,0.7)] text-white"
+    },
+    "dice": {
+      "slider_track": "h-4 bg-[#1A1D28] border border-[#2A2F45] rounded-full relative overflow-hidden shadow-inner",
+      "slider_fill_win": "bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-150 shadow-[0_0_15px_rgba(16,185,129,0.5)]",
+      "slider_fill_loss": "bg-gradient-to-r from-red-600 to-rose-400 h-full rounded-full transition-all duration-150",
+      "roll_marker": "w-7 h-7 rounded-full bg-white border-2 border-emerald-400 shadow-[0_0_12px_rgba(255,255,255,0.9)] absolute -top-1.5 -translate-x-1/2 transition-all duration-300"
+    },
+    "limbo": {
+      "multiplier_display": "font-mono font-black text-6xl md:text-7xl tracking-tighter bg-gradient-to-b from-white via-slate-100 to-slate-400 bg-clip-text text-transparent drop-shadow-[0_4px_25px_rgba(16,185,129,0.3)]",
+      "target_card": "bg-[#1A1D28] border border-[#2A2F45] rounded-xl p-3 text-center"
+    },
+    "plinko": {
+      "peg": "w-2.5 h-2.5 rounded-full bg-slate-300 shadow-[0_0_6px_rgba(255,255,255,0.8)]",
+      "ball": "w-3.5 h-3.5 rounded-full bg-gradient-to-r from-yellow-300 to-amber-500 shadow-[0_0_12px_rgba(251,191,36,0.9)] animate-pulse",
+      "bucket_low": "bg-yellow-500/20 border border-yellow-500/50 text-yellow-300 text-xs font-bold rounded-lg py-1 text-center shadow-sm",
+      "bucket_med": "bg-orange-500/20 border border-orange-500/50 text-orange-400 text-xs font-bold rounded-lg py-1 text-center shadow-sm",
+      "bucket_high": "bg-rose-500/20 border border-rose-500/50 text-rose-400 text-xs font-bold rounded-lg py-1 text-center shadow-sm"
+    }
   },
-  "surface_strategies": {
-    "card_style": "Cardless grid or flat crisp dark surfaces (#12141C) with subtle 1px border (#2A2F45), hover elevation with micro light outline transition.",
-    "header_style": "Crystal Glass backdrop-blur-md bg-[#090A0F]/90 border-b border-[#2A2F45] fixed top-0 z-50",
-    "bet_slip_style": "Fixed right drawer or overlay panel with sticky summary footer for instant placing of bets."
+  "grids_and_layouts": {
+    "originals_layout": "grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-7xl mx-auto items-start p-4 md:p-6",
+    "left_controls_col": "lg:col-span-4 w-full flex flex-col gap-4",
+    "right_board_col": "lg:col-span-8 w-full min-h-[520px] flex flex-col"
   },
-  "key_functionalities_to_implement": [
-    "Live Sports & Odds Browser (Football, Basketball, Soccer, Tennis, Esports) powered by free ESPN APIs / mock fallback with real-time simulated odds flux",
-    "Dynamic Interactive Bet Slip (Single bets, Parlay multipliers, stake input with instant payout calculation, clear all, quick bet buttons like +$10, +$50, Max)",
-    "Crypto Wallet Hub (Simulated BTC, ETH, SOL, USDT balances, Deposit QR Modal, Withdraw form, mock payment gateway pluggable interface)",
-    "Bet History & Open Bets Ledger (Live status, Won, Lost, Cashout option, simulated live score tracking)",
-    "JWT Authentication Modal / Drawer (Email + Password Login & Register, user profile, wallet balance state)",
-    "Live Scoreboard Widget (Real-time score updates, match minute counter, possession indicators)"
+  "motion_and_animations": {
+    "tile_hover_transition": "transition-all duration-150 ease-out hover:scale-[1.03] active:scale-[0.97]",
+    "big_win_animation": "animate-in fade-in zoom-in-95 duration-200",
+    "tile_reveal_stagger": "transition-all duration-200 ease-in-out"
+  },
+  "accessibility": {
+    "contrast_ratio": "APCA high contrast dark mode standard",
+    "focus_ring": "focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 focus:ring-offset-[#090A0F]",
+    "aria_labels": "All game controls and tiles must provide clear descriptive aria-label and data-testid attributes"
+  },
+  "image_urls": {},
+  "instructions_to_main_agent": [
+    "Ensure all 5 Originals (Dice, Limbo, Mines, Keno, Plinko) adopt this unified Stake-style tactile 3D theme.",
+    "Implement tactile 3D bevels on Keno and Mines tiles with realistic upper highlight borders and lower inset shadows.",
+    "Always render the glowing Big Win Pop-Up Overlay card over the active board whenever payout > 0 or multiplier >= 1.5x.",
+    "Use data-testid on all key interactive elements and inputs for automated verification.",
+    "Maintain high contrast for all numbers and hit/miss statuses."
   ],
-  "image_urls": {
-    "hero_stadium": "https://images.unsplash.com/photo-1679391029864-d46f366a456b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwzfHxzdGFkaXVtJTIwbGlnaHRzJTIwbmlnaHQlMjBzcG9ydHMlMjBiZXR0aW5nfGVufDB8fHx8MTc5MjM5MjE3OHww&ixlib=rb-4.1.0&q=85",
-    "soccer_match": "https://images.unsplash.com/photo-1599158150601-1417ebbaafdd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxzdGFkaXVtJTIwbGlnaHRzJTIwbmlnaHQlMjBzcG9ydHMlMjBiZXR0aW5nfGVufDB8fHx8MTc5MjM5MjE3OHww&ixlib=rb-4.1.0&q=85",
-    "basketball_dunk": "https://images.unsplash.com/photo-1608245449230-4ac19066d2d0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwyfHxiYXNrZXRiYWxsJTIwcGxheWVyJTIwc2xhbSUyMGR1bmslMjBnYW1lfGVufDB8fHx8MTc5MjM5MjE4NXww&ixlib=rb-4.1.0&q=85",
-    "bitcoin_coins": "https://images.unsplash.com/photo-1657525641283-76b45d0534ba?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxiaXRjb2luJTIwY3J5cHRvY3VycmVuY3klMjBnb2xkZW4lMjBjb2lufGVufDB8fHx8MTc5MjM5MjE4NXww&ixlib=rb-4.1.0&q=85",
-    "night_arena": "https://images.unsplash.com/photo-1556764420-e37ef4cdfa5c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHw0fHxzdGFkaXVtJTIwbGlnaHRzJTIwbmlnaHQlMjBzcG9ydHMlMjBiZXR0aW5nfGVufDB8fHx8MTc5MjM5MjE3OHww&ixlib=rb-4.1.0&q=85"
-  },
-  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
-    "Avoid generic AI slop: Do not use light centered cards or pure black #000000 without subtle dark surface tinting.",
-    "Data Test IDs: ALL buttons, input fields, tabs, navigation links, sports items, odds buttons, slip items, deposit inputs, and modal triggers MUST contain explicit data-testid attributes (e.g. data-testid='odds-button-home-1', data-testid='bet-slip-stake-input', data-testid='wallet-deposit-button').",
-    "Odds Button Animations: Flash subtle green when odds increase, flash subtle red when odds decrease.",
-    "Monospace tabular numbers: Always use font-mono for numbers, odds, prices, timer counters, and transaction hashes.",
-    "Toast Feedback: Use Sonner toast notifications when a selection is added/removed from bet slip, when a bet is placed, or wallet funds deposited.",
-    "File Extensions: Write pure JavaScript (.js / .jsx) components without TypeScript syntax errors."
-  ]
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": {
+    "testing_attributes": "All interactive and key informational elements MUST include a data-testid attribute.",
+    "contrast": "Do not use transparent background without backdrop filters for floating panels.",
+    "motion": "Add micro-interactions and tactile active press states for all game buttons."
+  }
 }
