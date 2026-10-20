@@ -105,3 +105,8 @@
 - Sportsbook polls odds every 20s; `syncPrices(events)` (BetSlipContext) re-prices slip legs via `refreshLeg`. Moved legs show old odds struck through, arrow + green (up) / red (down) with flash animation.
 - "Auto-accept better odds" switch in slip (persisted localStorage `apex_accept_better`, default on). Up-moves auto-accepted when on; down-moves (or any move when off) mark legs pending → amber note + button becomes "Accept odds changes".
 - Backend `PlaceBetInput.accept_better` (default true): off → any price difference returns 409; on → only worse prices 409. 409 responses also flag legs pending in the slip. Verified backend matrix + UI flow (mocked feed).
+
+## Cash Out (2026-06)
+- `GET /api/bets/cashout-quotes` → live offer per open bet: `potential_payout / Π(current odds of unsettled legs) × 0.95` (CASHOUT_MARGIN). Finished-won legs count as 1.0; any lost leg, missing event or vanished market → null (suspended). Capped at 95% of potential payout.
+- `POST /api/bets/{id}/cashout {expected}` re-prices server-side; 409 with new value if it dropped >0.5%; atomic status flip open→cashed_out, credits wallet, `cashout` transaction. auto_settle now only settles if still open (no double pay).
+- My Bets modal: Cash out button with live value + USD (refresh 15s), two-tap confirm, "unavailable" state, Cashed out status/filter. Verified backend math (1.8→1.5 single = 1.14; parlay with won leg = 1.71), double-cashout blocked, UI flow with mocks.

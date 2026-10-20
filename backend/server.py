@@ -1338,15 +1338,77 @@ async def auto_settle(user_id: str):
         if any(x is None for x in legs):
             continue
         won = all(legs)
-        await db.bets.update_one({"id": b["id"]},
-                                 {"$set": {"status": "won" if won else "lost", "settled_at": now_iso()}})
-        if won:
+        res = await db.bets.update_one({"id": b["id"], "status": "open"},
+                                       {"$set": {"status": "won" if won else "lost", "settled_at": now_iso()}})
+        if won and res.modified_count:
             await db.wallets.update_one({"user_id": user_id},
                                         {"$inc": {f"balances.{b['coin']}": b["potential_payout"]}})
             await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id,
                                               "type": "payout", "coin": b["coin"],
                                               "amount": b["potential_payout"], "created_at": now_iso(),
                                               "hash": "0x" + uuid.uuid4().hex[:24]})
+
+
+CASHOUT_MARGIN = 0.95
+
+
+def _cashout_value(b, events) -> Optional[float]:
+    """Live cash-out offer for an open bet, or None when suspended/lost."""
+    remaining = 1.0
+    for s in b["selections"]:
+        ev = events.get(s["event_id"])
+        if not ev:
+            return None
+        if ev.get("state") == "post":
+            r = settle_selection(s, ev)
+            if r is None or r is False:
+                return None
+            continue
+        price = _live_price(Selection(**{k: s.get(k) for k in Selection.model_fields if k in s}), ev)
+        if not price or price <= 1:
+            return None
+        remaining *= float(price)
+    value = b["potential_payout"] / remaining * CASHOUT_MARGIN
+    return round(max(0.0, min(value, b["potential_payout"] * CASHOUT_MARGIN)), 8)
+
+
+async def _events_index():
+    return {ev["event_id"]: ev for ev in await _fetch_sgo_sequential(SGO_LEAGUES)}
+
+
+@api_router.get("/bets/cashout-quotes")
+async def cashout_quotes(user: dict = Depends(get_current_user)):
+    open_bets = await db.bets.find({"user_id": user["id"], "status": "open"}, {"_id": 0}).to_list(200)
+    if not open_bets:
+        return {"quotes": {}}
+    events = await _events_index()
+    return {"quotes": {b["id"]: _cashout_value(b, events) for b in open_bets}}
+
+
+class CashoutInput(BaseModel):
+    expected: float = Field(gt=0, allow_inf_nan=False)
+
+
+@api_router.post("/bets/{bet_id}/cashout")
+async def cashout_bet(bet_id: str, body: CashoutInput, user: dict = Depends(get_current_user)):
+    b = await db.bets.find_one({"id": bet_id, "user_id": user["id"]}, {"_id": 0})
+    if not b or b["status"] != "open":
+        raise HTTPException(status_code=400, detail="This bet can no longer be cashed out")
+    value = _cashout_value(b, await _events_index())
+    if not value:
+        raise HTTPException(status_code=409, detail={"msg": "Cash out is suspended for this bet right now", "value": None})
+    if value < body.expected * 0.995:
+        raise HTTPException(status_code=409, detail={"msg": "Cash out value changed", "value": value})
+    res = await db.bets.update_one({"id": bet_id, "status": "open"},
+                                   {"$set": {"status": "cashed_out", "cashout_amount": value, "settled_at": now_iso()}})
+    if not res.modified_count:
+        raise HTTPException(status_code=400, detail="This bet can no longer be cashed out")
+    await db.wallets.update_one({"user_id": user["id"]}, {"$inc": {f"balances.{b['coin']}": value}})
+    await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"], "type": "cashout",
+                                      "coin": b["coin"], "amount": value, "created_at": now_iso(),
+                                      "hash": "0x" + uuid.uuid4().hex[:24]})
+    wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
+    return {"amount": value, "balances": wallet["balances"]}
 
 
 @api_router.get("/bets")

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, History, Trophy, XCircle, Clock } from "lucide-react";
-import { api } from "@/lib/api";
+import { X, History, Trophy, XCircle, Clock, HandCoins } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+import { CashoutButton } from "@/components/CashoutButton";
+import { api, formatApiErrorDetail } from "@/lib/api";
 import { Usd } from "@/components/Usd";
 import { fmtCrypto, fmtOdds } from "@/lib/format";
 
@@ -9,18 +12,45 @@ const STATUS = {
   open: { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10", label: "Open" },
   won: { icon: Trophy, color: "text-emerald-400", bg: "bg-emerald-500/10", label: "Won" },
   lost: { icon: XCircle, color: "text-red-400", bg: "bg-red-500/10", label: "Lost" },
+  cashed_out: { icon: HandCoins, color: "text-sky-400", bg: "bg-sky-500/10", label: "Cashed out" },
 };
 
 export function BetHistoryModal({ open, onClose }) {
   const [bets, setBets] = useState([]);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [quotes, setQuotes] = useState({});
+  const { setBalances } = useAuth();
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     api.get("/bets").then(({ data }) => setBets(data.bets)).finally(() => setLoading(false));
   }, [open]);
+
+  const hasOpen = bets.some((b) => b.status === "open");
+  useEffect(() => {
+    if (!open || !hasOpen) return;
+    const load = () => api.get("/bets/cashout-quotes").then(({ data }) => setQuotes(data.quotes)).catch(() => {});
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, [open, hasOpen]);
+
+  const cashout = async (b) => {
+    try {
+      const { data } = await api.post(`/bets/${b.id}/cashout`, { expected: quotes[b.id] });
+      setBalances(data.balances);
+      setBets((prev) => prev.map((x) => (x.id === b.id ? { ...x, status: "cashed_out", cashout_amount: data.amount } : x)));
+      toast.success(`Cashed out ${fmtCrypto(data.amount, b.coin)} ${b.coin}`);
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      if (e.response?.status === 409 && d) {
+        setQuotes((q) => ({ ...q, [b.id]: d.value }));
+        toast.warning(d.msg, { description: d.value ? "Review the new offer and try again." : undefined });
+      } else toast.error(formatApiErrorDetail(d));
+    }
+  };
 
   const shown = filter === "all" ? bets : bets.filter((b) => b.status === filter);
 
@@ -41,11 +71,11 @@ export function BetHistoryModal({ open, onClose }) {
             </div>
 
             <div className="flex gap-1 p-3 border-b border-[#2A2F45]">
-              {["all", "open", "won", "lost"].map((f) => (
+              {["all", "open", "won", "lost", "cashed_out"].map((f) => (
                 <button key={f} data-testid={`history-filter-${f}`} onClick={() => setFilter(f)}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md capitalize transition-colors ${
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md capitalize whitespace-nowrap transition-colors ${
                     filter === f ? "bg-emerald-500 text-black" : "text-zinc-400 hover:text-white"
-                  }`}>{f}</button>
+                  }`}>{f === "cashed_out" ? "Cashed out" : f}</button>
               ))}
             </div>
 
@@ -79,12 +109,13 @@ export function BetHistoryModal({ open, onClose }) {
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-[#1E2234]">
                         <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtCrypto(b.stake, b.coin)} {b.coin}</span> <Usd amount={b.stake} coin={b.coin} prefix="(" />{")"}</span>
                         <span className="text-zinc-500">
-                          {b.status === "won" ? "Payout" : "To win"}{" "}
-                          <span className={`font-mono ${b.status === "won" ? "text-emerald-400" : "text-zinc-300"}`}>
-                            {fmtCrypto(b.potential_payout, b.coin)} {b.coin}
-                          </span> <Usd amount={b.potential_payout} coin={b.coin} prefix="(" />{")"}
+                          {b.status === "cashed_out" ? "Cashed out" : b.status === "won" ? "Payout" : "To win"}{" "}
+                          <span className={`font-mono ${b.status === "won" ? "text-emerald-400" : b.status === "cashed_out" ? "text-sky-400" : "text-zinc-300"}`}>
+                            {fmtCrypto(b.status === "cashed_out" ? b.cashout_amount : b.potential_payout, b.coin)} {b.coin}
+                          </span> <Usd amount={b.status === "cashed_out" ? b.cashout_amount : b.potential_payout} coin={b.coin} prefix="(" />{")"}
                         </span>
                       </div>
+                      {b.status === "open" && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} />}
                     </div>
                   );
                 })
