@@ -884,11 +884,47 @@ async def get_deposit_address(coin: str, user: dict = Depends(get_current_user))
 _ALERT_SYNC = {}
 
 
+def _wd_stage(w):
+    s = (w.get("status") or "").lower()
+    if w.get("refunded") or s in PAYOUT_FAILED:
+        return "refunded"
+    if s == "confirmed":
+        return "confirmed"
+    if s in ("pending_approval", "approving", ""):
+        return None
+    return "sent"
+
+
+async def _withdrawal_alerts(user_id, sync):
+    if sync and OXAPAY_PAYOUT_KEY:
+        inflight = await db.withdrawals.find({"user_id": user_id, "track_id": {"$ne": None}, "refunded": {"$ne": True},
+                                              "status": {"$nin": list(PAYOUT_TERMINAL)}}).to_list(20)
+        async with httpx.AsyncClient(timeout=10) as hc:
+            for wd in inflight:
+                try:
+                    r = await hc.get(f"{OXAPAY_API}/payout/{wd['track_id']}", headers={"payout_api_key": OXAPAY_PAYOUT_KEY})
+                    data = r.json().get("data", {})
+                    await _settle_withdrawal(wd["track_id"], data.get("status", wd.get("status")), data.get("tx_hash"))
+                except Exception as e:
+                    logger.warning(f"withdrawal alert sync error: {e}")
+    out = []
+    for w in await db.withdrawals.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(50):
+        stage = _wd_stage(w)
+        if stage and stage != w.get("notified_stage"):
+            await db.withdrawals.update_one({"id": w["id"]}, {"$set": {"notified_stage": stage}})
+            out.append({"id": w["id"], "stage": stage, "coin": w["coin"], "amount": w["amount"],
+                        "net": w.get("network"), "tx_hash": w.get("tx_hash"), "address": w.get("address")})
+    return out
+
+
 @api_router.get("/wallet/deposit-alerts")
 async def deposit_alerts(user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc).timestamp()
-    if OXAPAY_KEY and now - _ALERT_SYNC.get(user["id"], 0) >= 30:
+    sync = now - _ALERT_SYNC.get(user["id"], 0) >= 30
+    if sync:
         _ALERT_SYNC[user["id"]] = now
+    withdrawals = await _withdrawal_alerts(user["id"], sync)
+    if OXAPAY_KEY and sync:
         addrs = await db.static_addresses.find({"user_id": user["id"]}).to_list(20)
         async with httpx.AsyncClient(timeout=10) as hc:
             for sa in addrs:
@@ -903,7 +939,7 @@ async def deposit_alerts(user: dict = Depends(get_current_user)):
                                              {"$set": {"notified": True}})
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"alerts": [{k: a.get(k) for k in ("tx_hash", "coin", "net", "amount", "created_at")} for a in alerts],
-            "balances": (wallet or {}).get("balances")}
+            "withdrawals": withdrawals, "balances": (wallet or {}).get("balances")}
 
 
 @api_router.post("/wallet/deposit-address/{coin}/check")
@@ -1566,6 +1602,8 @@ async def startup():
         await db.static_addresses.update_many({"coin": c, "net": {"$exists": False}}, {"$set": {"net": n}})
     await db.static_addresses.create_index([("user_id", 1), ("coin", 1), ("net", 1)], unique=True)
     await db.static_deposits.update_many({"notified": {"$exists": False}}, {"$set": {"notified": True}})
+    async for w in db.withdrawals.find({"notified_stage": {"$exists": False}}, {"id": 1, "status": 1, "refunded": 1}):
+        await db.withdrawals.update_one({"id": w["id"]}, {"$set": {"notified_stage": _wd_stage(w)}})
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@apexodds.io").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})

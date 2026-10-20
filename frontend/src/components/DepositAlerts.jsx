@@ -1,27 +1,41 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { ArrowDownToLine, ExternalLink } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Undo2, ExternalLink } from "lucide-react";
 import { api, COIN_META, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 
-function DepositToast({ a }) {
+const WD_STAGE = {
+  sent: { title: "Withdrawal sent", sub: "Approved & broadcast on-chain", Icon: ArrowUpFromLine, tone: "amber" },
+  confirmed: { title: "Withdrawal confirmed", sub: "Delivered to your wallet", Icon: CheckCircle2, tone: "emerald" },
+  refunded: { title: "Withdrawal refunded", sub: "Returned to your balance", Icon: Undo2, tone: "red" },
+};
+const TONE = {
+  emerald: { border: "border-emerald-500/40", glow: "rgba(16,185,129,0.5)", bg: "bg-emerald-500/15", text: "text-emerald-400" },
+  amber: { border: "border-amber-500/40", glow: "rgba(245,158,11,0.45)", bg: "bg-amber-500/15", text: "text-amber-400" },
+  red: { border: "border-red-500/40", glow: "rgba(239,68,68,0.45)", bg: "bg-red-500/15", text: "text-red-400" },
+};
+
+function AlertToast({ a, kind, title, sub, Icon, tone, sign }) {
   const url = explorerUrl(a.coin, a.tx_hash, a.net);
+  const t = TONE[tone];
   return (
-    <div data-testid="deposit-alert" className="w-[340px] bg-[#12141C] border border-emerald-500/40 rounded-xl p-4 shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)]">
+    <div data-testid={`${kind}-alert`} className={`w-[340px] bg-[#12141C] border ${t.border} rounded-xl p-4`}
+      style={{ boxShadow: `0 10px 40px -10px ${t.glow}` }}>
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
-          <ArrowDownToLine size={17} className="text-emerald-400" />
+        <div className={`w-9 h-9 rounded-full ${t.bg} flex items-center justify-center shrink-0`}>
+          <Icon size={17} className={t.text} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-emerald-400">Deposit received</p>
-          <p className="font-mono text-lg font-bold text-white" data-testid="deposit-alert-amount">
-            +{fmtCrypto(a.amount, a.coin)} <span style={{ color: COIN_META[a.coin]?.color }}>{a.coin}</span>
+          <p className={`text-[11px] font-mono uppercase tracking-[0.2em] ${t.text}`} data-testid={`${kind}-alert-title`}>{title}</p>
+          <p className="font-mono text-lg font-bold text-white" data-testid={`${kind}-alert-amount`}>
+            {sign}{fmtCrypto(a.amount, a.coin)} <span style={{ color: COIN_META[a.coin]?.color }}>{a.coin}</span>
           </p>
           <Usd amount={a.amount} coin={a.coin} className="text-xs text-zinc-400" />
+          {sub && <p className="text-[11px] text-zinc-500 mt-0.5">{sub}</p>}
           {url && (
-            <a href={url} target="_blank" rel="noreferrer" data-testid="deposit-alert-tx-link"
+            <a href={url} target="_blank" rel="noreferrer" data-testid={`${kind}-alert-tx-link`}
               className="mt-2 flex items-center gap-1.5 text-xs font-mono text-emerald-300 hover:text-emerald-200">
               <span className="truncate">{a.tx_hash.slice(0, 10)}…{a.tx_hash.slice(-6)}</span>
               <ExternalLink size={12} className="shrink-0" />
@@ -40,9 +54,15 @@ export function DepositAlerts() {
     const poll = async () => {
       try {
         const { data } = await api.get("/wallet/deposit-alerts");
-        if (!data.alerts.length) return;
+        const wds = data.withdrawals || [];
+        if (!data.alerts.length && !wds.length) return;
         if (data.balances) setBalances(data.balances);
-        data.alerts.forEach((a) => toast.custom(() => <DepositToast a={a} />, { duration: 12000 }));
+        data.alerts.forEach((a) => toast.custom(() => (
+          <AlertToast a={a} kind="deposit" title="Deposit received" Icon={ArrowDownToLine} tone="emerald" sign="+" />
+        ), { duration: 12000 }));
+        wds.forEach((w) => toast.custom(() => (
+          <AlertToast a={w} kind="withdrawal" {...WD_STAGE[w.stage]} sign={w.stage === "refunded" ? "+" : "-"} />
+        ), { duration: 12000 }));
       } catch { /* retry next tick */ }
     };
     poll();

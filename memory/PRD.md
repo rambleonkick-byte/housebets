@@ -74,3 +74,7 @@
 - `GET /api/wallet/deposit-alerts`: syncs the user's static addresses with OxaPay (throttled 30s/user), returns un-notified confirmed deposits from `static_deposits` (notified=false) and marks them notified; returns fresh balances.
 - Global `DepositAlerts` component (App.js) polls every 15s while logged in — works on any page, wallet open or not. Shows a custom toast: amount + coin, ≈USD, and the tx hash linking to the right explorer (`explorerUrl` in lib/api.js, USDT by network ERC20/TRC20). Header balance updates instantly.
 - Verified: signed webhook for 25 USDT → popup on login with Etherscan link (test data cleaned up).
+
+## Withdrawal Alerts (2026-06)
+- `/api/wallet/deposit-alerts` now also returns `withdrawals` alerts. Stages: `sent` (approved & broadcast: processing/confirming), `confirmed`, `refunded` (rejected/failed). Each withdrawal stores `notified_stage`; an alert fires once per stage change. In-flight payouts are synced with OxaPay (throttled 30s/user). Existing withdrawals backfilled at startup.
+- Same global poller shows a toast per stage (amber sent / green confirmed / red refunded) with amount, ≈USD and explorer tx link. Verified with seeded confirmed withdrawal (cleaned up).
