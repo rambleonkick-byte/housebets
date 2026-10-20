@@ -1,0 +1,29 @@
+{
+  "summary": "Backend-only test of the OxaPay static-address currency fix (_credit_static_txs / POST /api/oxapay/webhook). Ran 9 pytest cases against the public URL with real HMAC-SHA512 signatures, using a new test user and a TEST static_addresses doc (coin SOL). All 9 passed, on two separate runs. Results: USDT sent to a SOL address credits USDT +200 and leaves SOL unchanged, and both static_deposits and transactions record coin USDT. Re-sending the webhook is deduped by the unique tx_hash index. currency SOL 1.5 credits SOL. A missing currency falls back to the address coin (SOL). Lowercase 'usdt' is uppercased and credited. Unsupported 'TRX' credits nothing and writes no static_deposits row. Status 'pending' is not credited. A bad HMAC returns 401. The USD total worked out from /api/wallet x /api/prices is about $210 USDT plus 2 SOL, not $30k. Frontend not tested (the request said backend only). All test data was removed; only admin@apexodds.io and dhensley727@icloud.com remain.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_credit_static_txs", "issue": "Credits sent_amount before received_amount. If OxaPay deducts fees, received_amount is the net amount, so this could over-credit by the fee. Consider using received_amount first."},
+      {"endpoint": "data hygiene", "issue": "There are 4 orphan wallet docs whose user_id matches no user (6ad759cc..., 6ad75bb5..., 6ad75cfd..., 6ad75da6...). They are left over from the earlier DB cleanup, not from this run. I did not delete them."},
+      {"endpoint": "dhensley727@icloud.com wallet (read only)", "issue": "The wallet still holds legacy simulated starting balances (BTC 0.05, ETH 0.8, USDT 1479, SOL 15.096). Its only real static deposit is 0.0959 SOL. STARTING_BALANCES is now all 0, but these old demo balances still inflate the user's USD total. It also suggests the 'large balance' complaint may come partly from the old demo seed, not only from the currency bug. Main agent should check with the user whether to reset this wallet. I did not touch it."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_static_deposit_currency.py", "/app/test_reports/pytest/pytest_static_deposit.xml"],
+  "action_items": [
+    "Optional: credit received_amount (net of fees) instead of sent_amount in _credit_static_txs",
+    "Decide with the user whether to reset dhensley727's legacy demo balances (BTC 0.05 / ETH 0.8 / USDT 1479 / SOL 15) to the real deposits",
+    "Optional: delete the 4 orphan wallet docs"
+  ],
+  "critical_code_review_comments": [
+    "Fix is correct: coin = (tx.currency or sa.coin).upper(), unsupported coins skipped, dedupe relies on the unique static_deposits.tx_hash index (confirmed present)",
+    "Users are stored with ObjectId _id (no 'id' field), so cleanup must match users by _id or email",
+    "server.py is 2800+ lines; it should be split into modules"
+  ],
+  "updated_files": ["/app/backend/tests/test_static_deposit_currency.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "not tested"},
+  "seed_data_creation": "None persisted. Each run creates test_static_<run>@example.com plus a TEST-TRACK-<run> static address, then deletes them on teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run with: pytest /app/backend/tests/test_static_deposit_currency.py (self-cleaning; pytest.ini adds xdist). The webhook HMAC is hex HMAC-SHA512 of the raw body with OXAPAY_MERCHANT_API_KEY."
+}

@@ -989,7 +989,7 @@ async def _credit_static_txs(sa, txs) -> float:
             continue
         try:
             await db.static_deposits.insert_one({"tx_hash": h, "user_id": sa["user_id"], "coin": coin,
-                                                 "net": sa.get("net"), "amount": amt, "track_id": sa["track_id"],
+                                                 "net": sa.get("net"), "amount": amt, "track_id": sa["track_id"], "address_coin": sa["coin"],
                                                  "notified": False, "created_at": now_iso()})
         except DuplicateKeyError:
             continue

@@ -195,3 +195,7 @@
 ## 10% Lossback (2026-06)
 - Sports bets only. When `auto_settle` marks a bet lost, 10% of the stake (`LOSSBACK_RATE`) goes straight to the wallet as real balance with no cap. The amount is saved as `bets.lossback` and logged as a "lossback" transaction. Affiliate NGR subtracts lossback. Bet history shows a "10% lossback credited" line, and the wallet lists lossback as a plus.
 - Lossback toast (2026-06): each lossback saves a "lossback" notification (key lb:{bet_id}). `/wallet/deposit-alerts` now runs `auto_settle` on its 30s sync, so bets settle while the player is browsing, and returns `lossbacks`, each only once. DepositAlerts shows a "10% LOSSBACK +X COIN — You got X COIN back on your losing bet" pop-up, and the notification bell lists it too.
+
+## Bug fix: wrong-coin static deposits (2026-06)
+- Prod user lilbabyrollbit@gmail.com sent ~200 USDT (Solana SPL) to their SOL static address and was credited 200.24 SOL (about $30k). `_credit_static_txs` now credits `tx.currency` (uppercased) when it is a supported coin, skips unsupported currencies, falls back to the address coin when currency is missing, and records `address_coin` on static_deposits. Tested 9/9 (iteration_15).
+- The PROD balance correction still has to be done by the admin through the panel: remove 200.242908 SOL and add 200.242908 USDT for that user.
