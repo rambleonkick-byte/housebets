@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Undo2, ExternalLink } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Undo2, ExternalLink, HandCoins } from "lucide-react";
 import { api, COIN_META, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto } from "@/lib/format";
@@ -15,6 +15,7 @@ export const WD_STAGE = {
 export const TONE = {
   emerald: { border: "border-emerald-500/40", glow: "rgba(16,185,129,0.5)", bg: "bg-emerald-500/15", text: "text-emerald-400" },
   amber: { border: "border-amber-500/40", glow: "rgba(245,158,11,0.45)", bg: "bg-amber-500/15", text: "text-amber-400" },
+  sky: { border: "border-sky-500/40", glow: "rgba(14,165,233,0.45)", bg: "bg-sky-500/15", text: "text-sky-400" },
   red: { border: "border-red-500/40", glow: "rgba(239,68,68,0.45)", bg: "bg-red-500/15", text: "text-red-400" },
 };
 
@@ -57,7 +58,11 @@ export function DepositAlerts() {
       try {
         const { data } = await api.get("/wallet/deposit-alerts");
         const wds = data.withdrawals || [];
-        if (!data.alerts.length && !wds.length) return;
+        const cos = data.cashouts || [];
+        if (!data.alerts.length && !wds.length && !cos.length) return;
+        cos.forEach((c) => toast.custom(() => (
+          <AlertToast a={c} kind="cashout" title="Auto cash out" sub="Your target was hit — winnings added" Icon={HandCoins} tone="sky" sign="+" />
+        ), { duration: 12000 }));
         if (data.balances) setBalances(data.balances);
         qc.invalidateQueries({ queryKey: ["notifications"] });
         data.alerts.forEach((a) => toast.custom(() => (

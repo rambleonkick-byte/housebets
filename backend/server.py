@@ -470,6 +470,7 @@ async def list_sports():
 async def get_odds(league: Optional[str] = None):
     metas = [m for m in SGO_LEAGUES if m["group"] == league] if league else SGO_LEAGUES
     out = await _fetch_sgo_sequential(metas)
+    _kick_auto_cashouts()
     out.sort(key=lambda e: (0 if e["state"] == "in" else 1 if e["state"] == "pre" else 2, e.get("start") or ""))
     return {"events": out}
 
@@ -926,7 +927,7 @@ _ALERT_SYNC = {}
 
 async def _save_notification(user_id, kind, a, stage=None, key_id=None, created_at=None):
     from pymongo.errors import DuplicateKeyError
-    key = f"wd:{key_id}:{stage}" if kind == "withdrawal" else f"dep:{a.get('tx_hash')}"
+    key = f"wd:{key_id}:{stage}" if kind == "withdrawal" else f"co:{key_id}" if kind == "cashout" else f"dep:{a.get('tx_hash')}"
     try:
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()), "key": key, "user_id": user_id, "kind": kind, "stage": stage,
@@ -989,6 +990,11 @@ async def deposit_alerts(user: dict = Depends(get_current_user)):
     if sync:
         _ALERT_SYNC[user["id"]] = now
     withdrawals = await _withdrawal_alerts(user["id"], sync)
+    _kick_auto_cashouts()
+    cashouts = await db.notifications.find({"user_id": user["id"], "kind": "cashout", "alerted": {"$ne": True}},
+                                           {"_id": 0, "key": 0}).to_list(20)
+    if cashouts:
+        await db.notifications.update_many({"id": {"$in": [n["id"] for n in cashouts]}}, {"$set": {"alerted": True}})
     if OXAPAY_KEY and sync:
         addrs = await db.static_addresses.find({"user_id": user["id"]}).to_list(20)
         async with httpx.AsyncClient(timeout=10) as hc:
@@ -1008,7 +1014,7 @@ async def deposit_alerts(user: dict = Depends(get_current_user)):
         await _save_notification(user["id"], "withdrawal", w, stage=w["stage"], key_id=w["id"])
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"alerts": [{k: a.get(k) for k in ("tx_hash", "coin", "net", "amount", "created_at")} for a in alerts],
-            "withdrawals": withdrawals, "balances": (wallet or {}).get("balances")}
+            "withdrawals": withdrawals, "cashouts": cashouts, "balances": (wallet or {}).get("balances")}
 
 
 @api_router.post("/wallet/deposit-address/{coin}/check")
@@ -1385,6 +1391,77 @@ async def cashout_quotes(user: dict = Depends(get_current_user)):
     return {"quotes": {b["id"]: _cashout_value(b, events) for b in open_bets}}
 
 
+async def _do_cashout(b, value, auto=False) -> bool:
+    res = await db.bets.update_one({"id": b["id"], "status": "open"},
+                                   {"$set": {"status": "cashed_out", "cashout_amount": value, "settled_at": now_iso(),
+                                             "auto_cashed": auto}})
+    if not res.modified_count:
+        return False
+    await db.wallets.update_one({"user_id": b["user_id"]}, {"$inc": {f"balances.{b['coin']}": value}})
+    await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": b["user_id"], "type": "cashout",
+                                      "coin": b["coin"], "amount": value, "created_at": now_iso(),
+                                      "hash": "0x" + uuid.uuid4().hex[:24]})
+    if auto:
+        await _save_notification(b["user_id"], "cashout", {"coin": b["coin"], "amount": value}, key_id=b["id"])
+    return True
+
+
+_AUTO_CO = {"ts": 0.0, "running": False}
+
+
+async def _run_auto_cashouts():
+    if _AUTO_CO["running"]:
+        return
+    _AUTO_CO["running"] = True
+    try:
+        bets = await db.bets.find({"status": "open", "auto_cashout": {"$gt": 0}}, {"_id": 0}).to_list(1000)
+        if not bets:
+            return
+        events = await _events_index()
+        for b in bets:
+            value = _cashout_value(b, events)
+            if value and value >= b["auto_cashout"] and await _do_cashout(b, value, auto=True):
+                logger.info(f"auto cash-out bet {b['id']} at {value} {b['coin']}")
+    except Exception as e:
+        logger.warning(f"auto cash-out run failed: {e}")
+    finally:
+        _AUTO_CO["running"] = False
+
+
+def _kick_auto_cashouts():
+    now = datetime.now(timezone.utc).timestamp()
+    if now - _AUTO_CO["ts"] >= 20:
+        _AUTO_CO["ts"] = now
+        asyncio.create_task(_run_auto_cashouts())
+
+
+class AutoCashoutInput(BaseModel):
+    target: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
+
+
+@api_router.post("/bets/{bet_id}/auto-cashout")
+async def set_auto_cashout(bet_id: str, body: AutoCashoutInput, user: dict = Depends(get_current_user)):
+    b = await db.bets.find_one({"id": bet_id, "user_id": user["id"], "status": "open"}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=400, detail="Only open bets can use auto cash out")
+    if body.target is not None and body.target >= b["potential_payout"] * CASHOUT_MARGIN:
+        raise HTTPException(status_code=400, detail="Target must be below the maximum cash out value")
+    await db.bets.update_one({"id": bet_id}, {"$set": {"auto_cashout": body.target}})
+    _kick_auto_cashouts()
+    return {"auto_cashout": body.target}
+
+
+@api_router.post("/cron/auto-cashout")
+async def cron_auto_cashout(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    auth = request.headers.get("authorization", "")
+    expected = os.environ.get("WEBHOOK_CRON_SECRET", "")
+    if not expected or not auth.startswith("Bearer ") or not hmac.compare_digest(auth[7:], expected):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    asyncio.create_task(_run_auto_cashouts())
+    return {"accepted": True, "run_id": request.headers.get("x-webhook-id")}
+
+
 class CashoutInput(BaseModel):
     expected: float = Field(gt=0, allow_inf_nan=False)
 
@@ -1399,14 +1476,8 @@ async def cashout_bet(bet_id: str, body: CashoutInput, user: dict = Depends(get_
         raise HTTPException(status_code=409, detail={"msg": "Cash out is suspended for this bet right now", "value": None})
     if value < body.expected * 0.995:
         raise HTTPException(status_code=409, detail={"msg": "Cash out value changed", "value": value})
-    res = await db.bets.update_one({"id": bet_id, "status": "open"},
-                                   {"$set": {"status": "cashed_out", "cashout_amount": value, "settled_at": now_iso()}})
-    if not res.modified_count:
+    if not await _do_cashout(b, value):
         raise HTTPException(status_code=400, detail="This bet can no longer be cashed out")
-    await db.wallets.update_one({"user_id": user["id"]}, {"$inc": {f"balances.{b['coin']}": value}})
-    await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"], "type": "cashout",
-                                      "coin": b["coin"], "amount": value, "created_at": now_iso(),
-                                      "hash": "0x" + uuid.uuid4().hex[:24]})
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"amount": value, "balances": wallet["balances"]}
 

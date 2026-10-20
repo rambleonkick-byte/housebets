@@ -37,6 +37,18 @@ export function BetHistoryModal({ open, onClose }) {
     return () => clearInterval(t);
   }, [open, hasOpen]);
 
+  const setAuto = async (b, target) => {
+    try {
+      const { data } = await api.post(`/bets/${b.id}/auto-cashout`, { target });
+      setBets((prev) => prev.map((x) => (x.id === b.id ? { ...x, auto_cashout: data.auto_cashout } : x)));
+      toast.success(target ? `Auto cash out set at ${fmtCrypto(target, b.coin)} ${b.coin}` : "Auto cash out removed");
+      return true;
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+      return false;
+    }
+  };
+
   const cashout = async (b) => {
     try {
       const { data } = await api.post(`/bets/${b.id}/cashout`, { expected: quotes[b.id] });
@@ -109,13 +121,13 @@ export function BetHistoryModal({ open, onClose }) {
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-[#1E2234]">
                         <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtCrypto(b.stake, b.coin)} {b.coin}</span> <Usd amount={b.stake} coin={b.coin} prefix="(" />{")"}</span>
                         <span className="text-zinc-500">
-                          {b.status === "cashed_out" ? "Cashed out" : b.status === "won" ? "Payout" : "To win"}{" "}
+                          {b.status === "cashed_out" ? (b.auto_cashed ? "Auto cashed out" : "Cashed out") : b.status === "won" ? "Payout" : "To win"}{" "}
                           <span className={`font-mono ${b.status === "won" ? "text-emerald-400" : b.status === "cashed_out" ? "text-sky-400" : "text-zinc-300"}`}>
                             {fmtCrypto(b.status === "cashed_out" ? b.cashout_amount : b.potential_payout, b.coin)} {b.coin}
                           </span> <Usd amount={b.status === "cashed_out" ? b.cashout_amount : b.potential_payout} coin={b.coin} prefix="(" />{")"}
                         </span>
                       </div>
-                      {b.status === "open" && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} />}
+                      {b.status === "open" && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />}
                     </div>
                   );
                 })

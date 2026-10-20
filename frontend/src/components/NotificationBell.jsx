@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, ArrowDownToLine, ExternalLink } from "lucide-react";
+import { Bell, ArrowDownToLine, ExternalLink, HandCoins } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { api, COIN_META, explorerUrl } from "@/lib/api";
 import { fmtCrypto } from "@/lib/format";
@@ -15,8 +15,9 @@ function timeAgo(iso) {
 }
 
 function NotificationRow({ n }) {
-  const dep = n.kind === "deposit";
-  const meta = dep ? { title: "Deposit received", Icon: ArrowDownToLine, tone: "emerald" } : WD_STAGE[n.stage] || WD_STAGE.sent;
+  const dep = n.kind === "deposit" || n.kind === "cashout";
+  const meta = n.kind === "cashout" ? { title: "Auto cash out", Icon: HandCoins, tone: "sky" }
+    : n.kind === "deposit" ? { title: "Deposit received", Icon: ArrowDownToLine, tone: "emerald" } : WD_STAGE[n.stage] || WD_STAGE.sent;
   const t = TONE[meta.tone];
   const url = explorerUrl(n.coin, n.tx_hash, n.net);
   const sign = dep || n.stage === "refunded" ? "+" : "-";
@@ -93,7 +94,7 @@ export function NotificationBell() {
           {items.length === 0 ? (
             <div data-testid="notifications-empty" className="py-12 text-center">
               <Bell size={22} className="mx-auto text-zinc-600 mb-2" />
-              <p className="text-sm text-zinc-500">No deposits or withdrawals yet.</p>
+              <p className="text-sm text-zinc-500">No notifications yet.</p>
             </div>
           ) : items.map((n) => <NotificationRow key={n.id} n={n} />)}
         </div>

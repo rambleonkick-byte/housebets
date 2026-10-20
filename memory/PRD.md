@@ -110,3 +110,9 @@
 - `GET /api/bets/cashout-quotes` → live offer per open bet: `potential_payout / Π(current odds of unsettled legs) × 0.95` (CASHOUT_MARGIN). Finished-won legs count as 1.0; any lost leg, missing event or vanished market → null (suspended). Capped at 95% of potential payout.
 - `POST /api/bets/{id}/cashout {expected}` re-prices server-side; 409 with new value if it dropped >0.5%; atomic status flip open→cashed_out, credits wallet, `cashout` transaction. auto_settle now only settles if still open (no double pay).
 - My Bets modal: Cash out button with live value + USD (refresh 15s), two-tap confirm, "unavailable" state, Cashed out status/filter. Verified backend math (1.8→1.5 single = 1.14; parlay with won leg = 1.71), double-cashout blocked, UI flow with mocks.
+
+## Auto Cash Out (2026-06)
+- `POST /api/bets/{id}/auto-cashout {target|null}` sets/clears `bets.auto_cashout` (must be < 95% of potential payout).
+- `_run_auto_cashouts()` checks all open bets with a target against live cash-out value and cashes out (`_do_cashout(auto=True)`, `auto_cashed: true`) when value ≥ target. Triggered (throttled 20s) whenever the odds feed or alert poll is hit, plus platform cron backstop `.emergent/crons.yml` → `POST /api/cron/auto-cashout` every 15 min (Bearer `WEBHOOK_CRON_SECRET` in backend/.env, constant-time check, acks immediately).
+- Auto cash outs create a `cashout` notification (bell) and a sky-blue pop-up via `/api/wallet/deposit-alerts` → `cashouts` (alerted once).
+- UI (My Bets): "Set auto cash out" → target input (prefilled +25%), active target chip with Edit/remove; "Auto cashed out" label. Verified: validation, cron 401s, trigger at 1.368 ≥ 1.3, single alert, UI flow.

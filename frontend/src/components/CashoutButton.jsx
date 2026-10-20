@@ -1,19 +1,24 @@
 import { useState } from "react";
 import { HandCoins, Loader2, Lock } from "lucide-react";
+import { AutoCashout } from "@/components/AutoCashout";
 import { fmtCrypto } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 
-export function CashoutButton({ bet, value, onCashout }) {
+export function CashoutButton({ bet, value, onCashout, onSetAuto }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
 
   if (value === undefined) return null;
+  const auto = <AutoCashout bet={bet} value={value} onSave={onSetAuto} />;
   if (!value) {
     return (
+      <>
       <div data-testid={`cashout-suspended-${bet.id}`}
         className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 border border-dashed border-[#2A2F45] rounded-lg py-2">
         <Lock size={12} /> Cash out unavailable right now
       </div>
+      {auto}
+      </>
     );
   }
   const go = async () => {
@@ -24,6 +29,7 @@ export function CashoutButton({ bet, value, onCashout }) {
     setConfirm(false);
   };
   return (
+    <>
     <button data-testid={`cashout-button-${bet.id}`} onClick={go} disabled={busy}
       className={`mt-2 w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-60 ${
         confirm ? "bg-sky-500 text-black" : "bg-sky-500/10 border border-sky-500/30 text-sky-300 hover:bg-sky-500/20"}`}>
@@ -36,5 +42,7 @@ export function CashoutButton({ bet, value, onCashout }) {
         <Usd amount={value} coin={bet.coin} prefix="(" className={confirm ? "text-black/60" : "text-sky-300/60"} />{")"}
       </span>
     </button>
+    {auto}
+    </>
   );
 }
