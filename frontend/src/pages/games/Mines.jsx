@@ -4,6 +4,7 @@ import { Gem, Bomb } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { BetControls, useGameBase, GameLayout, PlayButton, TILE, PILL_BTN, FieldLabel, StatBox } from "@/components/casino/GameKit";
 import { toast } from "sonner";
+import { sfx } from "@/lib/sfx";
 
 const MINE = "bg-gradient-to-br from-red-400 via-rose-600 to-red-900 text-white border-red-300/40 shadow-[0_5px_0_#7F1D1D,0_0_22px_rgba(239,68,68,0.6),inset_0_2px_3px_rgba(255,255,255,0.35)]";
 
@@ -42,9 +43,11 @@ export function Mines() {
     try {
       const { data } = await api.post("/casino/mines/reveal", { game_id: game.game_id, tile });
       if (data.hit) {
+        sfx.bomb();
         setMines(data.mines); setStatus("lost"); g.setBalances(data.balances);
         toast.error("Boom! You hit a mine");
       } else {
+        sfx.gem();
         setRevealed(data.revealed); setMult(data.multiplier);
         setNextMult(data.next_multiplier); setCashValue(data.cashout_value);
       }
@@ -75,7 +78,7 @@ export function Mines() {
             <FieldLabel>Mines</FieldLabel>
             <div className="flex gap-1.5">
               {[1, 3, 5, 10, 24].map((m) => (
-                <button key={m} data-testid={`mines-count-${m}`} disabled={active || loading} onClick={() => setMineCount(m)}
+                <button key={m} data-testid={`mines-count-${m}`} disabled={active || loading} onClick={() => { sfx.click(); setMineCount(m); }}
                   className={PILL_BTN(mineCount === m) + " font-mono"}>{m}</button>
               ))}
             </div>

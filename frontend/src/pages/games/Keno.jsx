@@ -4,6 +4,7 @@ import { Eraser, Shuffle, Gem } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { BetControls, useGameBase, GameLayout, PlayButton, TILE, StatBox } from "@/components/casino/GameKit";
 import { toast } from "sonner";
+import { sfx } from "@/lib/sfx";
 
 const KENO_TABLE = {
   1: [0, 1.9], 2: [0, 0, 4.5], 3: [0, 0, 1.4, 8], 4: [0, 0, 0, 2.2, 13],
@@ -42,6 +43,7 @@ export function Keno() {
 
   const toggle = (n) => {
     if (loading) return;
+    if (picks.includes(n)) sfx.unpick(); else if (picks.length < 10) sfx.pick();
     setPicks((p) => p.includes(n) ? p.filter((x) => x !== n) : p.length >= 10 ? p : [...p, n]);
     setDrawn([]); setResult(null);
   };
@@ -52,6 +54,7 @@ export function Keno() {
       const x = 1 + Math.floor(Math.random() * 40);
       if (!picked.includes(x)) picked.push(x);
     }
+    sfx.pick();
     setPicks(picked); setDrawn([]); setResult(null);
   };
 
@@ -63,11 +66,11 @@ export function Keno() {
     setLoading(true); setDrawn([]); setResult(null);
     try {
       const { data } = await api.post("/casino/keno", { coin: g.coin, stake: g.stakeNum, picks });
-      data.drawn.forEach((n, i) => setTimeout(() => setDrawn((d) => [...d, n]), i * 110));
+      data.drawn.forEach((n, i) => setTimeout(() => { (picks.includes(n) ? sfx.hit : sfx.draw)(); setDrawn((d) => [...d, n]); }, i * 110));
       setTimeout(() => {
         g.setBalances(data.balances); setResult(data);
         if (data.multiplier > 1) setWin({ multiplier: data.multiplier, payout: data.payout, coin: g.coin });
-        else toast(`${data.hits} hits · ${data.multiplier}×`);
+        else { sfx.lose(); toast(`${data.hits} hits · ${data.multiplier}×`); }
         setLoading(false);
       }, data.drawn.length * 110 + 250);
     } catch (e) {

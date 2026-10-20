@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, Volume2, VolumeX } from "lucide-react";
+import { sfx } from "@/lib/sfx";
 import { COIN_META } from "@/lib/api";
 import { fmtCrypto } from "@/lib/format";
 import { Usd } from "@/components/Usd";
@@ -37,7 +38,7 @@ export function PlayButton({ loading, icon, children, tone = "emerald", ...rest 
     amber: "bg-amber-400 hover:bg-amber-300 shadow-[0_4px_0_#B45309,0_8px_24px_rgba(245,158,11,0.35)]",
   };
   return (
-    <button {...rest} disabled={loading || rest.disabled}
+    <button {...rest} onClick={(e) => { sfx.bet(); rest.onClick?.(e); }} disabled={loading || rest.disabled}
       className={`w-full py-3.5 rounded-xl font-display font-black text-sm uppercase tracking-wider text-slate-950 flex items-center justify-center gap-2 transition-[transform,background-color,box-shadow] active:translate-y-1 active:shadow-none disabled:opacity-50 disabled:active:translate-y-0 ${tones[tone]}`}>
       {loading ? <Loader2 size={16} className="animate-spin" /> : icon}{children}
     </button>
@@ -60,7 +61,7 @@ export function BetControls({ coin, setCoin, stake, setStake, balance, disabled,
         <FieldLabel>Currency</FieldLabel>
         <div className="flex gap-1.5">
           {COINS.map((c) => (
-            <button key={c} data-testid={`game-coin-${c}`} disabled={disabled} onClick={() => setCoin(c)}
+            <button key={c} data-testid={`game-coin-${c}`} disabled={disabled} onClick={() => { sfx.click(); setCoin(c); }}
               className={PILL_BTN(coin === c) + " font-mono"}
               style={coin === c ? { color: COIN_META[c].color, borderColor: COIN_META[c].color } : undefined}>{c}</button>
           ))}
@@ -73,7 +74,7 @@ export function BetControls({ coin, setCoin, stake, setStake, balance, disabled,
             onChange={(e) => setStake(e.target.value)} placeholder="0.00"
             className="flex-1 min-w-0 bg-transparent px-3 py-2.5 font-mono text-sm text-white outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
           {[["½", "game-stake-half", () => (parseFloat(stake) || 0) / 2], ["2×", "game-stake-double", () => (parseFloat(stake) || 0) * 2], ["MAX", "game-stake-max", () => balance]].map(([l, id, f]) => (
-            <button key={id} data-testid={id} disabled={disabled} onClick={() => setStake(String(f()))}
+            <button key={id} data-testid={id} disabled={disabled} onClick={() => { sfx.click(); setStake(String(f())); }}
               className={`px-3 text-[11px] font-mono font-bold border-l border-[#2A2F45] bg-[#1A1D28] hover:bg-[#252A3B] disabled:opacity-50 transition-colors ${l === "MAX" ? "text-emerald-400" : "text-slate-300"}`}>{l}</button>
           ))}
         </div>
@@ -95,10 +96,22 @@ export function useGameBase() {
   return { user, setBalances, setAuthOpen, coin, setCoin, stake, setStake, balance, stakeNum };
 }
 
+export function MuteToggle() {
+  const [m, setM] = useState(sfx.isMuted());
+  useEffect(() => sfx.subscribe(setM), []);
+  return (
+    <button data-testid="game-sound-toggle" onClick={() => sfx.setMuted(!m)} aria-label={m ? "Unmute sounds" : "Mute sounds"}
+      className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${m ? "border-[#2A2F45] text-slate-500 hover:text-white" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}`}>
+      {m ? <VolumeX size={15} /> : <Volume2 size={15} />}
+    </button>
+  );
+}
+
 // Glowing win card over the board; auto-hides, click to dismiss.
 export function BigWin({ win, onClose }) {
   useEffect(() => {
     if (!win) return;
+    (win.multiplier >= 5 ? sfx.bigWin : sfx.win)();
     const t = setTimeout(onClose, 2600);
     return () => clearTimeout(t);
   }, [win, onClose]);
@@ -135,9 +148,12 @@ export function GameLayout({ title, tag, controls, children, footer, win, onWinC
           <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-emerald-400">ApexOdds Originals · {tag}</p>
           <h1 className="font-display text-3xl sm:text-4xl font-black tracking-tight text-white">{title}</h1>
         </div>
-        <span className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-3 py-1">
-          <ShieldCheck size={13} /> Provably fair
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-3 py-1">
+            <ShieldCheck size={13} /> Provably fair
+          </span>
+          <MuteToggle />
+        </div>
       </div>
       <div className="grid lg:grid-cols-[330px_1fr] gap-4 items-start">
         <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5 shadow-xl order-2 lg:order-1">{controls}</div>

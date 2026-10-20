@@ -4,6 +4,7 @@ import { Rocket } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { BetControls, useGameBase, GameLayout, PlayButton, FieldLabel, StatBox } from "@/components/casino/GameKit";
 import { toast } from "sonner";
+import { sfx } from "@/lib/sfx";
 
 export function Limbo() {
   const g = useGameBase();
@@ -34,9 +35,11 @@ export function Limbo() {
       timer.current = setInterval(() => {
         i++;
         setDisplay(1 + (end - 1) * Math.pow(i / steps, 2));
+        if (i % 2 === 0) sfx.tick(i / steps);
         if (i >= steps) {
           clearInterval(timer.current); setDisplay(end); setLast(data);
           setHistory((h) => [{ v: end, won: data.won }, ...h].slice(0, 8));
+          if (!data.won) sfx.lose();
           if (data.won) setWin({ multiplier: targetNum, payout: data.payout, coin: g.coin });
         }
       }, 20);

@@ -4,6 +4,7 @@ import { Dices } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { BetControls, useGameBase, GameLayout, PlayButton, PILL_BTN, FieldLabel, StatBox } from "@/components/casino/GameKit";
 import { toast } from "sonner";
+import { sfx } from "@/lib/sfx";
 
 function Track({ target, direction, last }) {
   const winLeft = direction === "over" ? target : 0;
@@ -54,6 +55,7 @@ export function Dice() {
       const { data } = await api.post("/casino/dice", { coin: g.coin, stake: g.stakeNum, target, direction });
       g.setBalances(data.balances);
       setLast({ ...data, nonce: Date.now() });
+      if (!data.won) setTimeout(sfx.lose, 350);
       if (data.won) setTimeout(() => setWin({ multiplier: data.payout / g.stakeNum, payout: data.payout, coin: g.coin }), 450);
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
@@ -70,7 +72,7 @@ export function Dice() {
             <FieldLabel>Direction</FieldLabel>
             <div className="flex gap-1.5">
               {["under", "over"].map((d) => (
-                <button key={d} data-testid={`dice-direction-${d}`} disabled={loading} onClick={() => setDirection(d)}
+                <button key={d} data-testid={`dice-direction-${d}`} disabled={loading} onClick={() => { sfx.click(); setDirection(d); }}
                   className={PILL_BTN(direction === d) + " capitalize"}>Roll {d} {d === "over" ? "▲" : "▼"}</button>
               ))}
             </div>
@@ -88,7 +90,7 @@ export function Dice() {
           <div className="relative">
             <Track target={target} direction={direction} last={last} />
             <input data-testid="dice-target-slider" type="range" min="2" max="98" step="1" value={target} disabled={loading}
-              onChange={(e) => setTarget(parseInt(e.target.value, 10))} aria-label="Dice target"
+              onChange={(e) => { const v = parseInt(e.target.value, 10); if (v % 4 === 0) sfx.tick(v / 100); setTarget(v); }} aria-label="Dice target"
               className="absolute inset-x-0 top-0 h-4 w-full opacity-0 cursor-pointer" />
           </div>
         </div>

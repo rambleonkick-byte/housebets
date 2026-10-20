@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { BetControls, useGameBase, GameLayout, PlayButton, PILL_BTN, FieldLabel } from "@/components/casino/GameKit";
 import { toast } from "sonner";
+import { sfx } from "@/lib/sfx";
 
 const RISKS = ["low", "medium", "high"];
 const ROWS = [8, 12, 16];
@@ -46,10 +47,12 @@ export function Plinko() {
     try {
       const { data } = await api.post("/casino/plinko", { coin: g.coin, stake: g.stakeNum, risk, rows });
       setBall({ id: Date.now(), xs: pathTo(data.bucket, rows) });
+      // peg ticks accelerate with the ease-in fall
+      for (let r = 1; r <= rows; r++) setTimeout(sfx.peg, DROP_MS * Math.sqrt(r / (rows + 1)));
       setTimeout(() => {
         g.setBalances(data.balances); setLanded(data.bucket);
         if (data.multiplier > 1) setWin({ multiplier: data.multiplier, payout: data.payout, coin: g.coin });
-        else toast(`${data.multiplier}× — ${data.payout} ${g.coin}`);
+        else { (data.multiplier >= 1 ? sfx.draw : sfx.lose)(); toast(`${data.multiplier}× — ${data.payout} ${g.coin}`); }
         setLoading(false);
       }, DROP_MS);
     } catch (e) {
@@ -67,7 +70,7 @@ export function Plinko() {
             <FieldLabel>Risk</FieldLabel>
             <div className="flex gap-1.5">
               {RISKS.map((r) => (
-                <button key={r} data-testid={`plinko-risk-${r}`} disabled={loading} onClick={() => setRisk(r)} className={PILL_BTN(risk === r) + " capitalize"}>{r}</button>
+                <button key={r} data-testid={`plinko-risk-${r}`} disabled={loading} onClick={() => { sfx.click(); setRisk(r); }} className={PILL_BTN(risk === r) + " capitalize"}>{r}</button>
               ))}
             </div>
           </div>
@@ -75,7 +78,7 @@ export function Plinko() {
             <FieldLabel>Rows</FieldLabel>
             <div className="flex gap-1.5">
               {ROWS.map((r) => (
-                <button key={r} data-testid={`plinko-rows-${r}`} disabled={loading} onClick={() => setRows(r)} className={PILL_BTN(rows === r) + " font-mono"}>{r}</button>
+                <button key={r} data-testid={`plinko-rows-${r}`} disabled={loading} onClick={() => { sfx.click(); setRows(r); }} className={PILL_BTN(rows === r) + " font-mono"}>{r}</button>
               ))}
             </div>
           </div>

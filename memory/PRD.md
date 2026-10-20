@@ -120,3 +120,7 @@
 ## Originals Redesign (2026-06)
 - Shared Stake-style kit in `components/casino/GameKit.jsx`: 3D bevelled `TILE` states (idle/picked violet/hit emerald gem/miss red/dim), `PILL_BTN`, `FieldLabel`, `StatBox`, chunky `PlayButton` (emerald/amber), restyled `BetControls` (inline ½ 2× MAX, USD), `GameLayout` (Originals tag, Provably fair badge, glowing board, optional footer) and `BigWin` overlay (multiplier + payout + USD, spring-in, auto-hide 2.6s, click to dismiss; shown only for wins >1×).
 - Keno: bevelled tiles, gem hits, red misses, payout table bar highlighting current hits. Mines: 3D tiles with flip reveal, gem/bomb glossy tiles, current/next stats. Dice: win-zone track (green/red), cube handle, floating roll bubble. Limbo: gradient count-up number, recent results strip, target/result chips. Plinko: glowing pegs, animated ball path to the server bucket, heat-map buckets.
+
+## Sound Effects (2026-06)
+- `lib/sfx.js`: Web Audio synthesised sounds (no files): click, pick/unpick, bet, draw, hit, gem, bomb (noise burst), peg, tick, lose, win, bigWin (≥5×). Mute stored in localStorage `apex_sfx_muted`, pub/sub for toggles.
+- Speaker toggle (`game-sound-toggle`) in every Originals header. Hooked into: coin/stake/option buttons, Play buttons, Keno picks + draw/hit reveal, Mines gem/bomb, Dice slider ticks + lose, Limbo count-up ticks + lose, Plinko peg ticks + landing, BigWin win/bigWin chimes. Verified sounds fire, mute persists across games, no console errors.
