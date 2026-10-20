@@ -2601,15 +2601,24 @@ async def _migrate_to_usd():
             usd = round(sum(float(av.get(c) or 0) * rates.get(c, 0) for c in av), 2)
             await db.affiliates.update_one({"_id": a["_id"]}, {"$set": {"available": {"USD": usd} if usd > 0 else {}}})
     for coll, stake_f in (("bj_games", "total_stake"), ("mine_games", "stake")):
-        async for g in db[coll].find({"status": "active", "coin": {"$in": list(CRYPTO_COINS)}}):
-            res = await db[coll].update_one({"_id": g["_id"], "status": "active"},
-                                            {"$set": {"status": "void", "void_reason": "usd_migration"}})
+        async for g in db[coll].find({"status": {"$in": ["active", "insurance"]}, "coin": {"$in": list(CRYPTO_COINS)}}):
+            res = await db[coll].update_one({"_id": g["_id"], "status": g["status"]},
+                                            {"$set": {"status": "void", "void_reason": "usd_migration", "open": False}})
             if res.modified_count:
                 usd = round(float(g.get(stake_f) or 0) * rates[g["coin"]], 2)
                 await db.wallets.update_one({"user_id": g["user_id"]}, {"$inc": {"balances.USD": usd}})
                 await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": g["user_id"], "type": "refund",
                                                   "coin": "USD", "amount": usd, "created_at": now_iso(),
                                                   "hash": f"usd-migration:{coll}:{g['id']}"})
+    await db.bj_games.update_many({"status": "void", "open": True}, {"$set": {"open": False}})
+    # freeze settled history in USD at migration prices so NGR/commission stays stable
+    for coll, fields in (("bets", ("stake", "potential_payout", "payout", "cashout_amount", "lossback")),
+                         ("casino_games", ("stake", "payout"))):
+        async for d in db[coll].find({"coin": {"$in": list(CRYPTO_COINS)}}):
+            r = rates[d["coin"]]
+            upd = {f: round(float(d[f]) * r, 2) for f in fields if isinstance(d.get(f), (int, float))}
+            await db[coll].update_one({"_id": d["_id"], "coin": d["coin"]},
+                                      {"$set": {**upd, "coin": "USD", "orig_coin": d["coin"], "usd_rate": r}})
     async for led in db.affiliate_ledger.find({"coin": {"$in": list(CRYPTO_COINS)}}):
         usd = round(float(led.get("credited") or 0) * rates[led["coin"]], 2)
         await db.affiliate_ledger.update_one({"affiliate_id": led["affiliate_id"], "player_id": led["player_id"], "coin": "USD"},

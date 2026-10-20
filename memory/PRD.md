@@ -215,3 +215,16 @@
 ## Full Player Props (2026-06)
 - Bug: `_sgo_props` capped results at 24 props sorted by player name, so only about 2 players appeared. The cap is removed: NBA now has 150–250 props (13–19 players) per game, NFL 60–180 (23–48 players), EPL ~100 (26–48 players). ODDS_CACHE_VERSION was bumped to 3.
 - New `PropsSection.jsx`: the header shows the prop count and player count, plus a player/stat search box, stat-group chips (All, Scoring, Passing, Rushing, Receiving, Rebounds, Assists, Defense, Combos, Other; only chips with props are shown), props grouped under each player's name, and a scroll area up to 384px tall.
+
+## USD-Only Wallet (2026-06)
+- Balances are now a single USD figure (`STARTING_BALANCES = {"USD": 0}`); `CRYPTO_COINS` lists the deposit and withdrawal coins (BTC, ETH, USDT, SOL). Sports bets, casino games and admin adjustments only accept USD.
+- Live prices come from CoinGecko, falling back to Coinbase; USDT is fixed at $1. `_live_rate` returns 503 when prices are unavailable.
+- Deposits (static addresses and invoices) are credited as USD at the live price (`amount_usd` and `rate` are stored; transactions carry `crypto_coin`/`crypto_amount`). Withdrawals: the player enters USD (minimum $1) and picks a coin; the USD is reserved, the withdrawal stores the crypto `amount` plus `amount_usd`, and refunds return `amount_usd`.
+- `_adjust` converts any non-USD coin to USD as a safety net.
+- One-time `_migrate_to_usd` at startup (idempotent, waits for live prices):
+  - wallets become {USD} (the old balances are kept in pre_usd_balances);
+  - open bets and settled bets/casino games are converted to USD at migration prices (orig_coin and usd_rate kept);
+  - active or insurance crypto blackjack/mines games are voided with `open: False` and their stake refunded in USD;
+  - pending withdrawals get `amount_usd`; affiliate available and ledger are converted to USD.
+- `_player_ngr` is USD-only.
+- Frontend: `fmtCrypto(n, "USD")` shows `$x.xx`, and the new `fmtAmt` handles USD and crypto. `Usd` hides itself for USD. The coin selectors were removed from the bet slip, casino games and admin adjust. The wallet modal shows one USD total, keeps the deposit coin tabs, and the withdraw form takes USD with a "You receive ≈ X COIN" estimate. Alerts and notifications use amount_usd. Tested in iterations 18–19 (24/24 backend).

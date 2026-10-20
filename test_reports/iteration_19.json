@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 19: retest of the USD-wallet fixes from iteration 18, plus a short regression. Backend: 24/24 pytest checks pass (8 new in tests/test_usd_fixes_it19.py plus 16 regression in tests/test_usd_wallet.py). Verified: withdrawals of $0.50, $0.001 and $0.99 return 400 'Minimum withdrawal is $1.00', and exactly $1 works. deposit-alerts returns amount_usd for deposits and withdrawals, and notifications store amount_usd. Admin users 'Withdrawn' is {USD:100} from amount_usd and drops back after a reject. Affiliate legacy USDT casino NGR plus USD NGR is valued in USD ($15), the ledger is USD only, and claim credits USD only. Dice, sportsbook bet, withdraw/reject refund and admin adjust all pass. Migration probe (tests/probe_migration_it19.py, seed, then backend restart, then verify): the crypto wallet, an active USDT bj hand and an active mine game were converted or voided and refunded in USD (20+10+3 = $33, correct), and the crypto affiliate_ledger row became a USD row. Found 1 HIGH bug: a voided bj hand keeps open=True, so the player is locked out of blackjack for good. The real user dhensley727 is affected now. Also found that bj hands in status 'insurance' are not migrated. Frontend (Playwright): the hero copy is correct. The deposit toast and notification read '+$41.48' with '0.0005 BTC' in small text and no ≈ line. The withdrawal-refunded toast and notification read '+$25.00 0.000301 BTC'. In bet history, USD rows show 'Stake $5.00' and 'To win $6.20' with no stray ')'; the legacy BTC row shows '0.0001 BTC ($8.29)', which is correct. The cashout button reads 'Cash out $4.75'. The admin queue headline is '$25.00' with '0.000301 BTC' beside it. The admin table and drawer show Withdrawn $25.00 with no duplicated $ line. Rejecting in the UI works, and the user sees $495 and gets the refund toast. A dice roll in the UI updates the $ balance correctly. All test users and their data were deleted. Admin USD is still 11175.03 and dhensley was not modified (read-only check).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "_migrate_to_usd (bj_games void) -> POST /api/casino/blackjack/deal", "issue": "The migration sets status='void' on active crypto bj hands but leaves open=True. The partial unique index bj_one_open_hand (open:true) then makes every later deal fail with a DuplicateKeyError, which returns 400 'Finish your current hand first'. GET /casino/blackjack/current returns {game:null}, so the user can never play blackjack again and cannot recover. Reproduced with a fresh user. The real user dhensley727 has exactly this doc now (bj_games id f9f5a173-7273-42bd-9e2e-62046a1d388d: status void, open True). Fix: add 'open': False to the $set in the migration, and add a one-time startup update_many({status:'void', open:true}, {$set:{open:false}}).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "_migrate_to_usd", "issue": "Only bj_games with status 'active' are voided. Crypto hands in status 'insurance' (also open) are skipped. The insurance, double and split actions then check and deduct balances.<crypto> (server.py ~2440/2455, using g['coin']), so they fail with insufficient balance. Include 'insurance' in the status filter."},
+      {"endpoint": "_player_ngr / affiliate ledger", "issue": "Legacy crypto NGR is re-valued at the current live price on every accrual, while the migrated ledger 'credited' was fixed at the migration-time price. If BTC rises, extra commission accrues on old activity; if it falls, accrual stalls. It would be better to freeze legacy rows at a USD value (for example store stake_usd and payout_usd during migration)."},
+      {"endpoint": "startup affiliate_earnings gap reconcile", "issue": "After the ledger is converted to USD, the next restart finds USD ledger credit with no USD affiliate_earnings, so it inserts a gap doc dated today. The affiliate daily chart then shows all past commission as today's. Cosmetic only; it does not change balances."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin withdrawal queue card", "issues": ["Shows '0.000301 BTC · BTC'. The network label repeats the coin for BTC. Very minor."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_usd_fixes_it19.py", "/app/backend/tests/test_usd_wallet.py", "/app/backend/tests/probe_migration_it19.py", "/app/backend/tests/seed_ui_it19.py", "/app/test_reports/pytest/pytest_it19.xml"],
+  "action_items": [
+    "HIGH: in _migrate_to_usd set open=False when voiding bj_games, and add a startup fix to clear open=True on void hands (this unblocks blackjack for dhensley727 right away)",
+    "Include status 'insurance' when migrating or voiding crypto bj_games",
+    "Optional: freeze legacy crypto NGR at a USD value so affiliate commission does not drift with live prices"
+  ],
+  "critical_code_review_comments": [
+    "bj_one_open_hand is keyed on the 'open' flag, so any code path that changes status without also setting open will lock the player out. Set open and status together everywhere.",
+    "The affiliate_ledger migration does $inc on the USD row and then a separate delete of the crypto row, which is not atomic. A crash between the two steps would double-credit on the next run.",
+    "server.py is about 2960 lines and should be split into modules (wallet, casino, affiliate, admin)."
+  ],
+  "updated_files": ["/app/backend/tests/test_usd_fixes_it19.py", "/app/backend/tests/probe_migration_it19.py", "/app/backend/tests/seed_ui_it19.py"],
+  "success_rate": {"backend": "24/24 pytest (100%); migration probe found 1 HIGH bug", "frontend": "100% of the retested fixes"},
+  "seed_data_creation": "Temporary test_it19, test_mig19 and test_ui19 users, plus their seeded bets, deposits, withdrawals, bj and mine games and ledger rows, were all deleted. No test_ users remain.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run tests/test_usd_fixes_it19.py and tests/test_usd_wallet.py. For migration, run 'python tests/probe_migration_it19.py seed', restart the backend, wait about 25s, then run 'verify' and 'cleanup'. Expect the 'deal' line to return 200 after the fix (it currently returns 400 'Finish your current hand first'). Note: the seeded insurance doc has no hands, so /current returning 500 for it is an artifact of the probe. Do not modify dhensley727; admin USD must stay 11175.03.",
+  "rca of the issue": "_migrate_to_usd only does $set {status:'void'}. bj_games.open was derived once at startup only for docs missing the field, so voided hands keep open=True and stay covered by the partial unique index. blackjack/deal checks status in [active, insurance], which passes, then insert_one hits the unique index and the code returns 'Finish your current hand first'."
+}
