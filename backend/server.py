@@ -2544,7 +2544,10 @@ async def set_affiliate_code(body: AffCodeInput, user: dict = Depends(get_curren
     code = body.code.upper()
     if await db.affiliates.find_one({"code": code, "user_id": {"$ne": user["id"]}}):
         raise HTTPException(status_code=400, detail="That code is taken")
-    await db.affiliates.update_one({"user_id": user["id"]}, {"$set": {"code": code}})
+    try:
+        await db.affiliates.update_one({"user_id": user["id"]}, {"$set": {"code": code}})
+    except Exception:
+        raise HTTPException(status_code=400, detail="That code is taken")
     return {"code": code}
 
 
