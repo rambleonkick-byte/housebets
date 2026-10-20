@@ -477,6 +477,15 @@ async def get_wallet(user: dict = Depends(get_current_user)):
     await ensure_wallet(user["id"])
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     txs = await db.transactions.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    payouts = await db.oxa_payouts.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
+    pmap = {p["track_id"]: p for p in payouts}
+    for t in txs:
+        h = t.get("hash", "")
+        tid = h.split(":", 1)[1] if (h.startswith("oxapay:") or h.startswith("oxapay-refund:")) else None
+        p = pmap.get(tid) if tid else None
+        if p:
+            t["payout"] = {"track_id": tid, "status": p.get("status"), "tx_hash": p.get("tx_hash"),
+                           "refunded": p.get("refunded", False), "network": p.get("network")}
     return {"balances": wallet["balances"], "usd_rates": COIN_USD, "transactions": txs}
 
 

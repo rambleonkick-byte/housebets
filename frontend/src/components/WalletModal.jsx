@@ -8,6 +8,22 @@ import { toast } from "sonner";
 
 const COINS = ["BTC", "ETH", "USDT", "SOL"];
 
+const EXPLORER = {
+  BTC: (h) => `https://blockchair.com/bitcoin/transaction/${h}`,
+  ETH: (h) => `https://etherscan.io/tx/${h}`,
+  USDT: (h) => `https://tronscan.org/#/transaction/${h}`,
+  SOL: (h) => `https://solscan.io/tx/${h}`,
+};
+const PAYOUT_TERMINAL = ["confirmed", "failed", "rejected", "canceled", "cancelled"];
+
+function payoutBadge(status, refunded) {
+  const s = (status || "").toLowerCase();
+  if (refunded || ["failed", "rejected", "canceled", "cancelled"].includes(s))
+    return { label: refunded ? "Refunded" : s, cls: "text-red-300 bg-red-500/10 border-red-500/30" };
+  if (s === "confirmed") return { label: "Confirmed", cls: "text-emerald-300 bg-emerald-500/10 border-emerald-500/30" };
+  return { label: s || "processing", cls: "text-amber-300 bg-amber-500/10 border-amber-500/30" };
+}
+
 export function WalletModal({ open, onClose }) {
   const { user, setBalances } = useAuth();
   const [tab, setTab] = useState("deposit");
@@ -21,6 +37,7 @@ export function WalletModal({ open, onClose }) {
   const [deposit, setDeposit] = useState(null);     // generated address payload
   const [oxaPolling, setOxaPolling] = useState(false);
   const pollRef = (typeof window !== "undefined") ? WalletModal._pollRef || (WalletModal._pollRef = { t: null }) : { t: null };
+  const payoutRef = (typeof window !== "undefined") ? WalletModal._payoutRef || (WalletModal._payoutRef = { t: null }) : { t: null };
 
   const load = async () => {
     const [{ data: w }, { data: c }] = await Promise.all([api.get("/wallet"), api.get("/payment/config")]);
@@ -28,9 +45,32 @@ export function WalletModal({ open, onClose }) {
     setCfg(c);
   };
   useEffect(() => { if (open) load(); }, [open]);
-  useEffect(() => () => { if (pollRef.t) clearInterval(pollRef.t); }, []);
+  useEffect(() => () => { if (pollRef.t) clearInterval(pollRef.t); if (payoutRef.t) clearInterval(payoutRef.t); }, []);
   // reset generated address when switching coin/tab
   useEffect(() => { setDeposit(null); setOxaPolling(false); if (pollRef.t) clearInterval(pollRef.t); }, [coin, tab]);
+
+  // keep pending withdrawal payouts up to date (status + tx hash)
+  useEffect(() => {
+    if (payoutRef.t) { clearInterval(payoutRef.t); payoutRef.t = null; }
+    if (!open || !wallet) return;
+    const pending = (wallet.transactions || [])
+      .filter((t) => t.payout && !t.payout.refunded && !PAYOUT_TERMINAL.includes((t.payout.status || "").toLowerCase()))
+      .map((t) => t.payout.track_id);
+    if (pending.length === 0) return;
+    const poll = async () => {
+      let changed = false;
+      for (const id of pending) {
+        try {
+          const { data } = await api.get(`/wallet/payout/status/${id}`);
+          if (PAYOUT_TERMINAL.includes((data.status || "").toLowerCase()) || data.refunded) changed = true;
+        } catch { /* keep polling */ }
+      }
+      if (changed) load();
+    };
+    poll();
+    payoutRef.t = setInterval(poll, 12000);
+    return () => { if (payoutRef.t) clearInterval(payoutRef.t); };
+  }, [open, wallet]);
 
   const startPolling = (trackId, amt) => {
     setOxaPolling(true);
@@ -240,14 +280,45 @@ export function WalletModal({ open, onClose }) {
                 <div className="px-4 pb-5">
                   <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-600 mb-2">Recent activity</p>
                   <div className="space-y-1.5" data-testid="wallet-transactions">
-                    {wallet.transactions.slice(0, 8).map((t) => (
-                      <div key={t.id} className="flex items-center justify-between text-sm bg-[#0E1017] rounded-md px-3 py-2">
-                        <span className="capitalize text-zinc-300">{t.type}</span>
-                        <span className={`font-mono text-xs ${t.type === "payout" || t.type === "deposit" ? "text-emerald-400" : "text-zinc-400"}`}>
-                          {t.type === "payout" || t.type === "deposit" ? "+" : "-"}{fmtCrypto(t.amount, t.coin)} {t.coin}
-                        </span>
-                      </div>
-                    ))}
+                    {wallet.transactions.slice(0, 8).map((t) => {
+                      const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund";
+                      const po = t.payout;
+                      const hash = po?.tx_hash;
+                      const explorer = hash && EXPLORER[t.coin] ? EXPLORER[t.coin](hash) : null;
+                      return (
+                        <div key={t.id} className="bg-[#0E1017] rounded-md px-3 py-2" data-testid={`wallet-tx-${t.id}`}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="capitalize text-zinc-300">{t.type}</span>
+                            <span className={`font-mono text-xs ${positive ? "text-emerald-400" : "text-zinc-400"}`}>
+                              {positive ? "+" : "-"}{fmtCrypto(t.amount, t.coin)} {t.coin}
+                            </span>
+                          </div>
+                          {po && (() => {
+                            const b = payoutBadge(po.status, po.refunded);
+                            return (
+                              <div className="flex items-center justify-between gap-2 mt-1.5">
+                                <span data-testid={`payout-status-${t.id}`}
+                                  className={`text-[9px] font-mono uppercase tracking-wider border rounded px-1.5 py-0.5 ${b.cls}`}>
+                                  {b.label}
+                                </span>
+                                {hash ? (
+                                  explorer ? (
+                                    <a href={explorer} target="_blank" rel="noopener noreferrer" data-testid={`payout-txhash-${t.id}`}
+                                      className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 hover:text-emerald-300 truncate max-w-[55%]">
+                                      <span className="truncate">{hash}</span><ExternalLink size={11} className="shrink-0" />
+                                    </a>
+                                  ) : (
+                                    <span data-testid={`payout-txhash-${t.id}`} className="text-[10px] font-mono text-zinc-500 truncate max-w-[55%]">{hash}</span>
+                                  )
+                                ) : (
+                                  <span className="text-[10px] font-mono text-zinc-600">awaiting tx hash…</span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
