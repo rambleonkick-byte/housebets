@@ -16,7 +16,7 @@ export function Sidebar({ sports, active, onSelect, counts }) {
       </div>
       <div className="mt-auto p-4 border-t border-[#2A2F45]">
         <div className="text-[11px] text-zinc-500 leading-relaxed">
-          Live odds sourced from <span className="text-zinc-300">ESPN</span> &amp; bookmaker feeds.
+          Live odds from <span className="text-zinc-300">SportsGameOdds</span> · 85+ bookmakers.
           Deposit crypto to place bets &amp; play.
         </div>
       </div>

@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { Sidebar } from "@/components/Sidebar";
 import { MatchCard } from "@/components/MatchCard";
 import { BetSlip } from "@/components/BetSlip";
+import { CasinoStrip } from "@/components/CasinoStrip";
 
 const HERO = "https://images.unsplash.com/photo-1679391029864-d46f366a456b?crop=entropy&cs=srgb&fm=jpg&w=1600&q=80";
 
@@ -49,7 +50,7 @@ export function Sportsbook() {
           <img src={HERO} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#090A0F] via-[#090A0F]/85 to-transparent" />
           <div className="relative px-6 py-8 md:py-10">
-            <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Live odds · ESPN feed</p>
+            <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Live odds · SportsGameOdds</p>
             <h1 className="font-display text-4xl sm:text-5xl font-black tracking-tight max-w-xl leading-[1.05]">
               Bet smarter with <span className="text-emerald-400">real-time</span> crypto.
             </h1>
@@ -65,6 +66,8 @@ export function Sportsbook() {
             </div>
           </div>
         </div>
+
+        <CasinoStrip />
 
         {/* Mobile sport chips */}
         <div className="lg:hidden flex gap-2 overflow-x-auto scrollbar-thin px-4 pb-2">

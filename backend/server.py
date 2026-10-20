@@ -83,26 +83,6 @@ class LoginInput(BaseModel):
     password: str
 
 
-class Selection(BaseModel):
-    event_id: str
-    league: str
-    league_label: str
-    home: str
-    away: str
-    market: str          # moneyline | spread | total
-    pick: str            # label shown, e.g. "LAL ML", "Over 210.5"
-    side: str            # home | away | draw | over | under
-    line: Optional[float] = None
-    odds: float          # decimal odds
-
-
-class PlaceBetInput(BaseModel):
-    selections: List[Selection]
-    stake: float
-    coin: str
-    bet_type: str = "single"   # single | parlay
-
-
 class WalletTxInput(BaseModel):
     coin: str
     amount: float
@@ -113,6 +93,26 @@ class PaymentConfigInput(BaseModel):
     api_base: str = ""
     api_key: str = ""
     mode: str = "mock"   # mock | live
+
+
+class Selection(BaseModel):
+    event_id: str
+    league: str
+    league_label: str
+    home: str
+    away: str
+    market: str
+    pick: str
+    side: str
+    line: Optional[float] = None
+    odds: float
+
+
+class PlaceBetInput(BaseModel):
+    selections: List[Selection]
+    stake: float
+    coin: str
+    bet_type: str = "single"
 
 
 # ----------------------------------------------------------------------------
@@ -201,298 +201,140 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 # ----------------------------------------------------------------------------
-# ESPN odds
+# Sports odds (SportsGameOdds API)
 # ----------------------------------------------------------------------------
-# group = sidebar category | label = specific competition | sport/league = ESPN path
-SPORTS = [
-    # Basketball
-    {"key": "nba", "group": "basketball", "label": "NBA", "sport": "basketball", "league": "nba", "draw": False},
-    {"key": "wnba", "group": "basketball", "label": "WNBA", "sport": "basketball", "league": "wnba", "draw": False},
-    {"key": "ncaam", "group": "basketball", "label": "NCAA Men's", "sport": "basketball", "league": "mens-college-basketball", "draw": False},
-    {"key": "ncaaw", "group": "basketball", "label": "NCAA Women's", "sport": "basketball", "league": "womens-college-basketball", "draw": False},
-    {"key": "nbl", "group": "basketball", "label": "NBL Australia", "sport": "basketball", "league": "nbl", "draw": False},
-    # American Football
-    {"key": "nfl", "group": "football", "label": "NFL", "sport": "football", "league": "nfl", "draw": False},
-    {"key": "ncaaf", "group": "football", "label": "NCAA Football", "sport": "football", "league": "college-football", "draw": False},
-    # Baseball
-    {"key": "mlb", "group": "baseball", "label": "MLB", "sport": "baseball", "league": "mlb", "draw": False},
-    {"key": "collegebb", "group": "baseball", "label": "College Baseball", "sport": "baseball", "league": "college-baseball", "draw": False},
-    # Hockey
-    {"key": "nhl", "group": "hockey", "label": "NHL", "sport": "hockey", "league": "nhl", "draw": False},
-    # Soccer
-    {"key": "eng.1", "group": "soccer", "label": "Premier League", "sport": "soccer", "league": "eng.1", "draw": True},
-    {"key": "eng.2", "group": "soccer", "label": "Championship", "sport": "soccer", "league": "eng.2", "draw": True},
-    {"key": "esp.1", "group": "soccer", "label": "La Liga", "sport": "soccer", "league": "esp.1", "draw": True},
-    {"key": "ita.1", "group": "soccer", "label": "Serie A", "sport": "soccer", "league": "ita.1", "draw": True},
-    {"key": "ger.1", "group": "soccer", "label": "Bundesliga", "sport": "soccer", "league": "ger.1", "draw": True},
-    {"key": "fra.1", "group": "soccer", "label": "Ligue 1", "sport": "soccer", "league": "fra.1", "draw": True},
-    {"key": "ned.1", "group": "soccer", "label": "Eredivisie", "sport": "soccer", "league": "ned.1", "draw": True},
-    {"key": "por.1", "group": "soccer", "label": "Primeira Liga", "sport": "soccer", "league": "por.1", "draw": True},
-    {"key": "usa.1", "group": "soccer", "label": "MLS", "sport": "soccer", "league": "usa.1", "draw": True},
-    {"key": "mex.1", "group": "soccer", "label": "Liga MX", "sport": "soccer", "league": "mex.1", "draw": True},
-    {"key": "uefa.champions", "group": "soccer", "label": "Champions League", "sport": "soccer", "league": "uefa.champions", "draw": True},
-    {"key": "uefa.europa", "group": "soccer", "label": "Europa League", "sport": "soccer", "league": "uefa.europa", "draw": True},
-    {"key": "sau.1", "group": "soccer", "label": "Saudi Pro League", "sport": "soccer", "league": "ksa.1", "draw": True},
-    {"key": "tur.1", "group": "soccer", "label": "Süper Lig", "sport": "soccer", "league": "tur.1", "draw": True},
-    # Tennis
-    {"key": "atp", "group": "tennis", "label": "ATP Tour", "sport": "tennis", "league": "atp", "draw": False},
-    {"key": "wta", "group": "tennis", "label": "WTA Tour", "sport": "tennis", "league": "wta", "draw": False},
-]
-SPORTS_BY_KEY = {s["key"]: s for s in SPORTS}
+SGO_KEY = os.environ.get("SPORTSGAMEODDS_API_KEY")
+SGO_API = "https://api.sportsgameodds.com/v2"
 
+SGO_LEAGUES = [
+    {"id": "NFL", "group": "football", "label": "NFL", "draw": False},
+    {"id": "NCAAF", "group": "football", "label": "NCAA Football", "draw": False},
+    {"id": "NBA", "group": "basketball", "label": "NBA", "draw": False},
+    {"id": "NCAAB", "group": "basketball", "label": "NCAA Basketball", "draw": False},
+    {"id": "MLB", "group": "baseball", "label": "MLB", "draw": False},
+    {"id": "NHL", "group": "hockey", "label": "NHL", "draw": False},
+    {"id": "MLS", "group": "soccer", "label": "MLS", "draw": True},
+]
 GROUPS = [
     {"key": "soccer", "label": "Soccer", "icon": "goal"},
     {"key": "basketball", "label": "Basketball", "icon": "dribbble"},
     {"key": "football", "label": "Am. Football", "icon": "shield"},
     {"key": "baseball", "label": "Baseball", "icon": "circle-dot"},
     {"key": "hockey", "label": "Ice Hockey", "icon": "snowflake"},
-    {"key": "tennis", "label": "Tennis", "icon": "circle"},
-    {"key": "mma", "label": "UFC / MMA", "icon": "swords"},
 ]
-
-# The Odds API (real bookmaker odds). Curated keys; cached long to respect quota.
-ODDS_API_KEY = os.environ.get("ODDS_API_KEY")
-OA_SPORTS = [
-    {"key": "soccer_epl", "group": "soccer", "label": "Premier League", "draw": True},
-    {"key": "soccer_uefa_champs_league", "group": "soccer", "label": "Champions League", "draw": True},
-    {"key": "basketball_nba", "group": "basketball", "label": "NBA", "draw": False},
-    {"key": "americanfootball_nfl", "group": "football", "label": "NFL", "draw": False},
-    {"key": "baseball_mlb", "group": "baseball", "label": "MLB", "draw": False},
-    {"key": "icehockey_nhl", "group": "hockey", "label": "NHL", "draw": False},
-    {"key": "mma_mixed_martial_arts", "group": "mma", "label": "UFC / MMA", "draw": False},
-]
-_OA_CACHE = {}
+_SGO_CACHE = {}
 
 
-def _abbr(name):
-    name = (name or "").strip()
-    parts = [p for p in name.split() if p]
-    if len(parts) >= 2:
-        return "".join(p[0] for p in parts[:3]).upper()
-    return name[:3].upper() or "TBD"
-
-_ODDS_CACHE: dict = {}
-
-
-def american_to_decimal(ml) -> Optional[float]:
+def american_to_decimal(ml):
     try:
-        ml = float(ml)
+        v = float(str(ml).strip())
     except (TypeError, ValueError):
         return None
-    if ml == 0:
+    if v == 0:
         return None
-    return round(1 + (ml / 100.0 if ml > 0 else 100.0 / abs(ml)), 2)
+    return round(1 + (v / 100.0 if v > 0 else 100.0 / abs(v)), 2)
 
 
-def mk_odds(dec):
-    return dec if dec and dec > 1.0 else None
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
-def build_markets(sport_meta, comp, odds_block):
-    """Return list of markets with selections."""
-    draw = sport_meta["draw"]
+def _sgo_score(ev, side):
+    res = ev.get("results") or {}
+    for container in (res.get("game"), res):
+        if isinstance(container, dict):
+            node = container.get(side)
+            if isinstance(node, dict):
+                v = node.get("points", node.get("score"))
+                try:
+                    return int(float(v))
+                except (TypeError, ValueError):
+                    pass
+    return None
+
+
+def _sgo_markets(ev, draw):
+    odds = ev.get("odds", {})
+    ha = ev["teams"]["home"]["names"]["short"]
+    aa = ev["teams"]["away"]["names"]["short"]
     markets = []
-    home_dec = away_dec = None
-    spread = over_under = None
-    if odds_block:
-        spread = odds_block.get("spread")
-        over_under = odds_block.get("overUnder")
-        hto = odds_block.get("homeTeamOdds") or {}
-        ato = odds_block.get("awayTeamOdds") or {}
-        home_dec = american_to_decimal(hto.get("moneyLine"))
-        away_dec = american_to_decimal(ato.get("moneyLine"))
-
-    # fallback moneyline from spread heuristic
-    if home_dec is None or away_dec is None:
-        if spread is not None:
-            try:
-                s = abs(float(spread))
-                fav = max(1.25, round(1.9 - s * 0.05, 2))
-                dog = round(1.0 + (1.0 / (1 - 1.0 / fav)) - fav + 0.15 + s * 0.08, 2)
-                dog = max(1.6, min(dog, 6.0))
-                if float(spread) < 0:  # home favored
-                    home_dec, away_dec = fav, dog
-                else:
-                    home_dec, away_dec = dog, fav
-            except (TypeError, ValueError):
-                pass
-    if home_dec is None:
-        home_dec = 1.9
-    if away_dec is None:
-        away_dec = 1.9
-
-    ml_sel = [
-        {"side": "home", "pick": f"{sport_meta['label_home']} ML", "odds": home_dec, "line": None},
-    ]
     if draw:
-        ml_sel.append({"side": "draw", "pick": "Draw", "odds": 3.3, "line": None})
-    ml_sel.append({"side": "away", "pick": f"{sport_meta['label_away']} ML", "odds": away_dec, "line": None})
-    markets.append({"market": "moneyline", "label": "Moneyline", "selections": ml_sel})
+        pairs = [("home", f"{ha} ML", odds.get("points-home-reg-ml3way-home")),
+                 ("draw", "Draw", odds.get("points-all-reg-ml3way-draw")),
+                 ("away", f"{aa} ML", odds.get("points-away-reg-ml3way-away"))]
+    else:
+        pairs = [("home", f"{ha} ML", odds.get("points-home-game-ml-home")),
+                 ("away", f"{aa} ML", odds.get("points-away-game-ml-away"))]
+    ml = []
+    for side, pick, o in pairs:
+        dec = american_to_decimal(o.get("bookOdds")) if o else None
+        if dec:
+            ml.append({"side": side, "pick": pick, "odds": dec, "line": None})
+    if len(ml) >= 2:
+        markets.append({"market": "moneyline", "label": "Moneyline", "selections": ml})
 
-    if spread is not None:
-        try:
-            sp = float(spread)
+    hs, as_ = odds.get("points-home-game-sp-home"), odds.get("points-away-game-sp-away")
+    if hs and as_:
+        hl, al = _num(hs.get("bookSpread")), _num(as_.get("bookSpread"))
+        ho, ao = american_to_decimal(hs.get("bookOdds")), american_to_decimal(as_.get("bookOdds"))
+        if None not in (hl, al, ho, ao):
             markets.append({"market": "spread", "label": "Spread", "selections": [
-                {"side": "home", "pick": f"{sport_meta['label_home']} {sp:+g}", "odds": 1.91, "line": sp},
-                {"side": "away", "pick": f"{sport_meta['label_away']} {-sp:+g}", "odds": 1.91, "line": -sp},
-            ]})
-        except (TypeError, ValueError):
-            pass
-    if over_under is not None:
-        try:
-            ou = float(over_under)
+                {"side": "home", "pick": f"{ha} {hl:+g}", "odds": ho, "line": hl},
+                {"side": "away", "pick": f"{aa} {al:+g}", "odds": ao, "line": al}]})
+
+    ov, un = odds.get("points-all-game-ou-over"), odds.get("points-all-game-ou-under")
+    if ov and un:
+        line = _num(ov.get("bookOverUnder"))
+        oo, uo = american_to_decimal(ov.get("bookOdds")), american_to_decimal(un.get("bookOdds"))
+        if None not in (line, oo, uo):
             markets.append({"market": "total", "label": "Total", "selections": [
-                {"side": "over", "pick": f"Over {ou}", "odds": 1.91, "line": ou},
-                {"side": "under", "pick": f"Under {ou}", "odds": 1.91, "line": ou},
-            ]})
-        except (TypeError, ValueError):
-            pass
+                {"side": "over", "pick": f"Over {line}", "odds": oo, "line": line},
+                {"side": "under", "pick": f"Under {line}", "odds": uo, "line": line}]})
     return markets
 
 
-async def fetch_league_events(sport_meta) -> List[dict]:
-    key = sport_meta["key"]
-    cached = _ODDS_CACHE.get(key)
-    if cached and (datetime.now(timezone.utc).timestamp() - cached["ts"]) < 45:
+async def fetch_sgo_league(meta):
+    if not SGO_KEY:
+        return []
+    key = meta["id"]
+    cached = _SGO_CACHE.get(key)
+    if cached and (datetime.now(timezone.utc).timestamp() - cached["ts"]) < 120:
         return cached["data"]
-    url = (f"https://site.api.espn.com/apis/site/v2/sports/"
-           f"{sport_meta['sport']}/{sport_meta['league']}/scoreboard")
+    params = {"apiKey": SGO_KEY, "leagueID": key, "oddsAvailable": "true", "limit": 15}
     events = []
     try:
-        async with httpx.AsyncClient(timeout=10) as hc:
-            r = await hc.get(url)
-            data = r.json()
-        for ev in data.get("events", [])[:14]:
-            comp = (ev.get("competitions") or [{}])[0]
-            competitors = comp.get("competitors", [])
-            home = next((c for c in competitors if c.get("homeAway") == "home"), None)
-            away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+        async with httpx.AsyncClient(timeout=15) as hc:
+            r = await hc.get(f"{SGO_API}/events", params=params)
+        if r.status_code != 200:
+            logger.warning(f"SGO {key} -> {r.status_code}")
+            _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": []}
+            return []
+        for ev in (r.json().get("data") or [])[:15]:
+            teams = ev.get("teams") or {}
+            home, away = teams.get("home"), teams.get("away")
             if not home or not away:
                 continue
-            h_team = home.get("team", {})
-            a_team = away.get("team", {})
-            status = ev.get("status", {}).get("type", {})
-            odds_block = (comp.get("odds") or [None])[0]
-            meta = dict(sport_meta)
-            meta["label_home"] = h_team.get("abbreviation") or h_team.get("shortDisplayName", "HOME")
-            meta["label_away"] = a_team.get("abbreviation") or a_team.get("shortDisplayName", "AWAY")
-            events.append({
-                "event_id": ev.get("id"),
-                "league": sport_meta["group"],
-                "league_key": sport_meta["key"],
-                "league_label": sport_meta["label"],
-                "name": ev.get("shortName") or ev.get("name"),
-                "start": ev.get("date"),
-                "state": status.get("state", "pre"),     # pre | in | post
-                "status_detail": status.get("shortDetail", ""),
-                "home": {"name": h_team.get("displayName"), "abbr": meta["label_home"],
-                         "logo": (h_team.get("logo") or ""), "score": home.get("score")},
-                "away": {"name": a_team.get("displayName"), "abbr": meta["label_away"],
-                         "logo": (a_team.get("logo") or ""), "score": away.get("score")},
-                "markets": build_markets(meta, comp, odds_block),
-            })
-    except Exception as e:
-        logger.warning(f"ESPN fetch failed for {key}: {e}")
-    _ODDS_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": events}
-    return events
-
-
-def _oa_markets(bk, meta):
-    """Build our market format from one Odds-API bookmaker block."""
-    by_key = {m["key"]: m for m in bk.get("markets", [])}
-    home_name, away_name = meta["_home"], meta["_away"]
-    ha, aa = _abbr(home_name), _abbr(away_name)
-    markets = []
-    h2h = by_key.get("h2h")
-    if h2h:
-        sel = []
-        for o in h2h.get("outcomes", []):
-            price = o.get("price")
-            if not price or price <= 1:
-                continue
-            if o["name"] == home_name:
-                sel.append({"side": "home", "pick": f"{ha} ML", "odds": round(price, 2), "line": None})
-            elif o["name"] == away_name:
-                sel.append({"side": "away", "pick": f"{aa} ML", "odds": round(price, 2), "line": None})
-            else:
-                sel.append({"side": "draw", "pick": "Draw", "odds": round(price, 2), "line": None})
-        order = {"home": 0, "draw": 1, "away": 2}
-        sel.sort(key=lambda s: order.get(s["side"], 9))
-        if sel:
-            markets.append({"market": "moneyline", "label": "Moneyline", "selections": sel})
-    sp = by_key.get("spreads")
-    if sp:
-        sel = []
-        for o in sp.get("outcomes", []):
-            price, pt = o.get("price"), o.get("point")
-            if not price or pt is None:
-                continue
-            if o["name"] == home_name:
-                sel.append({"side": "home", "pick": f"{ha} {pt:+g}", "odds": round(price, 2), "line": pt})
-            elif o["name"] == away_name:
-                sel.append({"side": "away", "pick": f"{aa} {pt:+g}", "odds": round(price, 2), "line": pt})
-        if len(sel) == 2:
-            markets.append({"market": "spread", "label": "Spread", "selections": sel})
-    tot = by_key.get("totals")
-    if tot:
-        sel = []
-        for o in tot.get("outcomes", []):
-            price, pt = o.get("price"), o.get("point")
-            if not price or pt is None:
-                continue
-            side = "over" if o["name"].lower() == "over" else "under"
-            sel.append({"side": side, "pick": f"{o['name']} {pt}", "odds": round(price, 2), "line": pt})
-        if len(sel) == 2:
-            markets.append({"market": "total", "label": "Total", "selections": sel})
-    return markets
-
-
-async def fetch_oddsapi_sport(meta):
-    if not ODDS_API_KEY:
-        return []
-    key = meta["key"]
-    cached = _OA_CACHE.get(key)
-    if cached and (datetime.now(timezone.utc).timestamp() - cached["ts"]) < 900:
-        return cached["data"]
-    url = f"https://api.the-odds-api.com/v4/sports/{key}/odds"
-    params = {"apiKey": ODDS_API_KEY, "regions": "us", "markets": "h2h,spreads,totals",
-              "oddsFormat": "decimal", "dateFormat": "iso"}
-    events = []
-    try:
-        async with httpx.AsyncClient(timeout=12) as hc:
-            r = await hc.get(url, params=params)
-        if r.status_code != 200:
-            logger.warning(f"OddsAPI {key} -> {r.status_code}: {r.text[:120]}")
-            _OA_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": []}
-            return []
-        logger.info(f"OddsAPI {key} remaining={r.headers.get('x-requests-remaining')}")
-        now = datetime.now(timezone.utc)
-        for ev in r.json()[:12]:
-            bks = ev.get("bookmakers") or []
-            if not bks:
-                continue
-            bk = next((b for b in bks if any(m["key"] == "h2h" for m in b.get("markets", []))), bks[0])
-            m2 = dict(meta); m2["_home"] = ev["home_team"]; m2["_away"] = ev["away_team"]
-            markets = _oa_markets(bk, m2)
+            markets = _sgo_markets(ev, meta["draw"])
             if not markets:
                 continue
-            try:
-                ct = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00"))
-                state = "in" if ct <= now else "pre"
-                detail = "Live" if state == "in" else ct.strftime("%b %d, %H:%M UTC")
-            except Exception:
-                state, detail = "pre", ""
+            st = ev.get("status", {})
+            state = "in" if st.get("live") else "post" if (st.get("completed") or st.get("ended")) else "pre"
+            ha, aa = home["names"]["short"], away["names"]["short"]
             events.append({
-                "event_id": f"oa_{ev['id']}", "league": meta["group"], "league_key": key,
-                "league_label": meta["label"], "name": f"{_abbr(ev['away_team'])} @ {_abbr(ev['home_team'])}",
-                "start": ev.get("commence_time"), "state": state, "status_detail": detail,
-                "home": {"name": ev["home_team"], "abbr": _abbr(ev["home_team"]), "logo": "", "score": None},
-                "away": {"name": ev["away_team"], "abbr": _abbr(ev["away_team"]), "logo": "", "score": None},
-                "markets": markets, "source": "oddsapi", "book": bk.get("title", "Sportsbook"),
+                "event_id": ev["eventID"], "league": meta["group"], "league_key": key,
+                "league_label": meta["label"], "name": f"{aa} @ {ha}",
+                "start": st.get("startsAt"), "state": state,
+                "status_detail": st.get("displayLong") or ("Live" if state == "in" else "Upcoming"),
+                "home": {"name": home["names"].get("long", ha), "abbr": ha, "logo": "", "score": _sgo_score(ev, "home")},
+                "away": {"name": away["names"].get("long", aa), "abbr": aa, "logo": "", "score": _sgo_score(ev, "away")},
+                "markets": markets, "source": "sportsgameodds", "book": "Top books",
             })
     except Exception as e:
-        logger.warning(f"OddsAPI fetch failed for {key}: {e}")
-    _OA_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": events}
+        logger.warning(f"SGO fetch failed for {key}: {e}")
+    _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "data": events}
     return events
 
 
@@ -503,10 +345,8 @@ async def list_sports():
 
 @api_router.get("/odds")
 async def get_odds(league: Optional[str] = None):
-    metas = [s for s in SPORTS if s["group"] == league] if league else SPORTS
-    oa_metas = [s for s in OA_SPORTS if s["group"] == league] if league else OA_SPORTS
-    tasks = [fetch_league_events(m) for m in metas] + [fetch_oddsapi_sport(m) for m in oa_metas]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    metas = [m for m in SGO_LEAGUES if m["group"] == league] if league else SGO_LEAGUES
+    results = await asyncio.gather(*[fetch_sgo_league(m) for m in metas], return_exceptions=True)
     out = []
     for r in results:
         if isinstance(r, list):
@@ -707,7 +547,6 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
 
 
 def settle_selection(sel, ev) -> Optional[bool]:
-    """Return True=win, False=loss, None=unknown/push for a finished event."""
     try:
         hs = int(ev["home"]["score"])
         as_ = int(ev["away"]["score"])
@@ -739,8 +578,7 @@ async def auto_settle(user_id: str):
     open_bets = await db.bets.find({"user_id": user_id, "status": "open"}).to_list(200)
     if not open_bets:
         return
-    # fetch finished events across all leagues (cached), map by event_id
-    results = await asyncio.gather(*[fetch_league_events(m) for m in SPORTS], return_exceptions=True)
+    results = await asyncio.gather(*[fetch_sgo_league(m) for m in SGO_LEAGUES], return_exceptions=True)
     finished = {}
     for r in results:
         if isinstance(r, list):
@@ -748,16 +586,15 @@ async def auto_settle(user_id: str):
                 if ev["state"] == "post":
                     finished[ev["event_id"]] = ev
     for b in open_bets:
-        results = []
+        legs = []
         for s in b["selections"]:
             ev = finished.get(s["event_id"])
-            results.append(settle_selection(s, ev) if ev else None)
-        if any(r is None for r in results):
-            continue  # not all legs decided
-        won = all(results)
-        new_status = "won" if won else "lost"
-        update = {"status": new_status, "settled_at": now_iso()}
-        await db.bets.update_one({"id": b["id"]}, {"$set": update})
+            legs.append(settle_selection(s, ev) if ev else None)
+        if any(x is None for x in legs):
+            continue
+        won = all(legs)
+        await db.bets.update_one({"id": b["id"]},
+                                 {"$set": {"status": "won" if won else "lost", "settled_at": now_iso()}})
         if won:
             await db.wallets.update_one({"user_id": user_id},
                                         {"$inc": {f"balances.{b['coin']}": b["potential_payout"]}})
