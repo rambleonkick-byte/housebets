@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { api, formatApiErrorDetail } from "@/lib/api";
-import { BetControls, useGameBase, GameLayout, PlayButton, PILL_BTN, FieldLabel } from "@/components/casino/GameKit";
+import { BetControls, useGameBase, GameLayout, PlayButton, PlayArea, PILL_BTN, FieldLabel } from "@/components/casino/GameKit";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sfx";
 
@@ -33,6 +33,7 @@ export function Plinko() {
   const [risk, setRisk] = useState("medium");
   const [rows, setRows] = useState(12);
   const [loading, setLoading] = useState(false);
+  const [autoOn, setAutoOn] = useState(false);
   const [ball, setBall] = useState(null);
   const [landed, setLanded] = useState(null);
   const [win, setWin] = useState(null);
@@ -41,24 +42,27 @@ export function Plinko() {
 
   const play = async () => {
     setWin(null);
-    if (!g.user) return g.setAuthOpen(true);
-    if (g.stakeNum <= 0) return toast.error("Enter a bet amount");
-    if (g.stakeNum > g.balance) return toast.error("Insufficient balance");
+    if (!g.user) { g.setAuthOpen(true); return null; }
+    if (g.stakeNum <= 0) { toast.error("Enter a bet amount"); return null; }
+    if (g.stakeNum > g.balance) { toast.error("Insufficient balance"); return null; }
     setLoading(true); setLanded(null);
     try {
       const { data } = await api.post("/casino/plinko", { coin: g.coin, stake: g.stakeNum, risk, rows });
       setBall({ id: Date.now(), xs: pathTo(data.bucket, rows) });
       // peg ticks accelerate with the ease-in fall
       for (let r = 1; r <= rows; r++) setTimeout(sfx.peg, DROP_MS * Math.sqrt(r / (rows + 1)));
-      setTimeout(() => {
+      await new Promise((r) => setTimeout(r, DROP_MS));
+      {
         g.setBalances(data.balances); setLanded(data.bucket);
         if (data.multiplier > 1) setWin({ multiplier: data.multiplier, payout: data.payout, coin: g.coin });
         else { (data.multiplier >= 1 ? sfx.draw : sfx.lose)(); toast(`${data.multiplier}× — ${data.payout} ${g.coin}`); }
         setLoading(false);
-      }, DROP_MS);
+      }
+      return { payout: data.payout, stake: g.stakeNum };
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
       setLoading(false);
+      return null;
     }
   };
 
@@ -66,12 +70,12 @@ export function Plinko() {
   return (
     <GameLayout title="Plinko" tag="drop & win" win={win} onWinClose={closeWin}
       controls={
-        <BetControls {...g} disabled={loading}>
+        <BetControls {...g} disabled={loading || autoOn}>
           <div>
             <FieldLabel>Risk</FieldLabel>
             <div className="flex gap-1.5">
               {RISKS.map((r) => (
-                <button key={r} data-testid={`plinko-risk-${r}`} disabled={loading} onClick={() => { sfx.click(); setRisk(r); }} className={PILL_BTN(risk === r) + " capitalize"}>{r}</button>
+                <button key={r} data-testid={`plinko-risk-${r}`} disabled={loading || autoOn} onClick={() => { sfx.click(); setRisk(r); }} className={PILL_BTN(risk === r) + " capitalize"}>{r}</button>
               ))}
             </div>
           </div>
@@ -79,11 +83,12 @@ export function Plinko() {
             <FieldLabel>Rows</FieldLabel>
             <div className="flex gap-1.5">
               {ROWS.map((r) => (
-                <button key={r} data-testid={`plinko-rows-${r}`} disabled={loading} onClick={() => { sfx.click(); setRows(r); }} className={PILL_BTN(rows === r) + " font-mono"}>{r}</button>
+                <button key={r} data-testid={`plinko-rows-${r}`} disabled={loading || autoOn} onClick={() => { sfx.click(); setRows(r); }} className={PILL_BTN(rows === r) + " font-mono"}>{r}</button>
               ))}
             </div>
           </div>
-          <PlayButton data-testid="plinko-play-button" onClick={play} loading={loading}>Drop ball</PlayButton>
+          <PlayArea g={g} play={play} onRunning={setAutoOn}
+            manual={<PlayButton data-testid="plinko-play-button" onClick={play} loading={loading}>Drop ball</PlayButton>} />
         </BetControls>
       }>
       <div className="flex-1 flex flex-col items-center justify-end gap-3" data-testid="plinko-board">

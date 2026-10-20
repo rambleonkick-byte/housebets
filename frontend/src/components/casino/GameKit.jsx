@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, ShieldCheck, Volume2, VolumeX } from "lucide-react";
 import { sfx } from "@/lib/sfx";
@@ -164,6 +165,98 @@ export function GameLayout({ title, tag, controls, children, footer, win, onWinC
           <BigWin win={win} onClose={onWinClose} />
         </div>
       </div>
+    </div>
+  );
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function NumField({ label, value, onChange, disabled, testId, suffix }) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="relative">
+        <input data-testid={testId} type="number" min="0" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}
+          placeholder="0"
+          className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-xl px-3 py-2 font-mono text-sm text-white outline-none focus:border-emerald-500 disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+        {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-500">{suffix}</span>}
+      </div>
+    </div>
+  );
+}
+
+// Manual / Auto play switch. `play` must resolve with the round result ({payout}) or null on failure.
+export function PlayArea({ g, play, manual, onRunning }) {
+  const [mode, setMode] = useState("manual");
+  const [rounds, setRounds] = useState("10");
+  const [stopProfit, setStopProfit] = useState("");
+  const [stopLoss, setStopLoss] = useState("");
+  const [running, setRunning] = useState(false);
+  const [stats, setStats] = useState({ done: 0, net: 0 });
+  const stopRef = useRef(false);
+  const playRef = useRef(play);
+  playRef.current = play;
+
+  const setRun = (v) => { setRunning(v); onRunning?.(v); };
+  useEffect(() => () => { stopRef.current = true; }, []);
+
+  const start = async () => {
+    if (!g.user) return g.setAuthOpen(true);
+    const total = parseInt(rounds, 10) || 0;
+    const sp = parseFloat(stopProfit) || 0;
+    const sl = parseFloat(stopLoss) || 0;
+    stopRef.current = false;
+    setRun(true);
+    let done = 0, net = 0, reason = "Auto bet finished";
+    setStats({ done, net });
+    while (!stopRef.current && (total === 0 || done < total)) {
+      const res = await playRef.current();
+      if (!res) { reason = "Auto bet stopped"; break; }
+      done += 1;
+      net += res.payout - res.stake;
+      setStats({ done, net });
+      if (sp > 0 && net >= sp) { reason = "Stop on profit reached"; break; }
+      if (sl > 0 && -net >= sl) { reason = "Stop on loss reached"; break; }
+      await sleep(300);
+    }
+    if (stopRef.current) reason = "Auto bet stopped";
+    setRun(false);
+    toast(reason, { description: `${done} bets · net ${net >= 0 ? "+" : ""}${fmtCrypto(net, g.coin)} ${g.coin}` });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1 bg-[#090A0F] border border-[#2A2F45] p-1 rounded-xl">
+        {["manual", "auto"].map((m) => (
+          <button key={m} data-testid={`play-mode-${m}`} disabled={running} onClick={() => { sfx.click(); setMode(m); }}
+            className={`flex-1 text-xs font-bold py-1.5 rounded-lg capitalize transition-colors disabled:opacity-60 ${mode === m ? "bg-[#252A3B] text-white" : "text-slate-500 hover:text-white"}`}>{m}</button>
+        ))}
+      </div>
+      {mode === "manual" ? manual : (
+        <>
+          <NumField label="Number of bets (0 = ∞)" value={rounds} onChange={setRounds} disabled={running} testId="autobet-rounds" />
+          <div className="grid grid-cols-2 gap-2">
+            <NumField label="Stop on profit" value={stopProfit} onChange={setStopProfit} disabled={running} testId="autobet-stop-profit" suffix={g.coin} />
+            <NumField label="Stop on loss" value={stopLoss} onChange={setStopLoss} disabled={running} testId="autobet-stop-loss" suffix={g.coin} />
+          </div>
+          {(running || stats.done > 0) && (
+            <div className="grid grid-cols-2 gap-2">
+              <StatBox label="Bets" value={`${stats.done}${parseInt(rounds, 10) ? ` / ${parseInt(rounds, 10)}` : ""}`} testId="autobet-count" />
+              <div className="bg-[#090A0F] border border-[#2A2F45] rounded-xl px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Net profit</p>
+                <p data-testid="autobet-net" className={`font-mono text-sm font-bold ${stats.net >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {stats.net >= 0 ? "+" : ""}{fmtCrypto(stats.net, g.coin)}
+                </p>
+              </div>
+            </div>
+          )}
+          {running ? (
+            <PlayButton data-testid="autobet-stop-button" tone="amber" onClick={() => { stopRef.current = true; }}>Stop auto bet</PlayButton>
+          ) : (
+            <PlayButton data-testid="autobet-start-button" onClick={start}>Start auto bet</PlayButton>
+          )}
+        </>
+      )}
     </div>
   );
 }

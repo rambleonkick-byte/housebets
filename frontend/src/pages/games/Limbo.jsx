@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Rocket } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
-import { BetControls, useGameBase, GameLayout, PlayButton, FieldLabel, StatBox } from "@/components/casino/GameKit";
+import { BetControls, useGameBase, GameLayout, PlayButton, PlayArea, FieldLabel, StatBox } from "@/components/casino/GameKit";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sfx";
 
@@ -10,6 +10,7 @@ export function Limbo() {
   const g = useGameBase();
   const [target, setTarget] = useState("2.00");
   const [loading, setLoading] = useState(false);
+  const [autoOn, setAutoOn] = useState(false);
   const [last, setLast] = useState(null);
   const [display, setDisplay] = useState(1);
   const [history, setHistory] = useState([]);
@@ -20,10 +21,10 @@ export function Limbo() {
 
   const play = async () => {
     setWin(null);
-    if (!g.user) return g.setAuthOpen(true);
-    if (g.stakeNum <= 0) return toast.error("Enter a bet amount");
-    if (g.stakeNum > g.balance) return toast.error("Insufficient balance");
-    if (targetNum < 1.01) return toast.error("Target must be ≥ 1.01");
+    if (!g.user) { g.setAuthOpen(true); return null; }
+    if (g.stakeNum <= 0) { toast.error("Enter a bet amount"); return null; }
+    if (g.stakeNum > g.balance) { toast.error("Insufficient balance"); return null; }
+    if (targetNum < 1.01) { toast.error("Target must be ≥ 1.01"); return null; }
     setLoading(true);
     try {
       const { data } = await api.post("/casino/limbo", { coin: g.coin, stake: g.stakeNum, target: targetNum });
@@ -33,7 +34,7 @@ export function Limbo() {
       const steps = 26;
       let i = 0;
       clearInterval(timer.current);
-      timer.current = setInterval(() => {
+      await new Promise((resolve) => { timer.current = setInterval(() => {
         i++;
         setDisplay(1 + (end - 1) * Math.pow(i / steps, 2));
         if (i % 2 === 0) sfx.tick(i / steps);
@@ -42,10 +43,13 @@ export function Limbo() {
           setHistory((h) => [{ v: end, won: data.won }, ...h].slice(0, 8));
           if (!data.won) sfx.lose();
           if (data.won) setWin({ multiplier: targetNum, payout: data.payout, coin: g.coin });
+          resolve();
         }
-      }, 20);
+      }, 20); });
+      return { payout: data.payout, stake: g.stakeNum };
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
+      return null;
     } finally {
       setLoading(false);
     }
@@ -57,11 +61,11 @@ export function Limbo() {
   return (
     <GameLayout title="Limbo" tag="1% edge" win={win} onWinClose={closeWin}
       controls={
-        <BetControls {...g} disabled={loading}>
+        <BetControls {...g} disabled={loading || autoOn}>
           <div>
             <FieldLabel>Target multiplier</FieldLabel>
             <div className="relative">
-              <input data-testid="limbo-target-input" type="number" min="1.01" step="0.01" value={target}
+              <input data-testid="limbo-target-input" type="number" min="1.01" step="0.01" value={target} disabled={autoOn}
                 onChange={(e) => setTarget(e.target.value)}
                 className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-xl px-3 py-2.5 font-mono text-sm text-white outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-sm">×</span>
@@ -71,7 +75,8 @@ export function Limbo() {
             <StatBox label="Win chance" value={`${targetNum >= 1.01 ? (99 / targetNum).toFixed(2) : "0"}%`} testId="limbo-chance" />
             <StatBox label="Payout" value={`${(g.stakeNum * targetNum).toFixed(4)}`} testId="limbo-payout" accent />
           </div>
-          <PlayButton data-testid="limbo-play-button" onClick={play} loading={loading} icon={<Rocket size={16} />}>Place bet</PlayButton>
+          <PlayArea g={g} play={play} onRunning={setAutoOn}
+            manual={<PlayButton data-testid="limbo-play-button" onClick={play} loading={loading} icon={<Rocket size={16} />}>Place bet</PlayButton>} />
         </BetControls>
       }>
       <div className="flex-1 flex flex-col">

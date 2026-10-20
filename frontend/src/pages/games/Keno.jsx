@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Eraser, Shuffle, Gem } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
-import { BetControls, useGameBase, GameLayout, PlayButton, TILE, StatBox } from "@/components/casino/GameKit";
+import { BetControls, useGameBase, GameLayout, PlayButton, PlayArea, TILE, StatBox } from "@/components/casino/GameKit";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sfx";
 
@@ -38,11 +38,12 @@ export function Keno() {
   const [drawn, setDrawn] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [autoOn, setAutoOn] = useState(false);
   const [win, setWin] = useState(null);
   const closeWin = useCallback(() => setWin(null), []);
 
   const toggle = (n) => {
-    if (loading) return;
+    if (loading || autoOn) return;
     if (picks.includes(n)) sfx.unpick(); else if (picks.length < 10) sfx.pick();
     setPicks((p) => p.includes(n) ? p.filter((x) => x !== n) : p.length >= 10 ? p : [...p, n]);
     setDrawn([]); setResult(null);
@@ -60,23 +61,26 @@ export function Keno() {
 
   const play = async () => {
     setWin(null);
-    if (!g.user) return g.setAuthOpen(true);
-    if (picks.length === 0) return toast.error("Pick 1–10 numbers");
-    if (g.stakeNum <= 0) return toast.error("Enter a bet amount");
-    if (g.stakeNum > g.balance) return toast.error("Insufficient balance");
+    if (!g.user) { g.setAuthOpen(true); return null; }
+    if (picks.length === 0) { toast.error("Pick 1–10 numbers"); return null; }
+    if (g.stakeNum <= 0) { toast.error("Enter a bet amount"); return null; }
+    if (g.stakeNum > g.balance) { toast.error("Insufficient balance"); return null; }
     setLoading(true); setDrawn([]); setResult(null);
     try {
       const { data } = await api.post("/casino/keno", { coin: g.coin, stake: g.stakeNum, picks });
       data.drawn.forEach((n, i) => setTimeout(() => { (picks.includes(n) ? sfx.hit : sfx.draw)(); setDrawn((d) => [...d, n]); }, i * 110));
-      setTimeout(() => {
+      await new Promise((r) => setTimeout(r, data.drawn.length * 110 + 250));
+      {
         g.setBalances(data.balances); setResult(data);
         if (data.multiplier > 1) setWin({ multiplier: data.multiplier, payout: data.payout, coin: g.coin });
         else { sfx.lose(); toast(`${data.hits} hits · ${data.multiplier}×`); }
         setLoading(false);
-      }, data.drawn.length * 110 + 250);
+      }
+      return { payout: data.payout, stake: g.stakeNum };
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
       setLoading(false);
+      return null;
     }
   };
 
@@ -84,22 +88,23 @@ export function Keno() {
     <GameLayout title="Keno" tag="pick your numbers" win={win} onWinClose={closeWin}
       footer={<PayoutBar picks={picks.length} hits={result ? result.hits : -1} />}
       controls={
-        <BetControls {...g} disabled={loading}>
+        <BetControls {...g} disabled={loading || autoOn}>
           <div className="grid grid-cols-2 gap-2">
             <StatBox label="Selected" value={`${picks.length}/10`} testId="keno-selected-count" accent />
             <StatBox label="Hits" value={result ? `${result.hits} · ${result.multiplier}×` : "—"} testId="keno-hits" />
           </div>
           <div className="flex gap-2">
-            <button data-testid="keno-auto" onClick={auto} disabled={loading}
+            <button data-testid="keno-auto" onClick={auto} disabled={loading || autoOn}
               className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-300 bg-[#1A1D28] border border-[#2A2F45] rounded-lg py-2 hover:text-white hover:border-violet-400/50 disabled:opacity-50 transition-colors">
               <Shuffle size={13} /> Auto pick
             </button>
-            <button data-testid="keno-clear" onClick={clear} disabled={loading}
+            <button data-testid="keno-clear" onClick={clear} disabled={loading || autoOn}
               className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-300 bg-[#1A1D28] border border-[#2A2F45] rounded-lg py-2 hover:text-white hover:border-red-400/50 disabled:opacity-50 transition-colors">
               <Eraser size={13} /> Clear
             </button>
           </div>
-          <PlayButton data-testid="keno-play-button" onClick={play} loading={loading}>Play Keno</PlayButton>
+          <PlayArea g={g} play={play} onRunning={setAutoOn}
+            manual={<PlayButton data-testid="keno-play-button" onClick={play} loading={loading}>Play Keno</PlayButton>} />
         </BetControls>
       }>
       <div className="flex-1 flex items-center justify-center">

@@ -124,3 +124,8 @@
 ## Sound Effects (2026-06)
 - `lib/sfx.js`: Web Audio synthesised sounds (no files): click, pick/unpick, bet, draw, hit, gem, bomb (noise burst), peg, tick, lose, win, bigWin (≥5×). Mute stored in localStorage `apex_sfx_muted`, pub/sub for toggles.
 - Speaker toggle (`game-sound-toggle`) in every Originals header. Hooked into: coin/stake/option buttons, Play buttons, Keno picks + draw/hit reveal, Mines gem/bomb, Dice slider ticks + lose, Limbo count-up ticks + lose, Plinko peg ticks + landing, BigWin win/bigWin chimes. Verified sounds fire, mute persists across games, no console errors.
+
+## Auto-Bet Mode (2026-06)
+- `PlayArea` in GameKit: Manual/Auto switch. Auto: number of bets (0 = unlimited), stop on profit, stop on loss (in coin), live Bets + Net profit stats, Start/Stop button, summary toast. Loop awaits each round's animation, 300ms gap; stops on errors (e.g. insufficient balance).
+- Wired into Dice, Limbo, Keno, Plinko (each `play()` now resolves `{payout, stake}` after its animation, or null). Controls locked while running. Mines excluded (manual tile picks).
+- Verified: Dice 5/5 rounds, Limbo unlimited stopped by stop-on-loss, Keno manual stop, no console errors.

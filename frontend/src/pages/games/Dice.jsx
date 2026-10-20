@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Dices } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
-import { BetControls, useGameBase, GameLayout, PlayButton, PILL_BTN, FieldLabel, StatBox } from "@/components/casino/GameKit";
+import { BetControls, useGameBase, GameLayout, PlayButton, PlayArea, PILL_BTN, FieldLabel, StatBox } from "@/components/casino/GameKit";
 import { toast } from "sonner";
 import { sfx } from "@/lib/sfx";
 
@@ -39,6 +39,7 @@ export function Dice() {
   const [target, setTarget] = useState(50);
   const [direction, setDirection] = useState("over");
   const [loading, setLoading] = useState(false);
+  const [autoOn, setAutoOn] = useState(false);
   const [last, setLast] = useState(null);
   const [win, setWin] = useState(null);
   const closeWin = useCallback(() => setWin(null), []);
@@ -48,9 +49,9 @@ export function Dice() {
 
   const play = async () => {
     setWin(null);
-    if (!g.user) return g.setAuthOpen(true);
-    if (g.stakeNum <= 0) return toast.error("Enter a bet amount");
-    if (g.stakeNum > g.balance) return toast.error("Insufficient balance");
+    if (!g.user) { g.setAuthOpen(true); return null; }
+    if (g.stakeNum <= 0) { toast.error("Enter a bet amount"); return null; }
+    if (g.stakeNum > g.balance) { toast.error("Insufficient balance"); return null; }
     setLoading(true);
     try {
       const { data } = await api.post("/casino/dice", { coin: g.coin, stake: g.stakeNum, target, direction });
@@ -58,8 +59,11 @@ export function Dice() {
       setLast({ ...data, nonce: Date.now() });
       if (!data.won) setTimeout(sfx.lose, 350);
       if (data.won) setTimeout(() => setWin({ multiplier: data.payout / g.stakeNum, payout: data.payout, coin: g.coin }), 450);
+      await new Promise((r) => setTimeout(r, 450));
+      return { payout: data.payout, stake: g.stakeNum };
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
+      return null;
     } finally {
       setLoading(false);
     }
@@ -68,12 +72,12 @@ export function Dice() {
   return (
     <GameLayout title="Dice" tag="roll over / under" win={win} onWinClose={closeWin}
       controls={
-        <BetControls {...g} disabled={loading}>
+        <BetControls {...g} disabled={loading || autoOn}>
           <div>
             <FieldLabel>Direction</FieldLabel>
             <div className="flex gap-1.5">
               {["under", "over"].map((d) => (
-                <button key={d} data-testid={`dice-direction-${d}`} disabled={loading} onClick={() => { sfx.click(); setDirection(d); }}
+                <button key={d} data-testid={`dice-direction-${d}`} disabled={loading || autoOn} onClick={() => { sfx.click(); setDirection(d); }}
                   className={PILL_BTN(direction === d) + " capitalize"}>Roll {d} {d === "over" ? "▲" : "▼"}</button>
               ))}
             </div>
@@ -83,14 +87,15 @@ export function Dice() {
             <StatBox label="Chance" value={`${chance.toFixed(2)}%`} testId="dice-chance" />
             <StatBox label="Payout" value={`${mult.toFixed(4)}×`} testId="dice-multiplier" accent />
           </div>
-          <PlayButton data-testid="dice-play-button" onClick={play} loading={loading} icon={<Dices size={16} />}>Roll dice</PlayButton>
+          <PlayArea g={g} play={play} onRunning={setAutoOn}
+            manual={<PlayButton data-testid="dice-play-button" onClick={play} loading={loading} icon={<Dices size={16} />}>Roll dice</PlayButton>} />
         </BetControls>
       }>
       <div className="flex-1 flex flex-col justify-center px-2 sm:px-8">
         <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl px-5 pt-20 pb-5">
           <div className="relative">
             <Track target={target} direction={direction} last={last} />
-            <input data-testid="dice-target-slider" type="range" min="2" max="98" step="1" value={target} disabled={loading}
+            <input data-testid="dice-target-slider" type="range" min="2" max="98" step="1" value={target} disabled={loading || autoOn}
               onChange={(e) => { const v = parseInt(e.target.value, 10); if (v % 4 === 0) sfx.tick(v / 100); setTarget(v); }} aria-label="Dice target"
               className="absolute inset-x-0 top-0 h-4 w-full opacity-0 cursor-pointer" />
           </div>
