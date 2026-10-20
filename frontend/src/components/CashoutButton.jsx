@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { HandCoins, Loader2, Lock } from "lucide-react";
 import { AutoCashout } from "@/components/AutoCashout";
-import { fmtCrypto } from "@/lib/format";
+import { fmtCrypto, fmtAmt } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 
 export function CashoutButton({ bet, value, onCashout, onSetAuto }) {
@@ -38,7 +38,7 @@ export function CashoutButton({ bet, value, onCashout, onSetAuto }) {
         {confirm ? "Tap again to confirm" : "Cash out"}
       </span>
       <span className="font-mono" data-testid={`cashout-value-${bet.id}`}>
-        {fmtCrypto(value, bet.coin)} {bet.coin}{" "}
+        {fmtAmt(value, bet.coin)}{" "}
         <Usd amount={value} coin={bet.coin} prefix="(" className={confirm ? "text-black/60" : "text-sky-300/60"} />{")"}
       </span>
     </button>

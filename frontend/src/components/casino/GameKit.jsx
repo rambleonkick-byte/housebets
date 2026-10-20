@@ -4,11 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, ShieldCheck, Volume2, VolumeX } from "lucide-react";
 import { sfx } from "@/lib/sfx";
 import { COIN_META } from "@/lib/api";
-import { fmtCrypto } from "@/lib/format";
+import { fmtCrypto, fmtAmt } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 import { useAuth } from "@/context/AuthContext";
 
-const COINS = ["USDT", "BTC", "ETH", "SOL"];
+const COINS = ["USD"];
 
 // 3D bevelled tile states shared by Keno & Mines
 export const TILE = {
@@ -58,7 +58,7 @@ export function StatBox({ label, value, testId, accent }) {
 export function BetControls({ coin, setCoin, stake, setStake, balance, disabled, children }) {
   return (
     <div className="space-y-4">
-      <div>
+      <div className={COINS.length > 1 ? "" : "hidden"}>
         <FieldLabel>Currency</FieldLabel>
         <div className="flex gap-1.5">
           {COINS.map((c) => (
@@ -80,7 +80,7 @@ export function BetControls({ coin, setCoin, stake, setStake, balance, disabled,
           ))}
         </div>
         <p className="mt-1.5 text-[11px] font-mono text-slate-500">
-          Balance <span style={{ color: COIN_META[coin].color }}>{fmtCrypto(balance, coin)} {coin}</span> <Usd amount={balance} coin={coin} prefix="· " />
+          Balance <span style={{ color: COIN_META[coin].color }}>{fmtAmt(balance, coin)}</span> <Usd amount={balance} coin={coin} prefix="· " />
         </p>
       </div>
       {children}
@@ -90,7 +90,7 @@ export function BetControls({ coin, setCoin, stake, setStake, balance, disabled,
 
 export function useGameBase() {
   const { user, setBalances, setAuthOpen } = useAuth();
-  const [coin, setCoin] = useState("USDT");
+  const [coin, setCoin] = useState("USD");
   const [stake, setStake] = useState("10");
   const balance = user?.balances?.[coin] ?? 0;
   const stakeNum = parseFloat(stake) || 0;
@@ -131,7 +131,7 @@ export function BigWin({ win, onClose }) {
             </p>
             <div className="relative h-px my-3 bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent" />
             <p data-testid="big-win-payout" className="relative font-mono text-base font-bold text-white">
-              {fmtCrypto(win.payout, win.coin)} {win.coin}
+              {fmtAmt(win.payout, win.coin)}
             </p>
             <Usd amount={win.payout} coin={win.coin} prefix="" className="relative text-xs text-slate-400" />
           </motion.div>
@@ -257,7 +257,7 @@ export function PlayArea({ g, play, manual, onRunning, onMode }) {
     if (stopRef.current) reason = "Auto bet stopped";
     g.setStake(String(base));
     setRun(false);
-    toast(reason, { description: `${done} bets · net ${net >= 0 ? "+" : ""}${fmtCrypto(net, g.coin)} ${g.coin}` });
+    toast(reason, { description: `${done} bets · net ${net >= 0 ? "+" : ""}${fmtAmt(net, g.coin)}` });
   };
 
   return (

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { usePrices, fmtUsd } from "@/lib/prices";
-import { usdValue, fmtCrypto } from "@/lib/format";
+import { usdValue, fmtCrypto, fmtAmt } from "@/lib/format";
 import { AffiliateChart } from "@/components/AffiliateChart";
 
 const copy = (text, what) => navigator.clipboard.writeText(text).then(() => toast.success(`${what} copied`));
@@ -24,7 +24,7 @@ function CoinList({ amounts }) {
   const entries = Object.entries(amounts || {}).filter(([, v]) => v > 0);
   if (!entries.length) return <span className="text-zinc-600">—</span>;
   return entries.map(([c, v]) => (
-    <span key={c} className="block font-mono text-xs" style={{ color: COIN_META[c]?.color }}>{fmtCrypto(v, c)} {c}</span>
+    <span key={c} className="block font-mono text-xs" style={{ color: COIN_META[c]?.color }}>{fmtAmt(v, c)}</span>
   ));
 }
 

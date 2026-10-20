@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Copy, ExternalLink, ShieldCheck, AlertTriangle } from "lucide-react";
 import { api, formatApiErrorDetail, COIN_META, COIN_NETWORK, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { fmtCrypto, usdValue } from "@/lib/format";
+import { fmtCrypto, fmtAmt, usdValue } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 import { usePrices } from "@/lib/prices";
 import { toast } from "sonner";
@@ -104,7 +104,8 @@ export function WalletModal({ open, onClose }) {
   };
 
   const { rates, live } = usePrices();
-  const total = wallet ? usdValue(wallet.balances, rates) : 0;
+  const total = wallet ? Number(wallet.balances?.USD || 0) : 0;
+  const estCrypto = rates[coin] ? (parseFloat(amount) || 0) / rates[coin] : 0;
 
   return (
     <AnimatePresence>
@@ -116,7 +117,7 @@ export function WalletModal({ open, onClose }) {
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A2F45]">
               <div>
-                <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">Crypto Wallet</p>
+                <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">Wallet · USD</p>
                 <p data-testid="wallet-total-usd" className="font-mono text-2xl font-bold">${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 <p data-testid="wallet-price-status" className="text-[10px] font-mono text-zinc-500 flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />{live ? "Live market prices" : "Estimated prices"}</p>
               </div>
@@ -124,18 +125,10 @@ export function WalletModal({ open, onClose }) {
             </div>
 
             <div className="overflow-y-auto scrollbar-thin">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-4">
-                {wallet && COINS.map((c) => (
-                  <div key={c} data-testid={`wallet-balance-${c}`} className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="w-2 h-2 rounded-full" style={{ background: COIN_META[c].color }} />
-                      <span className="text-xs font-mono text-zinc-400">{c}</span>
-                    </div>
-                    <p className="font-mono text-sm font-bold">{fmtCrypto(wallet.balances[c], c)}</p>
-                    <Usd amount={wallet.balances[c]} coin={c} prefix="" className="text-[11px] text-zinc-500" testId={`wallet-balance-usd-${c}`} />
-                    <p className="text-[10px] font-mono text-zinc-600">@ ${Number(rates[c] || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-                  </div>
-                ))}
+              <div className="px-4 pt-4 pb-1">
+                <p className="text-[11px] text-zinc-500" data-testid="wallet-usd-note">
+                  Your balance is held in US dollars. Deposit with BTC, ETH, USDT or SOL; it's converted to USD at the live price when it arrives. Withdrawals are paid in the coin you choose.
+                </p>
               </div>
 
               <div className="px-4">
@@ -217,14 +210,18 @@ export function WalletModal({ open, onClose }) {
                   <>
                     <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-start gap-2">
                       <ArrowUpFromLine size={15} className="text-emerald-400 mt-0.5 shrink-0" />
-                      <p className="text-[11px] text-zinc-400">Send your {coin} to any external wallet on the <span className="text-zinc-200">{COIN_NETWORK[coin]}</span> network. Payouts are sent on-chain via OxaPay — double-check the address, crypto sent can't be reversed.</p>
+                      <p className="text-[11px] text-zinc-400">Withdraw dollars and receive {coin} at the live price, sent to any external wallet on the <span className="text-zinc-200">{COIN_NETWORK[coin]}</span> network. Payouts are sent on-chain via OxaPay — double-check the address, crypto sent can't be reversed.</p>
                     </div>
                     <input data-testid="wallet-address-input" value={address}
                       onChange={(e) => setAddress(e.target.value)} placeholder={`${coin} wallet address`}
                       className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-xs break-all focus:outline-none focus:border-emerald-500" />
                     <input data-testid="wallet-amount-input" type="number" min="0" value={amount}
-                      onChange={(e) => setAmount(e.target.value)} placeholder={`Amount in ${coin}`}
+                      onChange={(e) => setAmount(e.target.value)} placeholder="Amount in USD"
                       className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
+                    <div className="flex justify-between text-[11px] font-mono text-zinc-500" data-testid="wallet-withdraw-estimate">
+                      <span>Available {fmtAmt(total, "USD")}</span>
+                      <span>You receive ≈ {fmtCrypto(estCrypto, coin)} {coin}</span>
+                    </div>
                     <button data-testid="wallet-submit-button" onClick={act} disabled={loading}
                       className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-60">
                       {loading && <Loader2 size={16} className="animate-spin" />} Withdraw to Address
@@ -241,14 +238,15 @@ export function WalletModal({ open, onClose }) {
                       const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund" || t.type === "cashout" || t.type === "affiliate" || t.type === "lossback" || (t.type === "adjustment" && t.amount > 0);
                       const po = t.payout;
                       const hash = po?.tx_hash;
-                      const explorer = explorerUrl(t.coin, hash, po?.network);
+                      const explorer = explorerUrl(t.crypto_coin || po?.coin || t.coin, hash, po?.network);
                       return (
                         <div key={t.id} className="bg-[#0E1017] rounded-md px-3 py-2" data-testid={`wallet-tx-${t.id}`}>
                           <div className="flex items-center justify-between text-sm">
                             <span className="capitalize text-zinc-300">{t.type}</span>
                             <span className={`font-mono text-xs ${positive ? "text-emerald-400" : "text-zinc-400"}`}>
-                              {positive ? "+" : "-"}{fmtCrypto(Math.abs(t.amount), t.coin)} {t.coin}
+                              {positive ? "+" : "-"}{fmtAmt(Math.abs(t.amount), t.coin)}
                               <Usd amount={Math.abs(t.amount)} coin={t.coin} className="text-zinc-500 ml-1.5" />
+                              {t.crypto_coin && <span className="text-zinc-600 ml-1.5">· {fmtCrypto(t.crypto_amount, t.crypto_coin)} {t.crypto_coin}</span>}
                             </span>
                           </div>
                           {po && (() => {

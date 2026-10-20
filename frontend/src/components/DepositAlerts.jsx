@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Undo2, ExternalLink, HandCoins, LifeBuoy } from "lucide-react";
 import { api, COIN_META, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { fmtCrypto } from "@/lib/format";
+import { fmtCrypto, fmtAmt } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 
 export const WD_STAGE = {
@@ -32,7 +32,7 @@ function AlertToast({ a, kind, title, sub, Icon, tone, sign }) {
         <div className="min-w-0 flex-1">
           <p className={`text-[11px] font-mono uppercase tracking-[0.2em] ${t.text}`} data-testid={`${kind}-alert-title`}>{title}</p>
           <p className="font-mono text-lg font-bold text-white" data-testid={`${kind}-alert-amount`}>
-            {sign}{fmtCrypto(a.amount, a.coin)} <span style={{ color: COIN_META[a.coin]?.color }}>{a.coin}</span>
+            {sign}{a.amount_usd != null ? fmtAmt(a.amount_usd, "USD") : fmtAmt(a.amount, a.coin)}{a.amount_usd != null && a.coin !== "USD" && <span className="text-[10px] text-zinc-500 ml-1" style={{ color: COIN_META[a.coin]?.color }}>{fmtCrypto(a.amount, a.coin)} {a.coin}</span>}
           </p>
           <Usd amount={a.amount} coin={a.coin} className="text-xs text-zinc-400" />
           {sub && <p className="text-[11px] text-zinc-500 mt-0.5">{sub}</p>}
@@ -62,7 +62,7 @@ export function DepositAlerts() {
         const lbs = data.lossbacks || [];
         if (!data.alerts.length && !wds.length && !cos.length && !lbs.length) return;
         lbs.forEach((l) => toast.custom(() => (
-          <AlertToast a={l} kind="lossback" title="10% lossback" sub={`You got ${fmtCrypto(l.amount, l.coin)} ${l.coin} back on your losing bet`} Icon={LifeBuoy} tone="emerald" sign="+" />
+          <AlertToast a={l} kind="lossback" title="10% lossback" sub={`You got ${fmtAmt(l.amount, l.coin)} back on your losing bet`} Icon={LifeBuoy} tone="emerald" sign="+" />
         ), { duration: 12000 }));
         cos.forEach((c) => toast.custom(() => (
           <AlertToast a={c} kind="cashout" title="Auto cash out" sub="Your target was hit — winnings added" Icon={HandCoins} tone="sky" sign="+" />

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, ArrowDownToLine, ExternalLink, HandCoins, LifeBuoy } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { api, COIN_META, explorerUrl } from "@/lib/api";
-import { fmtCrypto } from "@/lib/format";
+import { fmtCrypto, fmtAmt } from "@/lib/format";
 import { WD_STAGE, TONE } from "@/components/DepositAlerts";
 
 function timeAgo(iso) {
@@ -34,7 +34,7 @@ function NotificationRow({ n }) {
           <span className="text-[10px] text-zinc-500 shrink-0">{timeAgo(n.created_at)}</span>
         </div>
         <p className="font-mono text-sm font-bold text-white">
-          {sign}{fmtCrypto(n.amount, n.coin)} <span style={{ color: COIN_META[n.coin]?.color }}>{n.coin}</span>
+          {sign}{n.amount_usd != null ? fmtAmt(n.amount_usd, "USD") : fmtAmt(n.amount, n.coin)}{n.amount_usd != null && n.coin !== "USD" && <span className="text-[10px] text-zinc-500 ml-1" style={{ color: COIN_META[n.coin]?.color }}>{fmtCrypto(n.amount, n.coin)} {n.coin}</span>}
         </p>
         {url && (
           <a href={url} target="_blank" rel="noreferrer" data-testid={`notification-tx-link-${n.id}`}

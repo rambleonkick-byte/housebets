@@ -4,9 +4,9 @@ import { toast } from "sonner";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { usePrices, fmtUsd } from "@/lib/prices";
-import { usdValue, fmtCrypto } from "@/lib/format";
+import { usdValue, fmtCrypto, fmtAmt } from "@/lib/format";
 
-const COINS = ["BTC", "ETH", "USDT", "SOL"];
+const COINS = ["USD"];
 const PAGE = 50;
 
 function Stat({ icon: Icon, label, value, testid }) {
@@ -21,11 +21,11 @@ function Stat({ icon: Icon, label, value, testid }) {
 function Coins({ v }) {
   const e = COINS.filter((c) => v?.[c]);
   if (!e.length) return <span className="text-zinc-600">—</span>;
-  return e.map((c) => <span key={c} className="block font-mono text-[11px]" style={{ color: COIN_META[c]?.color }}>{fmtCrypto(v[c], c)} {c}</span>);
+  return e.map((c) => <span key={c} className="block font-mono text-[11px]" style={{ color: COIN_META[c]?.color }}>{fmtAmt(v[c], c)}</span>);
 }
 
 function AdjustForm({ u, onDone }) {
-  const [coin, setCoin] = useState("USDT");
+  const [coin, setCoin] = useState("USD");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);

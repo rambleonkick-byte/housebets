@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ShieldCheck, RefreshCw, Copy, Check, Loader2 } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
-import { fmtCrypto } from "@/lib/format";
+import { fmtCrypto, fmtAmt } from "@/lib/format";
 import { verifyGame, sha256Hex } from "@/lib/fairness";
 import { Usd } from "@/components/Usd";
 import { toast } from "sonner";
@@ -116,7 +116,7 @@ export function CasinoHistoryModal({ open, onClose }) {
                               </span>
                             </div>
                             <div className="text-right">
-                              <p className="font-mono text-xs text-zinc-400">{fmtCrypto(gme.stake, gme.coin)} {gme.coin}</p>
+                              <p className="font-mono text-xs text-zinc-400">{fmtAmt(gme.stake, gme.coin)}</p>
                               <p className={`font-mono text-xs ${gme.won ? "text-emerald-400" : "text-zinc-500"}`}>
                                 {gme.won ? "+" : ""}{fmtCrypto(gme.payout, gme.coin)}
                               </p>

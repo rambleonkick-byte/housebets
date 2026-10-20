@@ -3,7 +3,7 @@ import { Zap, Hand, Plus, Square, Split, ShieldCheck } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { BetControls, useGameBase, GameLayout, PlayButton, FieldLabel } from "@/components/casino/GameKit";
 import { PlayingCard } from "@/components/casino/PlayingCard";
-import { fmtCrypto } from "@/lib/format";
+import { fmtCrypto, fmtAmt } from "@/lib/format";
 import { sfx } from "@/lib/sfx";
 import { toast } from "sonner";
 
@@ -31,7 +31,7 @@ function HandView({ cards, value, soft, title, active, result, bet, coin, testId
       </div>
       {(result || bet != null) && (
         <div className="flex items-center gap-1.5 h-5">
-          {bet != null && <span className="font-mono text-[10px] text-emerald-100/70">{fmtCrypto(bet, coin)} {coin}</span>}
+          {bet != null && <span className="font-mono text-[10px] text-emerald-100/70">{fmtAmt(bet, coin)}</span>}
           {result && <span data-testid={`${testId}-result`} className={`text-[10px] font-black uppercase tracking-wider rounded-full px-2 py-0.5 ${RESULT_TONE[result]}`}>{result}</span>}
         </div>
       )}
@@ -169,11 +169,11 @@ export function Blackjack() {
                 </div>
               ))}
             </div>
-            <p className="mt-1.5 text-[11px] font-mono text-slate-500" data-testid="bj-total-bet">Total bet {fmtCrypto(inPlay ? game.total_stake : g.stakeNum + sideTotal, g.coin)} {g.coin}</p>
+            <p className="mt-1.5 text-[11px] font-mono text-slate-500" data-testid="bj-total-bet">Total bet {fmtAmt(inPlay ? game.total_stake : g.stakeNum + sideTotal, g.coin)}</p>
           </div>
           {game?.status === "insurance" ? (
             <div className="space-y-2" data-testid="bj-insurance-prompt">
-              <p className="flex items-center gap-1.5 text-xs text-amber-200"><ShieldCheck size={14} /> Dealer shows an Ace — take insurance for {fmtCrypto(game.hands[0].bet / 2, g.coin)} {g.coin}?</p>
+              <p className="flex items-center gap-1.5 text-xs text-amber-200"><ShieldCheck size={14} /> Dealer shows an Ace — take insurance for {fmtAmt(game.hands[0].bet / 2, g.coin)}?</p>
               <div className="grid grid-cols-2 gap-2">
                 <PlayButton data-testid="bj-insurance-yes" tone="amber" loading={loading} onClick={() => act("insurance")}>Insure</PlayButton>
                 <PlayButton data-testid="bj-insurance-no" loading={loading} onClick={() => act("no_insurance")}>No thanks</PlayButton>

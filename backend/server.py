@@ -72,8 +72,9 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("apexodds")
 
-STARTING_BALANCES = {"BTC": 0.0, "ETH": 0.0, "USDT": 0.0, "SOL": 0.0}
-COIN_USD = {"BTC": 64000.0, "ETH": 3400.0, "USDT": 1.0, "SOL": 150.0}
+STARTING_BALANCES = {"USD": 0.0}
+CRYPTO_COINS = ("BTC", "ETH", "USDT", "SOL")
+COIN_USD = {"BTC": 64000.0, "ETH": 3400.0, "USDT": 1.0, "SOL": 150.0, "USD": 1.0}
 COIN_NETWORK = {"BTC": "BTC", "ETH": "ERC20", "USDT": "ERC20", "SOL": "SOL"}
 
 # ----------------------------------------------------------------------------
@@ -744,10 +745,28 @@ async def get_live_rates() -> dict:
         data = r.json()
         rates = {coin: float(data[cid]["usd"]) for cid, coin in _CG_IDS.items() if cid in data}
         if len(rates) == len(_CG_IDS):
-            _PRICE_CACHE.update(rates=rates, live=True)
+            _PRICE_CACHE.update(rates={**rates, "USDT": 1.0, "USD": 1.0}, live=True)
+            return _PRICE_CACHE["rates"]
     except Exception as e:
-        logger.warning(f"price fetch failed: {e}")
+        logger.warning(f"price fetch failed (coingecko): {e}")
+    try:
+        async with httpx.AsyncClient(timeout=8) as hc:
+            r = await hc.get("https://api.coinbase.com/v2/exchange-rates", params={"currency": "USD"})
+        r.raise_for_status()
+        cb = r.json()["data"]["rates"]
+        rates = {c: round(1 / float(cb[c]), 6) for c in CRYPTO_COINS if float(cb.get(c) or 0) > 0}
+        if len(rates) == len(CRYPTO_COINS):
+            _PRICE_CACHE.update(rates={**rates, "USDT": 1.0, "USD": 1.0}, live=True)
+    except Exception as e:
+        logger.warning(f"price fetch failed (coinbase): {e}")
     return _PRICE_CACHE["rates"]
+
+
+async def _live_rate(coin):
+    rates = await get_live_rates()
+    if not _PRICE_CACHE["live"] or not rates.get(coin):
+        raise HTTPException(status_code=503, detail="Live prices unavailable, try again in a minute")
+    return rates[coin]
 
 
 @api_router.get("/prices")
@@ -894,26 +913,29 @@ async def send_withdrawal_alert(wid: str):
 async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
     await ensure_wallet(user["id"])
     wallet = await db.wallets.find_one({"user_id": user["id"]})
-    if body.coin not in STARTING_BALANCES or body.amount <= 0:
+    if body.coin not in CRYPTO_COINS or body.amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid withdrawal")
     address = (body.address or "").strip()
     if len(address) < 10:
         raise HTTPException(status_code=400, detail="Enter a valid wallet address")
-    if wallet["balances"].get(body.coin, 0) < body.amount:
+    usd = round(body.amount, 2)
+    rate = await _live_rate(body.coin)
+    crypto_amt = round(usd / rate, 8)
+    # Reserve the USD and queue for admin approval — no crypto is sent until approved.
+    res = await db.wallets.update_one({"user_id": user["id"], "balances.USD": {"$gte": usd}},
+                                      {"$inc": {"balances.USD": -usd}})
+    if not res.modified_count:
         raise HTTPException(status_code=400, detail="Insufficient balance")
-
-    # Reserve funds and queue for admin approval — no crypto is sent until approved.
-    await db.wallets.update_one({"user_id": user["id"]},
-                                {"$inc": {f"balances.{body.coin}": -body.amount}})
     wid = str(uuid.uuid4())
     await db.withdrawals.insert_one({
         "id": wid, "user_id": user["id"], "user_email": user["email"], "user_name": user.get("name"),
-        "coin": body.coin, "amount": body.amount, "address": address, "memo": body.memo or "",
+        "coin": body.coin, "amount": crypto_amt, "amount_usd": usd, "rate": rate,
+        "address": address, "memo": body.memo or "",
         "network": COIN_NETWORK.get(body.coin), "status": "pending_approval", "track_id": None,
         "tx_hash": None, "refunded": False, "created_at": now_iso()})
     await db.transactions.insert_one({
         "id": str(uuid.uuid4()), "user_id": user["id"], "type": "withdraw",
-        "coin": body.coin, "amount": body.amount, "created_at": now_iso(),
+        "coin": "USD", "amount": usd, "crypto_coin": body.coin, "crypto_amount": crypto_amt, "created_at": now_iso(),
         "hash": "withdraw:" + wid})
     asyncio.create_task(send_withdrawal_alert(wid))
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -938,10 +960,11 @@ async def _credit_oxa_invoice(track_id, status):
         {"$set": {"credited": True, "status": "paid", "credited_at": now_iso()}})
     if not inv:
         return False
-    await _adjust(inv["user_id"], inv["coin"], inv["amount"])
+    usd = round(inv["amount"] * (await get_live_rates()).get(inv["coin"], 0), 2)
+    await _adjust(inv["user_id"], "USD", usd)
     await db.transactions.insert_one({
         "id": str(uuid.uuid4()), "user_id": inv["user_id"], "type": "deposit",
-        "coin": inv["coin"], "amount": inv["amount"], "created_at": now_iso(),
+        "coin": "USD", "amount": usd, "crypto_coin": inv["coin"], "crypto_amount": inv["amount"], "created_at": now_iso(),
         "hash": "oxapay:" + str(track_id)})
     return True
 
@@ -950,7 +973,7 @@ async def _credit_oxa_invoice(track_id, status):
 async def oxapay_invoice(body: WalletTxInput, user: dict = Depends(get_current_user)):
     if not OXAPAY_KEY:
         raise HTTPException(status_code=503, detail="Payment gateway not configured")
-    if body.coin not in STARTING_BALANCES or body.amount <= 0:
+    if body.coin not in CRYPTO_COINS or body.amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid amount")
     await ensure_wallet(user["id"])
     order_id = f"{user['id']}:{uuid.uuid4().hex[:12]}"
@@ -1044,19 +1067,25 @@ async def _credit_static_txs(sa, txs) -> float:
             continue
         # A static address can receive other tokens on the same chain; credit the coin actually sent
         coin = str(tx.get("currency") or sa["coin"]).upper()
-        if coin not in STARTING_BALANCES:
+        if coin not in CRYPTO_COINS:
             logger.warning(f"static deposit {h}: unsupported currency {coin}, not credited")
             continue
+        rates = await get_live_rates()
+        if not _PRICE_CACHE["live"]:
+            logger.warning(f"static deposit {h}: live prices unavailable, will credit on next callback/sync")
+            continue
+        usd = round(amt * rates[coin], 2)
         try:
             await db.static_deposits.insert_one({"tx_hash": h, "user_id": sa["user_id"], "coin": coin,
-                                                 "net": sa.get("net"), "amount": amt, "track_id": sa["track_id"], "address_coin": sa["coin"],
+                                                 "net": sa.get("net"), "amount": amt, "amount_usd": usd, "rate": rates[coin], "track_id": sa["track_id"], "address_coin": sa["coin"],
                                                  "notified": False, "created_at": now_iso()})
         except DuplicateKeyError:
             continue
-        await _adjust(sa["user_id"], coin, amt)
+        await _adjust(sa["user_id"], "USD", usd)
         await db.transactions.insert_one({
             "id": str(uuid.uuid4()), "user_id": sa["user_id"], "type": "deposit",
-            "coin": coin, "amount": amt, "created_at": now_iso(), "hash": "oxapay-static:" + h})
+            "coin": "USD", "amount": usd, "crypto_coin": coin, "crypto_amount": amt,
+            "created_at": now_iso(), "hash": "oxapay-static:" + h})
         total += amt
     return total
 
@@ -1068,7 +1097,7 @@ def _static_public(sa):
 @api_router.get("/wallet/deposit-address/{coin}")
 async def get_deposit_address(coin: str, user: dict = Depends(get_current_user)):
     coin = coin.upper()
-    if coin not in STARTING_BALANCES:
+    if coin not in CRYPTO_COINS:
         raise HTTPException(status_code=400, detail="Unsupported coin")
     net = COIN_NETWORK.get(coin)
     sel = {"user_id": user["id"], "coin": coin, "net": net}
@@ -1151,7 +1180,8 @@ async def _save_notification(user_id, kind, a, stage=None, key_id=None, created_
     try:
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()), "key": key, "user_id": user_id, "kind": kind, "stage": stage,
-            "coin": a.get("coin"), "amount": a.get("amount"), "net": a.get("net") or a.get("network"),
+            "coin": a.get("coin"), "amount": a.get("amount"), "amount_usd": a.get("amount_usd"),
+            "net": a.get("net") or a.get("network"),
             "tx_hash": a.get("tx_hash"), "read": False, "created_at": created_at or now_iso()})
     except DuplicateKeyError:
         pass
@@ -1267,10 +1297,13 @@ PAYOUT_TERMINAL = PAYOUT_FAILED | {"confirmed"}
 
 async def _do_refund(wd):
     """Credit a reserved withdrawal amount back to the user's wallet + ledger."""
-    await _adjust(wd["user_id"], wd["coin"], wd["amount"])
+    usd = wd.get("amount_usd")
+    if usd is None:
+        usd = round(wd["amount"] * (await get_live_rates()).get(wd["coin"], 0), 2)
+    await _adjust(wd["user_id"], "USD", usd)
     await db.transactions.insert_one({
         "id": str(uuid.uuid4()), "user_id": wd["user_id"], "type": "refund",
-        "coin": wd["coin"], "amount": wd["amount"], "created_at": now_iso(),
+        "coin": "USD", "amount": usd, "created_at": now_iso(),
         "hash": "withdraw-refund:" + wd["id"]})
 
 
@@ -2532,8 +2565,42 @@ async def root():
     return {"message": "ApexOdds API"}
 
 
+async def _migrate_to_usd():
+    """One-time: convert every crypto balance (and open bets / pending withdrawals) to USD at live prices."""
+    for _ in range(60):
+        rates = await get_live_rates()
+        if _PRICE_CACHE["live"]:
+            break
+        await asyncio.sleep(30)
+    else:
+        logger.error("USD migration skipped: no live prices")
+        return
+    n = 0
+    async for w in db.wallets.find({"usd_migrated": {"$ne": True}}):
+        bal = w.get("balances") or {}
+        usd = round(sum(float(bal.get(c) or 0) * rates[c] for c in CRYPTO_COINS) + float(bal.get("USD") or 0), 2)
+        res = await db.wallets.update_one({"_id": w["_id"], "usd_migrated": {"$ne": True}},
+                                          {"$set": {"balances": {"USD": usd}, "usd_migrated": True,
+                                                    "pre_usd_balances": bal, "usd_rates": rates}})
+        n += res.modified_count
+    async for b in db.bets.find({"status": "open", "coin": {"$in": list(CRYPTO_COINS)}}):
+        r = rates[b["coin"]]
+        await db.bets.update_one({"_id": b["_id"], "coin": b["coin"]}, {"$set": {
+            "coin": "USD", "stake": round(b["stake"] * r, 2), "potential_payout": round(b["potential_payout"] * r, 2),
+            "orig_coin": b["coin"], "orig_stake": b["stake"]}})
+    async for wd in db.withdrawals.find({"amount_usd": {"$exists": False}, "refunded": {"$ne": True}}):
+        await db.withdrawals.update_one({"_id": wd["_id"]}, {"$set": {"amount_usd": round(wd["amount"] * rates.get(wd["coin"], 0), 2)}})
+    async for a in db.affiliates.find({"available": {"$ne": {}}}):
+        av = a.get("available") or {}
+        if any(c in av for c in CRYPTO_COINS):
+            usd = round(sum(float(av.get(c) or 0) * rates.get(c, 0) for c in av), 2)
+            await db.affiliates.update_one({"_id": a["_id"]}, {"$set": {"available": {"USD": usd} if usd > 0 else {}}})
+    logger.info(f"USD migration done: {n} wallets converted")
+
+
 @app.on_event("startup")
 async def startup():
+    asyncio.create_task(_migrate_to_usd())
     await db.users.create_index("email", unique=True)
     await db.affiliates.create_index("code", unique=True)
     await db.affiliates.create_index("user_id", unique=True)

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Target, X } from "lucide-react";
-import { fmtCrypto } from "@/lib/format";
+import { fmtCrypto, fmtAmt } from "@/lib/format";
 
 export function AutoCashout({ bet, value, onSave }) {
   const max = bet.potential_payout * 0.95;
@@ -19,7 +19,7 @@ export function AutoCashout({ bet, value, onSave }) {
   if (bet.auto_cashout && !editing) {
     return (
       <div data-testid={`auto-cashout-active-${bet.id}`} className="mt-1.5 flex items-center justify-between text-[11px] text-sky-300/90 bg-sky-500/5 border border-sky-500/20 rounded-lg px-3 py-1.5">
-        <span className="flex items-center gap-1.5"><Target size={12} /> Auto cash out at <span className="font-mono">{fmtCrypto(bet.auto_cashout, bet.coin)} {bet.coin}</span></span>
+        <span className="flex items-center gap-1.5"><Target size={12} /> Auto cash out at <span className="font-mono">{fmtAmt(bet.auto_cashout, bet.coin)}</span></span>
         <span className="flex items-center gap-2">
           <button data-testid={`auto-cashout-edit-${bet.id}`} onClick={() => { setTarget(String(bet.auto_cashout)); setEditing(true); }} className="hover:text-white">Edit</button>
           <button data-testid={`auto-cashout-clear-${bet.id}`} onClick={() => save(null)} disabled={busy} aria-label="Remove auto cash out" className="hover:text-red-400"><X size={12} /></button>
@@ -46,7 +46,7 @@ export function AutoCashout({ bet, value, onSave }) {
         <button data-testid={`auto-cashout-cancel-${bet.id}`} onClick={() => setEditing(false)} className="px-2 text-zinc-500 hover:text-white"><X size={13} /></button>
       </div>
       <p className="text-[10px] text-zinc-500">
-        Cashes out automatically once the offer reaches your target. Max {fmtCrypto(max, bet.coin)} {bet.coin}.
+        Cashes out automatically once the offer reaches your target. Max {fmtAmt(max, bet.coin)}.
       </p>
     </div>
   );

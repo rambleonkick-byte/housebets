@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { CashoutButton } from "@/components/CashoutButton";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { Usd } from "@/components/Usd";
-import { fmtCrypto, fmtOdds } from "@/lib/format";
+import { fmtCrypto, fmtAmt, fmtOdds } from "@/lib/format";
 
 const STATUS = {
   open: { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10", label: "Open" },
@@ -42,7 +42,7 @@ export function BetHistoryModal({ open, onClose }) {
     try {
       const { data } = await api.post(`/bets/${b.id}/auto-cashout`, { target });
       setBets((prev) => prev.map((x) => (x.id === b.id ? { ...x, auto_cashout: data.auto_cashout } : x)));
-      toast.success(target ? `Auto cash out set at ${fmtCrypto(target, b.coin)} ${b.coin}` : "Auto cash out removed");
+      toast.success(target ? `Auto cash out set at ${fmtAmt(target, b.coin)}` : "Auto cash out removed");
       return true;
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
@@ -55,7 +55,7 @@ export function BetHistoryModal({ open, onClose }) {
       const { data } = await api.post(`/bets/${b.id}/cashout`, { expected: quotes[b.id] });
       setBalances(data.balances);
       setBets((prev) => prev.map((x) => (x.id === b.id ? { ...x, status: "cashed_out", cashout_amount: data.amount } : x)));
-      toast.success(`Cashed out ${fmtCrypto(data.amount, b.coin)} ${b.coin}`);
+      toast.success(`Cashed out ${fmtAmt(data.amount, b.coin)}`);
     } catch (e) {
       const d = e.response?.data?.detail;
       if (e.response?.status === 409 && d) {
@@ -120,17 +120,17 @@ export function BetHistoryModal({ open, onClose }) {
                         ))}
                       </div>
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-[#1E2234]">
-                        <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtCrypto(b.stake, b.coin)} {b.coin}</span> <Usd amount={b.stake} coin={b.coin} prefix="(" />{")"}</span>
+                        <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtAmt(b.stake, b.coin)}</span> <Usd amount={b.stake} coin={b.coin} prefix="(" />{")"}</span>
                         <span className="text-zinc-500">
                           {b.status === "cashed_out" ? (b.auto_cashed ? "Auto cashed out" : "Cashed out") : b.status === "won" ? "Payout" : "To win"}{" "}
                           <span className={`font-mono ${b.status === "won" ? "text-emerald-400" : b.status === "cashed_out" ? "text-sky-400" : "text-zinc-300"}`}>
-                            {fmtCrypto(b.status === "cashed_out" ? b.cashout_amount : b.potential_payout, b.coin)} {b.coin}
+                            {fmtAmt(b.status === "cashed_out" ? b.cashout_amount : b.potential_payout, b.coin)}
                           </span> <Usd amount={b.status === "cashed_out" ? b.cashout_amount : b.potential_payout} coin={b.coin} prefix="(" />{")"}
                         </span>
                       </div>
                       {b.status === "lost" && b.lossback > 0 && (
                         <p data-testid={`bet-lossback-${b.id}`} className="mt-2 text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2 py-1">
-                          10% lossback credited: <span className="font-mono font-bold">+{fmtCrypto(b.lossback, b.coin)} {b.coin}</span>
+                          10% lossback credited: <span className="font-mono font-bold">+{fmtAmt(b.lossback, b.coin)}</span>
                         </p>
                       )}
                       {b.status === "open" && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />}

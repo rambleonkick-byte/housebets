@@ -5,11 +5,11 @@ import { ShareSlipModal } from "@/components/ShareSlipModal";
 import { useBetSlip } from "@/context/BetSlipContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
-import { fmtOdds, fmtCrypto } from "@/lib/format";
+import { fmtOdds, fmtCrypto, fmtAmt } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 import { toast } from "sonner";
 
-const COINS = ["USDT", "BTC", "ETH", "SOL"];
+const COINS = ["USD"];
 const SGP_CORRELATION = 0.8;
 const PILL = {
   total: "bg-lime-400/10 border-lime-400/25 text-lime-300",
@@ -116,7 +116,7 @@ export function BetSlip() {
   const pendingChanges = items.some((s) => s.pending);
   const { user, setAuthOpen, setBalances } = useAuth();
   const [stake, setStake] = useState("");
-  const [coin, setCoin] = useState("USDT");
+  const [coin, setCoin] = useState("USD");
   const [mode, setMode] = useState("single");
   useEffect(() => { if (boost) setMode("parlay"); }, [boost]);
   const [loading, setLoading] = useState(false);
@@ -272,7 +272,7 @@ export function BetSlip() {
             </div>
           </div>
 
-          <div className="flex gap-1.5">
+          <div className={COINS.length > 1 ? "flex gap-1.5" : "hidden"}>
             {COINS.map((c) => (
               <button key={c} data-testid={`bet-slip-coin-${c}`} onClick={() => setCoin(c)}
                 className={`flex-1 text-[11px] font-mono font-semibold py-1.5 rounded-full border transition-colors ${
@@ -284,7 +284,7 @@ export function BetSlip() {
             <div className="flex items-center justify-between mb-1.5 text-[11px]">
               <span className="text-zinc-500">Stake {isParlay ? "" : "per bet"}</span>
               <span className="font-mono text-zinc-500">
-                <span style={{ color: COIN_META[coin].color }}>{fmtCrypto(bal, coin)} {coin}</span> <Usd amount={bal} coin={coin} prefix="· " />
+                <span style={{ color: COIN_META[coin].color }}>{fmtAmt(bal, coin)}</span> <Usd amount={bal} coin={coin} prefix="· " />
               </span>
             </div>
             <div className="flex gap-1.5">
@@ -303,12 +303,12 @@ export function BetSlip() {
           <div className="flex items-end justify-between">
             <div>
               <p className="text-[11px] text-zinc-500">Total stake</p>
-              <p className="font-mono text-sm font-semibold" data-testid="bet-slip-total-stake">{fmtCrypto(totalStake, coin)} {coin}</p>
+              <p className="font-mono text-sm font-semibold" data-testid="bet-slip-total-stake">{fmtAmt(totalStake, coin)}</p>
               <Usd amount={totalStake} coin={coin} className="text-[10px] text-zinc-600" testId="bet-slip-total-stake-usd" />
             </div>
             <div className="text-right">
               <p className="text-[11px] text-zinc-500">Potential payout</p>
-              <p className="font-mono text-sm font-bold text-emerald-400" data-testid="bet-slip-payout">{fmtCrypto(payout, coin)} {coin}</p>
+              <p className="font-mono text-sm font-bold text-emerald-400" data-testid="bet-slip-payout">{fmtAmt(payout, coin)}</p>
               <Usd amount={payout} coin={coin} className="text-[10px] text-emerald-400/60" testId="bet-slip-payout-usd" />
             </div>
           </div>

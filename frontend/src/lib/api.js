@@ -17,6 +17,7 @@ export function formatApiErrorDetail(detail) {
 }
 
 export const COIN_META = {
+  USD: { name: "US Dollar", color: "#34D399" },
   BTC: { name: "Bitcoin", color: "#F7931A" },
   ETH: { name: "Ethereum", color: "#627EEA" },
   USDT: { name: "Tether", color: "#26A17B" },
