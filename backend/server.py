@@ -366,7 +366,7 @@ def _sgo_props(ev):
                     "label": STAT_LABELS.get(statID, re.sub(r"(?<=[a-z])(?=[A-Z])", " ", (statID or "").replace("_", " ")).title()),
                     "line": g.get("line"), "over": g.get("over"), "under": g.get("under")})
     out.sort(key=lambda x: (x["player"], x["label"]))
-    return out[:24]
+    return out
 
 
 def _sgo_markets(ev, draw):
@@ -572,7 +572,7 @@ async def _enrich_ufc(events):
 
 
 _SGO_REFRESHING = set()
-ODDS_CACHE_VERSION = 2  # bump when the odds data shape changes so old saved copies are ignored after a deploy
+ODDS_CACHE_VERSION = 3  # bump when the odds data shape changes so old saved copies are ignored after a deploy
 
 
 async def fetch_sgo_league(meta, max_age=None):

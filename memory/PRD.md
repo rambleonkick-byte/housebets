@@ -211,3 +211,7 @@
 - The Tawk.to embed script was added before </body> in frontend/index.html, so it loads on every page of the SPA.
 - Tawk.to was shrunk to a small headphone button (2026-06). Tawk's default bubble and greeting are hidden via Tawk_API.onLoad/onChatMinimized → hideWidget(). `SupportButton.jsx` is a 44px headphone button (bottom-right; on mobile it sits above the bet slip button) that opens the chat with maximize() and shows the unread count.
 - Odds cache versioning (2026-06): saved odds now carry `v: ODDS_CACHE_VERSION` (currently 2). Saved copies with an older version are ignored on load, so they're fetched fresh. After this deploy, odds with a new shape (e.g. alt lines) appear right away instead of after the 5-minute refresh. Bump the version whenever the shape of the odds data changes. Root cause from the deployer RCA: saved copies from before the update were served until they expired.
+
+## Full Player Props (2026-06)
+- Bug: `_sgo_props` capped results at 24 props sorted by player name, so only about 2 players appeared. The cap is removed: NBA now has 150–250 props (13–19 players) per game, NFL 60–180 (23–48 players), EPL ~100 (26–48 players). ODDS_CACHE_VERSION was bumped to 3.
+- New `PropsSection.jsx`: the header shows the prop count and player count, plus a player/stat search box, stat-group chips (All, Scoring, Passing, Rushing, Receiving, Rebounds, Assists, Defense, Combos, Other; only chips with props are shown), props grouped under each player's name, and a scroll area up to 384px tall.
