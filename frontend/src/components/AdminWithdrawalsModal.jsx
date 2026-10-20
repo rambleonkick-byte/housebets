@@ -121,8 +121,8 @@ export function AdminWithdrawalsModal({ open, onClose }) {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate">{w.user_email}</p>
-                          <p className="font-mono text-lg font-bold text-emerald-400">{fmtAmt(w.amount, w.coin)}
-                            <Usd amount={w.amount} coin={w.coin} className="text-xs text-zinc-400 ml-1.5" />
+                          <p className="font-mono text-lg font-bold text-emerald-400">{w.amount_usd != null ? fmtAmt(w.amount_usd, "USD") : fmtAmt(w.amount, w.coin)}
+                            <span className="text-xs text-zinc-400 ml-1.5">{fmtAmt(w.amount, w.coin)}</span>
                             <span className="text-[11px] text-zinc-500 font-sans ml-1.5">· {w.network}</span>
                           </p>
                         </div>

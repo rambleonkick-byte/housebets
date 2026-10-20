@@ -919,6 +919,8 @@ async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
     if len(address) < 10:
         raise HTTPException(status_code=400, detail="Enter a valid wallet address")
     usd = round(body.amount, 2)
+    if usd < 1:
+        raise HTTPException(status_code=400, detail="Minimum withdrawal is $1.00")
     rate = await _live_rate(body.coin)
     crypto_amt = round(usd / rate, 8)
     # Reserve the USD and queue for admin approval — no crypto is sent until approved.
@@ -1228,7 +1230,7 @@ async def _withdrawal_alerts(user_id, sync):
         stage = _wd_stage(w)
         if stage and stage != w.get("notified_stage"):
             await db.withdrawals.update_one({"id": w["id"]}, {"$set": {"notified_stage": stage}})
-            out.append({"id": w["id"], "stage": stage, "coin": w["coin"], "amount": w["amount"],
+            out.append({"id": w["id"], "stage": stage, "coin": w["coin"], "amount": w["amount"], "amount_usd": w.get("amount_usd"),
                         "net": w.get("network"), "tx_hash": w.get("tx_hash"), "address": w.get("address")})
     return out
 
@@ -1267,7 +1269,7 @@ async def deposit_alerts(user: dict = Depends(get_current_user)):
     for w in withdrawals:
         await _save_notification(user["id"], "withdrawal", w, stage=w["stage"], key_id=w["id"])
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
-    return {"alerts": [{k: a.get(k) for k in ("tx_hash", "coin", "net", "amount", "created_at")} for a in alerts],
+    return {"alerts": [{k: a.get(k) for k in ("tx_hash", "coin", "net", "amount", "amount_usd", "created_at")} for a in alerts],
             "withdrawals": withdrawals, "cashouts": cashouts, "lossbacks": lossbacks, "balances": (wallet or {}).get("balances")}
 
 
@@ -1979,6 +1981,9 @@ async def _check_funds(user_id, coin, stake):
 
 
 async def _adjust(user_id, coin, delta):
+    if coin != "USD":  # legacy crypto-denominated games/commissions settle in USD
+        delta = round(delta * _PRICE_CACHE["rates"].get(coin, 0), 2)
+        coin = "USD"
     await db.wallets.update_one({"user_id": user_id}, {"$inc": {f"balances.{coin}": delta}})
 
 
@@ -2595,6 +2600,21 @@ async def _migrate_to_usd():
         if any(c in av for c in CRYPTO_COINS):
             usd = round(sum(float(av.get(c) or 0) * rates.get(c, 0) for c in av), 2)
             await db.affiliates.update_one({"_id": a["_id"]}, {"$set": {"available": {"USD": usd} if usd > 0 else {}}})
+    for coll, stake_f in (("bj_games", "total_stake"), ("mine_games", "stake")):
+        async for g in db[coll].find({"status": "active", "coin": {"$in": list(CRYPTO_COINS)}}):
+            res = await db[coll].update_one({"_id": g["_id"], "status": "active"},
+                                            {"$set": {"status": "void", "void_reason": "usd_migration"}})
+            if res.modified_count:
+                usd = round(float(g.get(stake_f) or 0) * rates[g["coin"]], 2)
+                await db.wallets.update_one({"user_id": g["user_id"]}, {"$inc": {"balances.USD": usd}})
+                await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": g["user_id"], "type": "refund",
+                                                  "coin": "USD", "amount": usd, "created_at": now_iso(),
+                                                  "hash": f"usd-migration:{coll}:{g['id']}"})
+    async for led in db.affiliate_ledger.find({"coin": {"$in": list(CRYPTO_COINS)}}):
+        usd = round(float(led.get("credited") or 0) * rates[led["coin"]], 2)
+        await db.affiliate_ledger.update_one({"affiliate_id": led["affiliate_id"], "player_id": led["player_id"], "coin": "USD"},
+                                             {"$inc": {"credited": usd}}, upsert=True)
+        await db.affiliate_ledger.delete_one({"_id": led["_id"]})
     logger.info(f"USD migration done: {n} wallets converted")
 
 
@@ -2678,9 +2698,11 @@ async def _ensure_affiliate(user_id):
 
 async def _player_ngr(player_ids):
     out = {}
+    rates = _PRICE_CACHE["rates"]
     def add(uid, coin, v):
-        out.setdefault(uid, {}).setdefault(coin, 0.0)
-        out[uid][coin] += v
+        v = v if coin == "USD" else v * rates.get(coin, 0)
+        out.setdefault(uid, {}).setdefault("USD", 0.0)
+        out[uid]["USD"] += v
     async for r in db.bets.aggregate([
         {"$match": {"user_id": {"$in": player_ids}, "status": {"$in": ["won", "lost", "void", "cashed_out"]}}},
         {"$group": {"_id": {"u": "$user_id", "c": "$coin"}, "stake": {"$sum": "$stake"},
@@ -2809,7 +2831,7 @@ async def claim_affiliate(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Nothing to claim yet")
     await ensure_wallet(user["id"])
     for coin, v in avail.items():
-        await db.wallets.update_one({"user_id": user["id"]}, {"$inc": {f"balances.{coin}": v}})
+        await _adjust(user["id"], coin, v)
         await db.affiliates.update_one({"user_id": user["id"]}, {"$inc": {f"claimed.{coin}": v}})
         await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"], "type": "affiliate",
                                           "coin": coin, "amount": v, "created_at": now_iso(),
@@ -2841,8 +2863,11 @@ async def _sum_by_user(coll, match, field):
 
 async def _money_flow(ids):
     dep = await _sum_by_user("transactions", {"user_id": {"$in": ids}, "type": "deposit"}, "amount")
-    wd = await _sum_by_user("withdrawals", {"user_id": {"$in": ids},
-                                            "status": {"$nin": ["rejected", "failed", "canceled"]}}, "amount")
+    wd = {}
+    async for r in db.withdrawals.aggregate([
+            {"$match": {"user_id": {"$in": ids}, "status": {"$nin": ["rejected", "failed", "canceled"]}}},
+            {"$group": {"_id": "$user_id", "t": {"$sum": {"$ifNull": ["$amount_usd", 0]}}}}]):
+        wd[r["_id"]] = {"USD": round(r["t"], 2)}
     wag = await _sum_by_user("bets", {"user_id": {"$in": ids}}, "stake")
     for u, v in (await _sum_by_user("casino_games", {"user_id": {"$in": ids}}, "stake")).items():
         for c, t in v.items():

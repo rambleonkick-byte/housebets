@@ -120,12 +120,12 @@ export function BetHistoryModal({ open, onClose }) {
                         ))}
                       </div>
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-[#1E2234]">
-                        <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtAmt(b.stake, b.coin)}</span> <Usd amount={b.stake} coin={b.coin} prefix="(" />{")"}</span>
+                        <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtAmt(b.stake, b.coin)}</span> {b.coin !== "USD" && <><Usd amount={b.stake} coin={b.coin} prefix="(" />)</>}</span>
                         <span className="text-zinc-500">
                           {b.status === "cashed_out" ? (b.auto_cashed ? "Auto cashed out" : "Cashed out") : b.status === "won" ? "Payout" : "To win"}{" "}
                           <span className={`font-mono ${b.status === "won" ? "text-emerald-400" : b.status === "cashed_out" ? "text-sky-400" : "text-zinc-300"}`}>
                             {fmtAmt(b.status === "cashed_out" ? b.cashout_amount : b.potential_payout, b.coin)}
-                          </span> <Usd amount={b.status === "cashed_out" ? b.cashout_amount : b.potential_payout} coin={b.coin} prefix="(" />{")"}
+                          </span> {b.coin !== "USD" && <><Usd amount={b.status === "cashed_out" ? b.cashout_amount : b.potential_payout} coin={b.coin} prefix="(" />)</>}
                         </span>
                       </div>
                       {b.status === "lost" && b.lossback > 0 && (

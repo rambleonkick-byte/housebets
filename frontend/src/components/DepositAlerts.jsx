@@ -34,7 +34,7 @@ function AlertToast({ a, kind, title, sub, Icon, tone, sign }) {
           <p className="font-mono text-lg font-bold text-white" data-testid={`${kind}-alert-amount`}>
             {sign}{a.amount_usd != null ? fmtAmt(a.amount_usd, "USD") : fmtAmt(a.amount, a.coin)}{a.amount_usd != null && a.coin !== "USD" && <span className="text-[10px] text-zinc-500 ml-1" style={{ color: COIN_META[a.coin]?.color }}>{fmtCrypto(a.amount, a.coin)} {a.coin}</span>}
           </p>
-          <Usd amount={a.amount} coin={a.coin} className="text-xs text-zinc-400" />
+          {a.amount_usd == null && <Usd amount={a.amount} coin={a.coin} className="text-xs text-zinc-400" />}
           {sub && <p className="text-[11px] text-zinc-500 mt-0.5">{sub}</p>}
           {url && (
             <a href={url} target="_blank" rel="noreferrer" data-testid={`${kind}-alert-tx-link`}

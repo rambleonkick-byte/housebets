@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 18: tested the USD-only wallet refactor end to end, backend and frontend. Backend: 16/16 new pytest checks pass (tests/test_usd_wallet.py). They cover live prices (USD and USDT both 1, live=true); new wallets holding only {USD}; dice, limbo, keno, plinko, mines and blackjack working with USD and rejecting BTC/ETH/SOL with 400; sportsbook bets in USD working and BTC rejected; the static-deposit webhook signed with HMAC-SHA512 crediting BTC at the live price (rounded to cents) and USDT 1:1, with replay protection and the bad-signature 401; withdrawals entered in USD and paid in BTC (USD reserved, amount is crypto, amount_usd is USD, too little USD gives 400, admin reject refunds the exact USD, a second reject gives 404); admin adjust in USD. Migration: I seeded a fresh user with a crypto wallet, an open ETH bet, a SOL withdrawal without amount_usd and a crypto affiliate balance, then restarted the backend. Everything converted correctly (1232.34 matched by hand; pre_usd_balances and orig_coin/orig_stake kept). A second restart changed nothing, so the migration is idempotent. Frontend (Playwright): the header shows $; the wallet modal shows one USD total and the note, with no per-coin cards; deposit keeps the coin selector, address and warning; withdraw takes USD and shows 'You receive ≈ 0.001205 BTC', and submitting works ($500 to $400, recent activity shows -$100.00 · 0.001205 BTC). The bet slip has no visible coin selector and shows stake $5.00 and payout $7.85; placing the bet works. Dice, blackjack and mines have no currency selector and show Balance in $. Casino history shows $2.00 / +$3.96. Admin table, drawer, USD-only adjust and the withdrawal reject all work; the Affiliate page shows $. Found 1 cosmetic UI bug, 2 display/integration issues and 2 backend logic issues (listed below). All test users and their data were deleted. Admin USD is still 11175.03 and dhensley is untouched.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "_migrate_to_usd (open blackjack hands)", "issue": "Open bj_games (and active mine_games) are not migrated. The real user dhensley727 has an open USDT blackjack hand (status active, created 2026-10-20). When it settles, _adjust(g['coin']='USDT') credits balances.USDT, which brings back a crypto balance the UI never shows. Double/split/insurance on that hand also checks balances.USDT (now 0), so those actions fail. Fix: in the migration, convert open bj_games/mine_games to coin USD (or refund the stake as USD and close them), and/or make settlement always credit USD.", "priority": "HIGH"},
+      {"endpoint": "affiliate accrual/claim (_player_ngr, _credit_ledger, /api/affiliate/claim)", "issue": "NGR and the ledger are still grouped by bet/casino coin. Settled pre-migration bets and casino_games keep coin BTC/USDT (casino_games currently contains USDT). Any commission accrued from them after the migration goes to available.<crypto>, and claim then does $inc balances.<crypto>, which puts crypto back into the wallet. Fix: value legacy rows in USD (or convert the coin field on settled history) and always credit USD.", "priority": "MEDIUM"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/wallet/deposit-alerts and _withdrawal_alerts", "issue": "The alert payloads drop amount_usd. Deposit alerts are built from ('tx_hash','coin','net','amount','created_at') at server.py ~line 1270. Withdrawal alerts only send coin/amount, and _save_notification is fed that same dict, so withdrawal notifications are stored with amount_usd=null. Result: the deposit toast shows '+0.0005 BTC ≈ $41.48' and the withdrawal-refunded toast and notification show '+0.001205 BTC ≈ $100.03' instead of the credited USD amount ($100.00)."},
+      {"endpoint": "GET /api/admin/users (_money_flow)", "issue": "Withdrawn is summed from withdrawals.amount (crypto) grouped by coin, and the frontend re-values it at live prices, so a $100.00 withdrawal shows as $100.03 and drifts. Should sum amount_usd."},
+      {"endpoint": "POST /api/wallet/withdraw", "issue": "Amounts that round to $0.00 (e.g. 0.001) return 400 'Insufficient balance', which is misleading. Validate usd > 0 or a minimum first."},
+      {"endpoint": "ensure_wallet", "issue": "New wallets are created without usd_migrated=True, so every restart re-scans and re-writes them with a read-then-$set, which could lose a concurrent bet's balance change during startup. Set usd_migrated on insert."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BetHistoryModal / CashoutButton", "issue": "A stray ')' appears after every USD amount ('Stake $5.00 )', 'To win $7.85 )', 'Cash out $4.75 )'). <Usd prefix='(' /> returns null for USD, but the literal {')'} is still rendered (BetHistoryModal.jsx lines 123 and 128, CashoutButton.jsx line 42). Render the ')' inside Usd or only when coin !== 'USD'.", "selector": "[data-testid='history-modal']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Deposit / withdrawal toasts and notifications", "issue": "Because of the missing amount_usd (see backend minor), DepositAlerts shows the crypto amount as the headline. Withdrawal notifications show crypto, not $.", "affected_selectors": ["[data-testid='deposit-alert-amount']", "[data-testid='withdrawal-alert-amount']", "[data-testid='notifications-panel']"]},
+      {"flow": "Admin withdrawal queue", "issue": "The row headline is '0.001205 BTC ≈ $100.03' (live re-valuation). The USD the player actually requested (amount_usd $100.00) is not shown.", "affected_selectors": ["[data-testid^='admin-withdrawal-']"]}
+    ],
+    "design_issues": [
+      {"screen": "Admin users table + drawer", "issues": ["Balance/Deposited/Wagered show the same $ value twice (the USD total plus the per-coin breakdown for USD). The Withdrawn breakdown shows '—' under the $ value."]},
+      {"screen": "DepositAlerts", "issues": ["When amount_usd is present, the extra <Usd> '≈ $' line would duplicate the value; hide it for credited USD deposits."]},
+      {"screen": "HeroCarousel", "issues": ["Copy still says 'Bet with BTC, ETH, SOL or USDT'. Consider 'Bet in USD, deposit with crypto'."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_usd_wallet.py", "/app/test_reports/pytest/pytest_iter18.xml"],
+  "action_items": [
+    "Migrate open bj_games/mine_games to USD (the real user dhensley has an open USDT blackjack hand) and/or make casino settlement always credit USD",
+    "Make affiliate NGR/claim USD-only so legacy crypto-coin bets/casino_games can't credit available.<crypto> or balances.<crypto>",
+    "Include amount_usd in deposit-alerts alerts and in withdrawal alerts and notifications",
+    "Remove the stray ')' in BetHistoryModal.jsx (lines 123, 128) and CashoutButton.jsx (line 42) for USD",
+    "Admin _money_flow: sum withdrawals.amount_usd; admin queue: show amount_usd as the headline",
+    "Withdraw: reject amounts that round to $0 with a clear message; ensure_wallet: set usd_migrated=True",
+    "Update the old regression tests (test_casino.py, test_boosts.py, test_blackjack.py, etc.), which still use coin USDT and will now fail with 400"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2936 lines; split it into wallet, casino, affiliate and admin modules",
+    "_migrate_to_usd skips bj_games/mine_games and settled bets/casino_games (fine for history, but affiliate NGR still groups by coin)",
+    "The withdrawal alert email subject/body still shows the crypto amount only; add the USD amount for the admin",
+    "Rate used for withdrawals is the cached rate (up to 60s old); acceptable, but note it for large payouts"
+  ],
+  "updated_files": ["/app/backend/tests/test_usd_wallet.py"],
+  "success_rate": {"backend": "100% of the 16 new tests pass; 2 logic gaps found in code review/DB inspection", "frontend": "~85% (core flows work; 1 visual bug and 2 display inconsistencies)"},
+  "test_credentials": "admin@apexodds.io / admin123. Fresh users were registered via /api/auth/register, funded via mongo balances.USD and deleted afterwards.",
+  "seed_data_creation": "None left behind. Temporary test users (test_usd_*, test_mig_*, test_ui_*) and their wallets, bets, casino games, transactions, withdrawals, static addresses/deposits, notifications and affiliates were all deleted. The backend was restarted twice to verify migration idempotency.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest /app/backend/tests/test_usd_wallet.py. It registers its own user, uses pymongo directly for seeding and cleans up after itself. For the static deposit webhook: insert static_addresses with a unique track_id, then POST the raw JSON with header HMAC = hmac_sha512(OXAPAY_MERCHANT_API_KEY, raw). Pre-insert fake static_addresses for UI users so the wallet deposit tab doesn't call real OxaPay. Admin user_id is 6ad5bc3b615e5bf27f902ee4 (USD 11175.03); dhensley is 6ad5bf9cbff3e4257a1217b0 (do not touch).",
+  "rca of the issue": "Stray ')': the JSX `<Usd prefix=\"(\"/>{\")\"}` was written when Usd always rendered; it now returns null for coin USD, so only the ')' is left. Crypto amounts in toasts: the deposit-alerts response whitelists fields without amount_usd, and the withdrawal alert dict never includes it. Possible crypto balance coming back: settlement uses the game's or bet's stored coin, and the migration only rewrote open bets, not open bj_games or settled history used by affiliate NGR."
+}

@@ -19,7 +19,7 @@ function Stat({ icon: Icon, label, value, testid }) {
 }
 
 function Coins({ v }) {
-  const e = COINS.filter((c) => v?.[c]);
+  const e = Object.keys(v || {}).filter((c) => v[c] && c !== "USD");
   if (!e.length) return <span className="text-zinc-600">—</span>;
   return e.map((c) => <span key={c} className="block font-mono text-[11px]" style={{ color: COIN_META[c]?.color }}>{fmtAmt(v[c], c)}</span>);
 }

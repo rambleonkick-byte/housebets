@@ -39,7 +39,7 @@ export function CashoutButton({ bet, value, onCashout, onSetAuto }) {
       </span>
       <span className="font-mono" data-testid={`cashout-value-${bet.id}`}>
         {fmtAmt(value, bet.coin)}{" "}
-        <Usd amount={value} coin={bet.coin} prefix="(" className={confirm ? "text-black/60" : "text-sky-300/60"} />{")"}
+        {bet.coin !== "USD" && <><Usd amount={value} coin={bet.coin} prefix="(" className={confirm ? "text-black/60" : "text-sky-300/60"} />)</>}
       </span>
     </button>
     {auto}

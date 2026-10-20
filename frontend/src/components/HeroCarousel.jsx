@@ -103,7 +103,7 @@ function WelcomeSlide({ live, markets }) {
       <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[0.95] uppercase max-w-xl">
         Under the lights.<br /><span className="text-emerald-400 drop-shadow-[0_0_24px_rgba(16,185,129,0.55)]">On the line.</span>
       </h1>
-      <p className="text-sm sm:text-base text-zinc-300 mt-4 max-w-md">Live odds on NFL, NBA, UFC and football. Bet with BTC, ETH, SOL or USDT and get paid instantly.</p>
+      <p className="text-sm sm:text-base text-zinc-300 mt-4 max-w-md">Live odds on NFL, NBA, UFC and football. Play in USD. Deposit with BTC, ETH, SOL or USDT and get paid fast.</p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-5 sm:mt-6">
         {!user && (
           <button data-testid="hero-cta-signup" onClick={() => setAuthOpen(true)}
