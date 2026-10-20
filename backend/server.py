@@ -5,6 +5,7 @@ import os
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
 from fastapi.responses import PlainTextResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -420,7 +421,41 @@ def _sgo_markets(ev, draw):
             markets.append({"market": "distance", "label": "Goes the Distance", "selections": [
                 {"side": "yes", "pick": "Fight goes the distance", "label": "Yes", "odds": yo, "line": None},
                 {"side": "no", "pick": "Fight doesn't go the distance", "label": "No", "odds": no, "line": None}]})
+    alt_sp = _alt_ladder(odds.get("points-home-game-sp-home"), odds.get("points-away-game-sp-away"), "spread", negate=True)
+    if len(alt_sp) > 1:
+        markets.append({"market": "alt_spread", "label": "Alternate Spread", "selections": [
+            sel for ln, h, a in alt_sp for sel in (
+                [{"side": "home", "pick": f"{ha} {ln:+g}", "label": f"{ha} {ln:+g}", "odds": h, "line": ln}] if h else []) + (
+                [{"side": "away", "pick": f"{aa} {-ln:+g}", "label": f"{aa} {-ln:+g}", "odds": a, "line": -ln}] if a else [])]})
+    alt_tot = _alt_ladder(odds.get("points-all-game-ou-over"), odds.get("points-all-game-ou-under"), "overUnder")
+    if len(alt_tot) > 1:
+        markets.append({"market": "alt_total", "label": "Alternate Total", "selections": [
+            sel for ln, o, u in alt_tot for sel in (
+                [{"side": "over", "pick": f"Over {ln:g}", "label": f"O {ln:g}", "odds": o, "line": ln}] if o else []) + (
+                [{"side": "under", "pick": f"Under {ln:g}", "label": f"U {ln:g}", "odds": u, "line": ln}] if u else [])]})
     return markets
+
+
+def _book_lines(o, field):
+    """{line: [decimal odds per bookmaker]} from each book's main line plus its alt lines."""
+    out = {}
+    for b in ((o or {}).get("byBookmaker") or {}).values():
+        if not isinstance(b, dict) or b.get("available") is False:
+            continue
+        for x in [b] + [a for a in (b.get("altLines") or []) if a.get("available", True)]:
+            ln, dec = _num(x.get(field)), american_to_decimal(x.get("odds"))
+            if ln is not None and dec and dec > 1:
+                out.setdefault(ln, []).append(dec)
+    return out
+
+
+def _alt_ladder(a_odd, b_odd, field, negate=False):
+    """Every line offered, median price across books. negate: side B's line is the mirror (spreads)."""
+    med = lambda v: round(sorted(v)[len(v) // 2], 2) if v else None
+    a, b = _book_lines(a_odd, field), _book_lines(b_odd, field)
+    # skip Asian quarter lines (.25/.75): those settle as split stakes, which we don't support
+    lines = sorted(x for x in set(a) | {(-y if negate else y) for y in b} if (x * 2) == int(x * 2))
+    return [(ln, med(a.get(ln)), med(b.get(-ln if negate else ln))) for ln in lines]
 
 
 def _sgo_player_results(ev):
@@ -549,7 +584,7 @@ async def _refresh_sgo_league(meta):
 async def _do_refresh_sgo_league(meta):
     key = meta["id"]
     prev = (_SGO_CACHE.get(key) or {}).get("data") or []
-    params = {"apiKey": SGO_KEY, "leagueID": key, "oddsAvailable": "true", "limit": 15}
+    params = {"apiKey": SGO_KEY, "leagueID": key, "oddsAvailable": "true", "limit": 15, "includeAltLines": "true"}
     events = []
     ttl = 300
     try:
@@ -1617,13 +1652,14 @@ def settle_selection(sel, ev) -> Optional[bool]:
             return as_ > hs
         if side == "draw":
             return hs == as_
-    if m == "spread" and line is not None:
-        if side == "home":
-            return (hs + line) > as_
-        if side == "away":
-            return (as_ + line) > hs
-    if m == "total" and line is not None:
+    if m in ("spread", "alt_spread") and line is not None:
+        if side in ("home", "away"):
+            mine, theirs = (hs, as_) if side == "home" else (as_, hs)
+            return "push" if mine + line == theirs else (mine + line) > theirs
+    if m in ("total", "alt_total") and line is not None:
         total = hs + as_
+        if total == line and side in ("over", "under"):
+            return "push"
         if side == "over":
             return total > line
         if side == "under":
@@ -2797,6 +2833,7 @@ async def admin_user_log(uid: str, admin: dict = Depends(get_admin_user)):
 
 
 app.include_router(api_router)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

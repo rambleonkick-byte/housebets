@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Copy, ExternalLink, ShieldCheck } from "lucide-react";
+import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Copy, ExternalLink, ShieldCheck, AlertTriangle } from "lucide-react";
 import { api, formatApiErrorDetail, COIN_META, COIN_NETWORK, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto, usdValue } from "@/lib/format";
 import { Usd } from "@/components/Usd";
 import { usePrices } from "@/lib/prices";
 import { toast } from "sonner";
+
+const DEPOSIT_NET = { BTC: "Bitcoin", ETH: "Ethereum (ERC20)", USDT: "Ethereum (ERC20)", SOL: "Solana" };
 
 const COINS = ["BTC", "ETH", "USDT", "SOL"];
 
@@ -65,6 +67,7 @@ export function WalletModal({ open, onClose }) {
   useEffect(() => {
     if (!open || tab !== "deposit") return;
     let alive = true;
+    setDeposit(null);
     setLoading(true);
     api.get(`/wallet/deposit-address/${coin}`)
       .then(({ data }) => { if (alive) setDeposit(data); })
@@ -177,7 +180,21 @@ export function WalletModal({ open, onClose }) {
                     <div className="text-center">
                       <p className="text-[11px] font-mono uppercase tracking-wider text-emerald-400" data-testid="deposit-permanent-label">Your permanent {coin} address</p>
                       <p className="text-[11px] text-zinc-500 mt-0.5">Network: <span className="text-zinc-300">{deposit.network}</span></p>
-                      <p className="text-[11px] text-zinc-500 mt-1">Send any amount, anytime — it never expires. Only send {coin} on this network.</p>
+                      <p className="text-[11px] text-zinc-500 mt-1">Send any amount, anytime — it never expires.</p>
+                    </div>
+                    <div data-testid="deposit-coin-warning" className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/40 rounded-lg p-3">
+                      <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-red-300">Only send {coin} to this address</p>
+                        <p className="text-[11px] text-red-200/70 mt-0.5">
+                          Use the <span className="font-semibold text-red-200">{DEPOSIT_NET[coin]}</span> network only.
+                          {coin === "SOL" && " Don't send USDT or other Solana tokens here — use your USDT address instead."}
+                          {coin === "ETH" && " Don't send USDT or other tokens here — use your USDT address instead."}
+                          {coin === "USDT" && " Send USDT (ERC20) only — not on Tron, Solana or BSC."}
+                          {coin === "BTC" && " Not Lightning or wrapped BTC."}
+                          {" "}Wrong coins or networks may be lost.
+                        </p>
+                      </div>
                     </div>
                     <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-center justify-between gap-2">
                       <code className="font-mono text-xs text-zinc-200 break-all" data-testid="deposit-address">{deposit.address}</code>

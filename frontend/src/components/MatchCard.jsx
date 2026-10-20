@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from "react";
+import { AltLineSlider } from "@/components/AltLineSlider";
 import { ChevronDown } from "lucide-react";
 import { useBetSlip } from "@/context/BetSlipContext";
 import { fmtOdds } from "@/lib/format";
@@ -127,7 +128,11 @@ export function MatchCard({ ev }) {
             </Market>
           )}
         </div>
-        {ev.markets.filter((m) => !["moneyline", "spread", "total"].includes(m.market)).map((m) => (
+        {["alt_spread", "alt_total"].map((k) => {
+          const m = ev.markets.find((x) => x.market === k);
+          return m && <AltLineSlider key={k} ev={ev} m={m} main={k === "alt_spread" ? spread : total} meta={meta} />;
+        })}
+        {ev.markets.filter((m) => !["moneyline", "spread", "total", "alt_spread", "alt_total"].includes(m.market)).map((m) => (
           <Market key={m.market} label={m.label} cols={m.selections.length}>
             {m.selections.map((s) => (
               <OddsButton key={s.side} sel={{ ...s, market: m.market }} meta={meta} />

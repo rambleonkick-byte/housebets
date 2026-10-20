@@ -4,7 +4,10 @@ import { toast } from "sonner";
 
 const BetSlipContext = createContext(null);
 
-function selId(s) { return `${s.event_id}:${s.market}:${s.side}`; }
+function selId(s) {
+  const alt = String(s.market).startsWith("alt_") ? `:${s.line}` : "";
+  return `${s.event_id}:${s.market}:${s.side}${alt}`;
+}
 
 // Identifies the underlying market a pick belongs to, so we can detect
 // conflicting selections (e.g. Over vs Under on the same prop line, or
@@ -36,6 +39,12 @@ export function BetSlipProvider({ children }) {
       }
       // Block conflicting sides of the same underlying market.
       const conflict = prev.find((p) => baseKey(p) === baseKey(sel) && selId(p) !== id);
+      if (conflict && String(sel.market).startsWith("alt_")) {
+        toast.success("Alternate line updated");
+        setBoost(null);
+        setOpen(true);
+        return prev.map((p) => (p === conflict ? { ...sel, _id: id } : p));
+      }
       if (conflict) {
         toast.error("Can't pick both sides of the same market");
         return prev;

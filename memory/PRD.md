@@ -199,3 +199,4 @@
 ## Bug fix: wrong-coin static deposits (2026-06)
 - Prod user lilbabyrollbit@gmail.com sent ~200 USDT (Solana SPL) to their SOL static address and was credited 200.24 SOL (about $30k). `_credit_static_txs` now credits `tx.currency` (uppercased) when it is a supported coin, skips unsupported currencies, falls back to the address coin when currency is missing, and records `address_coin` on static_deposits. Tested 9/9 (iteration_15).
 - The PROD balance correction still has to be done by the admin through the panel: remove 200.242908 SOL and add 200.242908 USDT for that user.
+- Deposit coin warning (2026-06): each deposit address now has a red "Only send {COIN} to this address" box giving the network and a coin-specific tip (e.g. no USDT to the SOL address). The previous coin's address is cleared when switching coins, so it can't briefly show under the wrong coin.

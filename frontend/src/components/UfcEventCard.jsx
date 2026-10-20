@@ -28,7 +28,7 @@ function Record({ f, testid }) {
 
 function ExtraMarkets({ ev, meta }) {
   const [open, setOpen] = useState(false);
-  const extra = ev.markets.filter((m) => m.market !== "moneyline");
+  const extra = ev.markets.filter((m) => m.market !== "moneyline" && !m.market.startsWith("alt_"));
   if (!extra.length) return null;
   return (
     <div className="mt-2">
