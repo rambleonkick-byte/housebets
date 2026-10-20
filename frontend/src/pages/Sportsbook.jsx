@@ -6,11 +6,12 @@ import { MatchCard } from "@/components/MatchCard";
 import { UfcEventCard } from "@/components/UfcEventCard";
 import { BetSlip } from "@/components/BetSlip";
 import { BoostsStrip } from "@/components/BoostsStrip";
+import { HeroCarousel } from "@/components/HeroCarousel";
+import { LiveScoresTicker } from "@/components/LiveScoresTicker";
 import { CasinoStrip } from "@/components/CasinoStrip";
 import { useSharedSlipLoader } from "@/lib/slips";
 import { useBetSlip } from "@/context/BetSlipContext";
 
-const HERO = "https://images.unsplash.com/photo-1679391029864-d46f366a456b?crop=entropy&cs=srgb&fm=jpg&w=1600&q=80";
 
 export function Sportsbook() {
   const [sports, setSports] = useState([]);
@@ -71,27 +72,9 @@ export function Sportsbook() {
       <Sidebar sports={sports} active={active} onSelect={setActive} counts={counts} live={liveBy} />
 
       <main className="flex-1 min-w-0 pb-24 lg:pb-8">
-        {/* Hero */}
-        <div className="relative m-4 rounded-xl overflow-hidden border border-[#2A2F45]">
-          <img src={HERO} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#090A0F] via-[#090A0F]/85 to-transparent" />
-          <div className="relative px-6 py-8 md:py-10">
-            <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-2">Live odds · ApexOdds</p>
-            <h1 className="font-display text-4xl sm:text-5xl font-black tracking-tight max-w-xl leading-[1.05]">
-              Bet smarter with <span className="text-emerald-400">real-time</span> crypto.
-            </h1>
-            <p className="text-sm text-zinc-400 mt-3 max-w-md">
-              Browse live markets across NBA, soccer, MLB & more. Stake BTC, ETH, SOL or USDT.
-            </p>
-            <div className="flex items-center gap-4 mt-5">
-              <div className="flex items-center gap-2">
-                <span className="live-dot w-2 h-2 rounded-full bg-red-500" />
-                <span className="font-mono text-sm"><span className="font-bold">{liveCount}</span> <span className="text-zinc-400">live now</span></span>
-              </div>
-              <div className="font-mono text-sm"><span className="font-bold">{events.length}</span> <span className="text-zinc-400">markets</span></div>
-            </div>
-          </div>
-        </div>
+        <HeroCarousel events={events} liveCount={liveCount} />
+        <LiveScoresTicker events={events} />
+        <div className="h-4" />
 
         <BoostsStrip ready={allDone} />
         <CasinoStrip />

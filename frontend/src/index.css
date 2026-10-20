@@ -106,3 +106,11 @@
 .grain {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
 }
+
+@keyframes hero-kenburns { from { transform: scale(1); } to { transform: scale(1.08); } }
+.hero-kenburns { animation: hero-kenburns 7s ease-out forwards; }
+@keyframes hero-progress { from { width: 0; } to { width: 100%; } }
+.hero-progress { animation-name: hero-progress; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.ticker-track { animation: ticker-scroll linear infinite; }
+.ticker:hover .ticker-track { animation-play-state: paused; }
