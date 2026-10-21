@@ -235,16 +235,17 @@ export function WalletModal({ open, onClose }) {
                   <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-600 mb-2">Recent activity</p>
                   <div className="space-y-1.5" data-testid="wallet-transactions">
                     {wallet.transactions.slice(0, 8).map((t) => {
-                      const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund" || t.type === "cashout" || t.type === "affiliate" || t.type === "lossback" || (t.type === "adjustment" && t.amount > 0);
+                      const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund" || t.type === "cashout" || t.type === "affiliate" || t.type === "lossback" || t.type === "bonus" || (t.type === "adjustment" && t.amount > 0);
+                      const neutral = t.type === "free_bet";
                       const po = t.payout;
                       const hash = po?.tx_hash;
                       const explorer = explorerUrl(t.crypto_coin || po?.coin || t.coin, hash, po?.network);
                       return (
                         <div key={t.id} className="bg-[#0E1017] rounded-md px-3 py-2" data-testid={`wallet-tx-${t.id}`}>
                           <div className="flex items-center justify-between text-sm">
-                            <span className="capitalize text-zinc-300">{t.type}</span>
+                            <span className="capitalize text-zinc-300">{neutral ? "Free bet placed" : t.label || t.type}</span>
                             <span className={`font-mono text-xs ${positive ? "text-emerald-400" : "text-zinc-400"}`}>
-                              {positive ? "+" : "-"}{fmtAmt(Math.abs(t.amount), t.coin)}
+                              {neutral ? "" : positive ? "+" : "-"}{fmtAmt(Math.abs(t.amount), t.coin)}
                               <Usd amount={Math.abs(t.amount)} coin={t.coin} className="text-zinc-500 ml-1.5" />
                               {t.crypto_coin && <span className="text-zinc-600 ml-1.5">· {fmtCrypto(t.crypto_amount, t.crypto_coin)} {t.crypto_coin}</span>}
                             </span>

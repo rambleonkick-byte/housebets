@@ -15,7 +15,7 @@ export function Header({ onWallet, onHistory, onAdmin }) {
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 h-16 bg-[#090A0F]/90 backdrop-blur-md border-b border-[#2A2F45]">
-      <div className="h-full px-4 md:px-6 flex items-center justify-between gap-4">
+      <div className="h-full px-3 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center gap-5">
           <Link to="/" className="flex items-center gap-2.5" data-testid="brand-logo">
             <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
@@ -42,7 +42,7 @@ export function Header({ onWallet, onHistory, onAdmin }) {
           </nav>
         </div>
 
-        <div className="flex items-center gap-2 md:gap-3">
+        <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
           {user ? (
             <>
               {user.role === "admin" && (

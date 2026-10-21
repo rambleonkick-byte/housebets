@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 
 const inp = "bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500";
+const L = ({ t, children, className = "" }) => <label className={`flex flex-col gap-1 text-[10px] font-mono uppercase text-zinc-500 ${className}`}>{t}{children}</label>;
 const EMPTY = { code: "", type: "cash", amount: "", pct: "", max_bonus: "", wager_mult: "1", max_uses: "", expires_at: "" };
 
 function PromoForm({ onCreated }) {
@@ -26,21 +27,21 @@ function PromoForm({ onCreated }) {
   const match = f.type === "deposit_match";
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-4 border-b border-[#1E2234]" data-testid="admin-promo-form">
-      <input data-testid="admin-promo-code" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="CODE" className={`${inp} font-mono`} />
-      <select data-testid="admin-promo-type" value={f.type} onChange={set("type")} className={inp}>
+      <L t="Code"><input data-testid="admin-promo-code" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="WELCOME25" className={`${inp} font-mono`} /></L>
+      <L t="Reward type"><select data-testid="admin-promo-type" value={f.type} onChange={set("type")} className={inp}>
         <option value="cash">Free cash</option><option value="free_bet">Free bet</option><option value="deposit_match">Deposit match</option>
-      </select>
+      </select></L>
       {match ? (
         <>
-          <input data-testid="admin-promo-pct" type="number" min="0" value={f.pct} onChange={set("pct")} placeholder="Match %" className={inp} />
-          <input data-testid="admin-promo-max" type="number" min="0" value={f.max_bonus} onChange={set("max_bonus")} placeholder="Max bonus $" className={inp} />
+          <L t="Match %"><input data-testid="admin-promo-pct" type="number" min="0" value={f.pct} onChange={set("pct")} placeholder="50" className={inp} /></L>
+          <L t="Max bonus $"><input data-testid="admin-promo-max" type="number" min="0" value={f.max_bonus} onChange={set("max_bonus")} placeholder="100" className={inp} /></L>
         </>
-      ) : <input data-testid="admin-promo-amount" type="number" min="0" value={f.amount} onChange={set("amount")} placeholder="Amount $" className={`${inp} md:col-span-2`} />}
-      {f.type !== "free_bet" && <input data-testid="admin-promo-wager" type="number" min="0" value={f.wager_mult} onChange={set("wager_mult")} placeholder="Wager x" title="Times the bonus must be wagered" className={inp} />}
-      <input data-testid="admin-promo-uses" type="number" min="0" value={f.max_uses} onChange={set("max_uses")} placeholder="Max uses (blank = ∞)" className={inp} />
-      <input data-testid="admin-promo-expiry" type="date" value={f.expires_at} onChange={set("expires_at")} className={inp} />
+      ) : <L t="Amount $" className="md:col-span-2"><input data-testid="admin-promo-amount" type="number" min="0" value={f.amount} onChange={set("amount")} placeholder="25" className={inp} /></L>}
+      {f.type !== "free_bet" && <L t="Wagering (× bonus)"><input data-testid="admin-promo-wager" type="number" min="0" value={f.wager_mult} onChange={set("wager_mult")} placeholder="Wager x" title="Times the bonus must be wagered" className={inp} /></L>}
+      <L t="Max uses"><input data-testid="admin-promo-uses" type="number" min="0" value={f.max_uses} onChange={set("max_uses")} placeholder="Unlimited" className={inp} /></L>
+      <L t="Expires (optional)"><input data-testid="admin-promo-expiry" type="date" value={f.expires_at} onChange={set("expires_at")} className={inp} /></L>
       <button data-testid="admin-promo-create" onClick={submit} disabled={busy || f.code.length < 3}
-        className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm rounded-lg py-2 disabled:opacity-40">{busy ? <Loader2 size={15} className="animate-spin mx-auto" /> : "Create code"}</button>
+        className="self-end bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm rounded-lg py-2 disabled:opacity-40">{busy ? <Loader2 size={15} className="animate-spin mx-auto" /> : "Create code"}</button>
     </div>
   );
 }

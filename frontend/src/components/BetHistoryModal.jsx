@@ -106,6 +106,7 @@ export function BetHistoryModal({ open, onClose }) {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">
                           {b.bet_type} · {b.selections.length} leg{b.selections.length > 1 ? "s" : ""}
+                          {b.free_bet && <span data-testid={`history-free-bet-${b.id}`} className="ml-2 text-emerald-300 border border-emerald-500/40 rounded px-1">FREE BET</span>}
                         </span>
                         <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${S.bg} ${S.color}`}>
                           <Icon size={12} /> {S.label}
@@ -124,7 +125,7 @@ export function BetHistoryModal({ open, onClose }) {
                         <span className="text-zinc-500">
                           {b.status === "cashed_out" ? (b.auto_cashed ? "Auto cashed out" : "Cashed out") : b.status === "won" ? "Payout" : "To win"}{" "}
                           <span className={`font-mono ${b.status === "won" ? "text-emerald-400" : b.status === "cashed_out" ? "text-sky-400" : "text-zinc-300"}`}>
-                            {fmtAmt(b.status === "cashed_out" ? b.cashout_amount : b.potential_payout, b.coin)}
+                            {fmtAmt(b.status === "cashed_out" ? b.cashout_amount : b.status === "won" ? b.payout : b.potential_payout - (b.free_bet ? b.stake : 0), b.coin)}
                           </span> {b.coin !== "USD" && <><Usd amount={b.status === "cashed_out" ? b.cashout_amount : b.potential_payout} coin={b.coin} prefix="(" />)</>}
                         </span>
                       </div>
@@ -133,7 +134,7 @@ export function BetHistoryModal({ open, onClose }) {
                           10% lossback credited: <span className="font-mono font-bold">+{fmtAmt(b.lossback, b.coin)}</span>
                         </p>
                       )}
-                      {b.status === "open" && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />}
+                      {b.status === "open" && !b.free_bet && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />}
                     </div>
                   );
                 })

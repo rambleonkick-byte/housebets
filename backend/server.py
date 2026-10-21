@@ -1960,6 +1960,8 @@ async def set_auto_cashout(bet_id: str, body: AutoCashoutInput, user: dict = Dep
     b = await db.bets.find_one({"id": bet_id, "user_id": user["id"], "status": "open"}, {"_id": 0})
     if not b:
         raise HTTPException(status_code=400, detail="Only open bets can use auto cash out")
+    if b.get("free_bet"):
+        raise HTTPException(status_code=400, detail="Free bets can't be cashed out")
     if body.target is not None and body.target >= b["potential_payout"] * CASHOUT_MARGIN:
         raise HTTPException(status_code=400, detail="Target must be below the maximum cash out value")
     await db.bets.update_one({"id": bet_id}, {"$set": {"auto_cashout": body.target}})
@@ -3219,7 +3221,7 @@ async def _vip_bonuses():
 
 
 async def _wagered(uid):
-    sports = await db.bets.aggregate([{"$match": {"user_id": uid, "free_bet": {"$ne": True}}},
+    sports = await db.bets.aggregate([{"$match": {"user_id": uid, "free_bet": {"$ne": True}, "status": {"$in": ["open", "won", "lost"]}}},
                                       {"$group": {"_id": None, "t": {"$sum": "$stake"}}}]).to_list(1)
     casino = 0.0
     rates = _PRICE_CACHE["rates"]

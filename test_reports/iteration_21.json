@@ -1,0 +1,45 @@
+{
+  "summary": "Tested VIP ranks / promo codes / player profile end to end. Backend: 10/10 pytest pass, plus a unit probe (deposit match and free-bet settlement) and a race probe (concurrent redemption and max_uses): all pass. Covered: RBAC 403s; profile shape (15 tiers, Bronze start); admin promo validation (bad type, zero amount, deposit match missing pct, bad code pattern, duplicate); cash code credits the balance and adds a wagering target, and withdraw is blocked with 'Wager $X more' (partial wagering lowers the amount, full wagering removes the gate); same code twice -> 400; invalid or disabled -> 404; max_uses exhausted -> 400; expired (ISO and date-only) -> 400; free bet (wrong stake 400, no deduction, free_bet true, reuse 400, cash-out quote null, cash-out rejected, not counted toward wagered); deposit match pending, a second match -> 400 without using up the second code; _apply_deposit_match (100% of $80 = $50 cap, target +2x, one-time); settlement (free bet win pays winnings only $20 on a $10 stake at 3.0, loss gives no lossback, void restores the token); VIP bonus editor (Silver change saved, negative or non-numeric -> 400); level-up to Silver credits the bonus exactly once with a 'vip' bonus transaction and adds to the wagering target; a normal bet still deducts. Frontend: admin promo form for all 3 types (wager field hidden for free bets), table rows, toggle to Disabled, VIP bonus save plus error toast, and the support tickets and bet review sections still show; header profile link -> /profile with all stat cards, VIP card/ladder (15 tiers) and the promo box; the cash redeem toast updates the header balance and shows wagering-locked; duplicate and disabled toasts; free bet list and pending match shown; bet slip free-bet chip locks the stake at $5 (input disabled), the free bet is placed, the balance stays the same and the chip is consumed; mobile profile has no horizontal overflow. Found 2 frontend display bugs in older components that don't handle the new free_bet / bonus types.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_wagered() / wagering gate", "issue": "Bets that get voided or cashed out still count their full stake toward the wagering requirement and VIP points. A player can clear a bonus by betting it and cashing out right away (losing only about 5%), or with bets that push or void. Consider excluding void bets and counting cashed-out bets differently."},
+      {"endpoint": "POST /api/bets/{id}/auto-cashout", "issue": "Accepts free bets (the target check uses potential_payout). It never triggers because the quote is None, but it is misleading. Reject when b.free_bet is true."},
+      {"endpoint": "POST /api/bets (free bet)", "issue": "Stores potential_payout = stake*odds (it includes the free stake), while the actual payout is winnings only. The frontend therefore shows the wrong 'To win' amount (see frontend issue)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "WalletModal transactions", "issue": "New tx types are not in the 'positive' list: a 'bonus' credit shows as '-$20.00' (should be +), and 'free_bet' shows as 'Free_bet -$5.00' although no balance was taken. Add bonus to positive and give free_bet a neutral label/sign.", "selector": "[data-testid=wallet-transactions]", "priority": "MEDIUM"},
+      {"component": "BetHistoryModal", "issue": "Free bets show 'To win $11.40' (potential_payout including the free stake) while the slip showed $6.40 winnings only. A won free bet would also show 'Payout' from potential_payout instead of b.payout. There is no 'Free bet' badge, and 'Set auto cash out' is offered for free bets.", "selector": "BetHistoryModal line ~125-128", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin promos form", "issues": ["Uses the browser's native date picker (admin-promo-expiry) and a native <select>. Use the shadcn Calendar/Popover and Select.", "Inputs have placeholders only. The wager field shows just '1' with no visible label (only a title tooltip), so admins can't tell what it is."]},
+      {"screen": "Mobile header (390px)", "issues": ["The logout icon at the far right is partly clipped at the screen edge."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_vip_promos_profile.py", "/app/backend/tests/probe_vip_unit_it21.py", "/app/backend/tests/race_probe_promos_it21.py", "/app/test_reports/pytest/pytest_vip_promos.xml"],
+  "action_items": [
+    "WalletModal: treat 'bonus' as a positive tx and render 'free_bet' as a neutral 'Free bet' entry (not a debit)",
+    "BetHistoryModal: for free bets show To win = potential_payout - stake and Payout = b.payout, add a 'Free bet' badge, and hide auto cash out",
+    "Backend: reject auto-cashout for free bets; optionally store a winnings-only potential_payout for free bets",
+    "Consider excluding void bets (and refining cashed-out bets) from _wagered so bonus wagering can't be cleared cheaply",
+    "Admin promo form: shadcn date picker/select and visible labels"
+  ],
+  "critical_code_review_comments": [
+    "Profile.jsx: load() swallows errors with catch(()=>{}), so a failing /profile call leaves the spinner forever. Add an error state.",
+    "AdminPromos toggle() has no try/catch, so failures fail silently.",
+    "Profile sign-in button lacks a data-testid.",
+    "server.py is 3496 lines; the VIP/promo section should be split into its own module.",
+    "_check_vip runs on every GET /profile and every casino game (2 aggregations each time). Fine now, but watch the cost for heavy casino users."
+  ],
+  "updated_files": ["/app/backend/tests/test_vip_promos_profile.py", "/app/backend/tests/probe_vip_unit_it21.py", "/app/backend/tests/race_probe_promos_it21.py"],
+  "success_rate": {"backend": "100% (10/10 pytest + unit + race probes)", "frontend": "~90% (core flows pass; 2 display bugs)"},
+  "test_credentials": "admin@apexodds.io / admin123; test players created via register and deleted afterwards",
+  "seed_data_creation": "None left behind. All test users, their data and the test promo codes were deleted. settings.vip_bonus doc exists with default amounts (restored).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest tests/test_vip_promos_profile.py with REACT_APP_BACKEND_URL exported (it cleans up after itself). probe_vip_unit_it21.py imports server directly and monkeypatches _fetch_sgo_results/settle_selection to test free-bet settlement. The bet slip renders two copies of bet-slip-stake-input/place-button (desktop + mobile), so use the :visible selector. Level-up is tested by inserting a casino_games doc with a $10,000 stake directly into Mongo.",
+  "rca of the issue": "WalletModal positive-type whitelist (line 238) and BetHistoryModal payout display (lines 125-128) were written before the bonus/free_bet types existed. Free bets store potential_payout = stake*odds, but settlement pays potential - stake."
+}
