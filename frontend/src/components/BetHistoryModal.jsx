@@ -4,6 +4,7 @@ import { X, History, Trophy, XCircle, Clock, HandCoins } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { CashoutButton } from "@/components/CashoutButton";
+import { OpenBetShareModal } from "@/components/OpenBetShare";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { Usd } from "@/components/Usd";
 import { fmtCrypto, fmtAmt, fmtOdds } from "@/lib/format";
@@ -21,7 +22,8 @@ export function BetHistoryModal({ open, onClose }) {
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [quotes, setQuotes] = useState({});
-  const { setBalances } = useAuth();
+  const [share, setShare] = useState(null);
+  const { user, setBalances } = useAuth();
 
   useEffect(() => {
     if (!open) return;
@@ -134,6 +136,12 @@ export function BetHistoryModal({ open, onClose }) {
                           10% lossback credited: <span className="font-mono font-bold">+{fmtAmt(b.lossback, b.coin)}</span>
                         </p>
                       )}
+                      {b.status === "won" && b.payout > 0 && (
+                        <button data-testid={`history-share-win-${b.id}`} onClick={() => setShare({ bet: b, by: user?.name || "My" })}
+                          className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider bg-emerald-500 hover:bg-emerald-400 text-black rounded-md py-2 transition-colors">
+                          <Trophy size={13} /> Share my win
+                        </button>
+                      )}
                       {b.status === "open" && !b.free_bet && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />}
                     </div>
                   );
@@ -143,6 +151,7 @@ export function BetHistoryModal({ open, onClose }) {
           </motion.div>
         </motion.div>
       )}
+      <OpenBetShareModal share={share} onClose={() => setShare(null)} />
     </AnimatePresence>
   );
 }

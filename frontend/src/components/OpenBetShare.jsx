@@ -22,17 +22,26 @@ export function BrandMark({ size = "sm" }) {
 const MARK = { won: [CheckCircle2, "text-emerald-400"], winning: [CircleDot, "text-emerald-400"], losing: [CircleDot, "text-red-400"], lost: [XCircle, "text-red-400"] };
 
 function ShareCard({ cardRef, bet, legs, by }) {
-  const toWin = bet.potential_payout - (bet.free_bet ? bet.stake : 0);
+  const winner = bet.status === "won";
+  const toWin = winner ? bet.payout : bet.potential_payout - (bet.free_bet ? bet.stake : 0);
+  const profit = winner ? bet.payout - (bet.free_bet ? 0 : bet.stake) : 0;
   return (
-    <div ref={cardRef} data-testid="open-bet-share-card" className="w-full bg-[#0D0F16] border border-[#1E2234] rounded-3xl p-5 space-y-3"
-      style={{ backgroundImage: "radial-gradient(120% 60% at 100% 0%, rgba(16,185,129,0.16), transparent 60%)" }}>
+    <div ref={cardRef} data-testid="open-bet-share-card" className={`relative overflow-hidden w-full bg-[#0D0F16] border rounded-3xl p-5 space-y-3 ${winner ? "border-emerald-500/50" : "border-[#1E2234]"}`}
+      style={{ backgroundImage: winner ? "radial-gradient(120% 70% at 50% 0%, rgba(16,185,129,0.30), transparent 65%)" : "radial-gradient(120% 60% at 100% 0%, rgba(16,185,129,0.16), transparent 60%)" }}>
       <div className="flex items-center justify-between">
         <BrandMark size="lg" />
         <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{by}'s {bet.bet_type === "parlay" ? `${bet.selections.length}-leg parlay` : "bet"}</span>
       </div>
+      {winner && (
+        <div className="flex justify-center py-1">
+          <div data-testid="share-winner-stamp" className="rotate-[-6deg] border-[3px] border-emerald-400 text-emerald-400 rounded-xl px-5 py-1 font-display font-black text-4xl tracking-[0.14em] shadow-[0_0_30px_rgba(16,185,129,0.45)]">
+            WINNER
+          </div>
+        </div>
+      )}
       {bet.selections.map((s, i) => {
         const l = legs?.[i];
-        const [Icon, cls] = (l && l.state !== "pre" && MARK[l.status]) || [];
+        const [Icon, cls] = winner ? [CheckCircle2, "text-emerald-400"] : (l && l.state !== "pre" && MARK[l.status]) || [];
         return (
           <div key={i} className="bg-[#151823] border border-[#232838] rounded-2xl p-3.5">
             <div className="flex items-center justify-between gap-2">
@@ -46,13 +55,18 @@ function ShareCard({ cardRef, bet, legs, by }) {
         );
       })}
       <div className="grid grid-cols-3 gap-2 text-center">
-        {[["Odds", fmtOdds(bet.total_odds), "text-white"], ["Stake", fmtAmt(bet.stake, bet.coin), "text-white"], ["To win", fmtAmt(toWin, bet.coin), "text-emerald-400"]].map(([k, v, c]) => (
+        {[["Odds", fmtOdds(bet.total_odds), "text-white"], ["Stake", fmtAmt(bet.stake, bet.coin), "text-white"], [winner ? "Paid" : "To win", fmtAmt(toWin, bet.coin), "text-emerald-400"]].map(([k, v, c]) => (
           <div key={k} className="bg-[#151823] border border-[#232838] rounded-2xl py-2.5">
             <p className="text-[9px] font-mono uppercase tracking-wider text-zinc-500">{k}</p>
             <p className={`font-mono text-base font-bold ${c}`} data-testid={`open-bet-share-${k.replace(" ", "-").toLowerCase()}`}>{v}</p>
           </div>
         ))}
       </div>
+      {winner && (
+        <div data-testid="share-winner-profit" className="text-center bg-emerald-500 text-black rounded-2xl py-2.5 font-display font-black text-xl tracking-tight">
+          +{fmtAmt(profit, bet.coin)} PROFIT
+        </div>
+      )}
       <p className="text-center text-[10px] font-mono uppercase tracking-[0.25em] text-zinc-500">{window.location.host}</p>
     </div>
   );
@@ -74,7 +88,9 @@ export function OpenBetShareModal({ share, onClose }) {
   const nativeShare = async () => {
     try {
       const file = new File([await (await fetch(await toImage())).blob()], name, { type: "image/png" });
-      const data = { title: "My ApexOdds bet", text: "Riding this one on ApexOdds", url: site };
+      const data = share.bet.status === "won"
+        ? { title: "I won on ApexOdds", text: `Cashed a winner on ApexOdds 💰`, url: site }
+        : { title: "My ApexOdds bet", text: "Riding this one on ApexOdds", url: site };
       await navigator.share(navigator.canShare?.({ files: [file] }) ? { ...data, files: [file] } : data);
     } catch { /* cancelled */ }
   };
@@ -91,7 +107,7 @@ export function OpenBetShareModal({ share, onClose }) {
           <motion.div className="w-[400px] max-w-full bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5 max-h-[92vh] overflow-y-auto scrollbar-thin"
             initial={{ scale: 0.96, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 15 }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">Share your bet</p>
+              <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">{share?.bet.status === "won" ? "Share your win" : "Share your bet"}</p>
               <button data-testid="open-bet-share-close" onClick={onClose} className="text-zinc-500 hover:text-white"><X size={18} /></button>
             </div>
             <ShareCard cardRef={cardRef} {...share} />
