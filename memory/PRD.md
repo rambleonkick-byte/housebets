@@ -275,3 +275,6 @@
 - Open Bets tab: each leg shows status icon (pre clock, winning/losing pulsing dot, hit/lost tick/cross, push), live score line "● LIVE AWAY x – y HOME · clock" or FINAL, and a sliding progress bar for totals & player props (current vs line marker). Polls GET /api/bets/live every 20s (SGO results by event ID, 30s cache, 10-min miss cache).
 - Fix: parlays with an already-lost leg now settle as lost immediately instead of waiting for pending legs.
 - Tested: backend pytest backend/tests/test_live_bet_tracker.py (11 pass); UI verified via screenshot with a real live soccer game.
+
+## 2026-06 — Branded shareable open bets
+- Each open-bet card in the sidebar has the APEX ODDS brand mark and a Share button. Share opens a branded image card (logo, player name, legs with live/final score marks, total odds, stake, to win, site address) with Save image (PNG), native Share (mobile, attaches image) and Copy link (plain site URL, no referral code per user). Component: OpenBetShare.jsx.

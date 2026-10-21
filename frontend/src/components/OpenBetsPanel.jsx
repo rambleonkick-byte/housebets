@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Clock, Radio, Ticket, CheckCircle2, XCircle, CircleDot, MinusCircle } from "lucide-react";
+import { Clock, Radio, Ticket, CheckCircle2, XCircle, CircleDot, MinusCircle, Share2 } from "lucide-react";
+import { BrandMark, OpenBetShareModal } from "@/components/OpenBetShare";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -77,10 +78,18 @@ function PropProgress({ p, status, testid }) {
   );
 }
 
-function OpenBetCard({ b, quote, legs, onCashout, onSetAuto }) {
+function OpenBetCard({ b, quote, legs, onCashout, onSetAuto, onShare }) {
   const toWin = b.potential_payout - (b.free_bet ? b.stake : 0);
   return (
-    <div data-testid={`open-bet-${b.id}`} className="bg-gradient-to-b from-[#161924] to-[#12141C] border border-[#232838] rounded-2xl p-3.5">
+    <div data-testid={`open-bet-${b.id}`} className="bg-gradient-to-b from-[#161924] to-[#12141C] border border-[#232838] rounded-2xl p-3.5"
+      style={{ backgroundImage: "radial-gradient(90% 50% at 100% 0%, rgba(16,185,129,0.10), transparent 60%)" }}>
+      <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-[#1E2234]">
+        <BrandMark />
+        <button data-testid={`open-bet-share-${b.id}`} onClick={() => onShare(b)} title="Share this bet"
+          className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/10 rounded-full px-2.5 py-1 transition-colors">
+          <Share2 size={11} /> Share
+        </button>
+      </div>
       <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-2">
         <span className="flex items-center gap-1.5">
           <span className="text-amber-300">{b.bet_type === "parlay" ? `${b.selections.length}-leg parlay` : "Single"}</span>
@@ -129,6 +138,7 @@ function OpenBetCard({ b, quote, legs, onCashout, onSetAuto }) {
 export function OpenBetsPanel({ data }) {
   const { user, setAuthOpen, setBalances } = useAuth();
   const { bets, setBets, quotes, reload } = data;
+  const [share, setShare] = useState(null);
 
   const cashout = async (b) => {
     try {
@@ -177,8 +187,10 @@ export function OpenBetsPanel({ data }) {
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-4 pb-4 space-y-3">
-        {bets.map((b) => <OpenBetCard key={b.id} b={b} quote={quotes[b.id]} legs={data.live?.[b.id]} onCashout={cashout} onSetAuto={setAuto} />)}
+        {bets.map((b) => <OpenBetCard key={b.id} b={b} quote={quotes[b.id]} legs={data.live?.[b.id]} onCashout={cashout} onSetAuto={setAuto}
+          onShare={(bet) => setShare({ bet, legs: data.live?.[bet.id], by: user.name || "My" })} />)}
       </div>
+      <OpenBetShareModal share={share} onClose={() => setShare(null)} />
     </div>
   );
 }
