@@ -20,6 +20,7 @@ export function useOpenBets() {
     return () => { clearInterval(t); window.removeEventListener("bets:changed", reload); };
   }, [user, reload]);
   const has = !!bets?.length;
+  const idsKey = (bets || []).map((b) => b.id).join(",");
   const [live, setLive] = useState({});
   useEffect(() => {
     if (!has) return;
@@ -27,7 +28,7 @@ export function useOpenBets() {
     load();
     const t = setInterval(load, 20000);
     return () => clearInterval(t);
-  }, [has, bets?.length]);
+  }, [has, idsKey]);
   useEffect(() => {
     if (!has) return;
     const load = () => api.get("/bets/cashout-quotes").then(({ data }) => setQuotes(data.quotes)).catch(() => {});

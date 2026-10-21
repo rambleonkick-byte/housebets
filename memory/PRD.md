@@ -270,3 +270,8 @@
 
 ## 2026-06 — Right sidebar "Open Bets" tab
 - Right sidebar (and mobile sheet) has tabs: Bet Slip (n) | Open Bets (n). Open Bets shows at-risk / potential-win totals and clean cards per open bet (legs, odds, stake, to win, cash out + auto cash out). Auto-refreshes every 30s and right after a bet is placed; adding a pick switches back to Bet Slip. Mobile floating button also appears when only open bets exist. Component: OpenBetsPanel.jsx (useOpenBets hook).
+
+## 2026-06 — Live bet tracker
+- Open Bets tab: each leg shows status icon (pre clock, winning/losing pulsing dot, hit/lost tick/cross, push), live score line "● LIVE AWAY x – y HOME · clock" or FINAL, and a sliding progress bar for totals & player props (current vs line marker). Polls GET /api/bets/live every 20s (SGO results by event ID, 30s cache, 10-min miss cache).
+- Fix: parlays with an already-lost leg now settle as lost immediately instead of waiting for pending legs.
+- Tested: backend pytest backend/tests/test_live_bet_tracker.py (11 pass); UI verified via screenshot with a real live soccer game.

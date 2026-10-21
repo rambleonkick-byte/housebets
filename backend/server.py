@@ -1754,6 +1754,7 @@ LOSSBACK_RATE = 0.10
 
 SETTLE_FLAG_HOURS = 48
 _RESULTS_CACHE = {}  # event_id -> (fetched_ts, result event)
+_RESULTS_MISS = {}  # event_id -> last ts SGO didn't return it
 
 
 def _sgo_result_event(ev):
@@ -1774,8 +1775,13 @@ async def _fetch_sgo_results(ids):
         c = _RESULTS_CACHE.get(i)
         if c and (c[1]["state"] == "post" or now - c[0] < 30):
             out[i] = c[1]
+        elif now - _RESULTS_MISS.get(i, 0) < 600:
+            continue
         else:
             need.append(i)
+    if len(_RESULTS_CACHE) > 5000:
+        for k in sorted(_RESULTS_CACHE, key=lambda k: _RESULTS_CACHE[k][0])[:1000]:
+            _RESULTS_CACHE.pop(k, None)
     if not SGO_KEY:
         return out
     for i in range(0, len(need), 25):
@@ -1787,6 +1793,8 @@ async def _fetch_sgo_results(ids):
                 res = _sgo_result_event(ev)
                 _RESULTS_CACHE[res["event_id"]] = (now, res)
                 out[res["event_id"]] = res
+            for miss in set(chunk) - set(out):
+                _RESULTS_MISS[miss] = now
         except Exception as e:
             logger.warning(f"SGO results lookup failed: {e}")
     return out
@@ -2041,7 +2049,7 @@ def _live_leg(sel, ev):
     if r is None:
         out["status"] = "live"
     elif r == "push":
-        out["status"] = "push"
+        out["status"] = "losing" if ou == "over" else "winning" if ou == "under" else "losing"
     elif ou == "over" and cur is not None and line is not None and cur > line:
         out["status"] = "won"
     elif ou == "under" and cur is not None and line is not None and cur > line:
