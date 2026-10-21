@@ -3205,12 +3205,9 @@ async def admin_ticket_status(tid: str, body: TicketStatusInput, admin: dict = D
 # ----------------------------------------------------------------------------
 VIP_TIERS = [("Bronze", 0), ("Silver", 10_000), ("Gold", 50_000),
              ("Platinum I", 100_000), ("Platinum II", 250_000), ("Platinum III", 500_000),
-             ("Diamond I", 1_000_000), ("Diamond II", 2_500_000), ("Diamond III", 5_000_000),
-             ("Elite I", 10_000_000), ("Elite II", 25_000_000), ("Elite III", 50_000_000),
-             ("Black I", 100_000_000), ("Black II", 250_000_000), ("Black III", 500_000_000)]
+             ("Diamond I", 1_000_000), ("Diamond II", 2_500_000), ("Diamond III", 5_000_000)]
 DEFAULT_VIP_BONUS = {"Bronze": 0, "Silver": 25, "Gold": 100, "Platinum I": 200, "Platinum II": 400, "Platinum III": 750,
-                     "Diamond I": 1500, "Diamond II": 3000, "Diamond III": 5000, "Elite I": 10000, "Elite II": 20000,
-                     "Elite III": 35000, "Black I": 75000, "Black II": 150000, "Black III": 300000}
+                     "Diamond I": 1500, "Diamond II": 3000, "Diamond III": 5000}
 SPORTS_POINT_MULT = 3
 LEVELUP_WAGER_MULT = 1
 
