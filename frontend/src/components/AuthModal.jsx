@@ -1,18 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Mail, Lock, User, Loader2, Gift } from "lucide-react";
 import { useAuth, formatApiErrorDetail } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 export function AuthModal() {
-  const { authOpen, setAuthOpen, login, register } = useAuth();
+  const { user, authOpen, setAuthOpen, login, register } = useAuth();
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [ref, setRef] = useState("");
+  const [ref, setRef] = useState(() => localStorage.getItem("apex_ref") || "");
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const code = (p.get("ref") || "").trim().toUpperCase().slice(0, 24);
+    if (!code) return;
+    localStorage.setItem("apex_ref", code);
+    setRef(code);
+    p.delete("ref");
+    window.history.replaceState(null, "", window.location.pathname + (p.toString() ? `?${p}` : "") + window.location.hash);
+    if (!user) { setMode("register"); setAuthOpen(true); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e) => {
     e.preventDefault();
@@ -20,7 +31,7 @@ export function AuthModal() {
     setError("");
     try {
       if (mode === "login") await login(email, password);
-      else await register(name, email, password, ref.trim());
+      else { await register(name, email, password, ref.trim()); localStorage.removeItem("apex_ref"); }
       toast.success(mode === "login" ? "Welcome back" : "Account created");
       setAuthOpen(false);
       setPassword("");

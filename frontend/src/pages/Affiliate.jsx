@@ -31,6 +31,7 @@ function CoinList({ amounts }) {
 function CodeCard({ data, onSaved }) {
   const [edit, setEdit] = useState(false);
   const [code, setCode] = useState(data.code);
+  const link = `${window.location.origin}/?ref=${data.code}`;
   const [saving, setSaving] = useState(false);
   const save = async () => {
     setSaving(true);
@@ -63,7 +64,14 @@ function CodeCard({ data, onSaved }) {
           </>
         )}
       </div>
-      <p className="mt-4 text-xs text-zinc-400" data-testid="aff-code-hint">Players enter this code when they sign up.</p>
+      {!edit && (
+        <div className="mt-4 flex flex-wrap items-center gap-2" data-testid="aff-link-box">
+          <span data-testid="aff-link" className="font-mono text-xs sm:text-sm text-emerald-200 bg-[#090A0F] border border-emerald-500/30 rounded-xl px-3 py-2 break-all">{link}</span>
+          <button data-testid="aff-copy-link" onClick={() => copy(link, "Link")}
+            className="flex items-center gap-1.5 text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-black px-3 py-2 rounded-xl transition-colors"><Copy size={14} /> Copy link</button>
+        </div>
+      )}
+      <p className="mt-3 text-xs text-zinc-400" data-testid="aff-code-hint">Share your link, or have players enter your code at sign-up. Old codes keep working after you customize.</p>
     </div>
   );
 }

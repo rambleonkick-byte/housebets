@@ -198,7 +198,8 @@ async def register(body: RegisterInput, response: Response):
         raise HTTPException(status_code=400, detail="Email already registered")
     referrer = None
     if body.ref_code and body.ref_code.strip():
-        referrer = await db.affiliates.find_one({"code": body.ref_code.strip().upper()})
+        c = body.ref_code.strip().upper()
+        referrer = await db.affiliates.find_one({"$or": [{"code": c}, {"old_codes": c}]})
         if not referrer:
             raise HTTPException(status_code=400, detail="Invalid referral code")
     doc = {"name": body.name, "email": email, "password_hash": hash_password(body.password),
@@ -2926,10 +2927,14 @@ async def affiliate_daily(user: dict = Depends(get_current_user)):
 async def set_affiliate_code(body: AffCodeInput, user: dict = Depends(get_current_user)):
     await _ensure_affiliate(user["id"])
     code = body.code.upper()
-    if await db.affiliates.find_one({"code": code, "user_id": {"$ne": user["id"]}}):
+    if await db.affiliates.find_one({"$or": [{"code": code}, {"old_codes": code}], "user_id": {"$ne": user["id"]}}):
         raise HTTPException(status_code=400, detail="That code is taken")
+    cur = await db.affiliates.find_one({"user_id": user["id"]}, {"code": 1})
     try:
-        await db.affiliates.update_one({"user_id": user["id"]}, {"$set": {"code": code}})
+        upd = {"$set": {"code": code}, "$pull": {"old_codes": code}}
+        await db.affiliates.update_one({"user_id": user["id"]}, upd)
+        if cur and cur.get("code") and cur["code"] != code:
+            await db.affiliates.update_one({"user_id": user["id"]}, {"$addToSet": {"old_codes": cur["code"]}})
     except Exception:
         raise HTTPException(status_code=400, detail="That code is taken")
     return {"code": code}
@@ -2937,7 +2942,8 @@ async def set_affiliate_code(body: AffCodeInput, user: dict = Depends(get_curren
 
 @api_router.get("/affiliate/check/{code}")
 async def check_affiliate_code(code: str):
-    a = await db.affiliates.find_one({"code": code.strip().upper()[:24]})
+    c = code.strip().upper()[:24]
+    a = await db.affiliates.find_one({"$or": [{"code": c}, {"old_codes": c}]})
     return {"valid": bool(a)}
 
 

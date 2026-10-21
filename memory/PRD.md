@@ -262,3 +262,8 @@
 - Player drawer tabs: Open bets (Won/Lost/Void buttons with confirm), Settled bets, Casino games.
 - POST /api/admin/bets/{id}/grade {result}: shares _finalize_bet with auto-settlement (lossback on lost, refund on void, free-bet rules); graded_by stored; logged in admin_actions. GET /api/admin/users/{uid}/history.
 - Tested: iteration_23 (backend 15/15; UI label fixes applied after).
+
+## 2026-06 — Custom referral links
+- Affiliate page shows a shareable link {origin}/?ref=CODE with "Copy link"; affiliates customize their code (4-16 chars).
+- Visiting ?ref=CODE saves it (localStorage apex_ref), strips it from the URL and opens sign-up with the code prefilled.
+- Old codes keep working: on change, previous code goes to affiliates.old_codes; register/check match code or old_codes; others can't claim an old code.
