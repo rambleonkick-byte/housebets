@@ -267,3 +267,6 @@
 - Affiliate page shows a shareable link {origin}/?ref=CODE with "Copy link"; affiliates customize their code (4-16 chars).
 - Visiting ?ref=CODE saves it (localStorage apex_ref), strips it from the URL and opens sign-up with the code prefilled.
 - Old codes keep working: on change, previous code goes to affiliates.old_codes; register/check match code or old_codes; others can't claim an old code.
+
+## 2026-06 — Right sidebar "Open Bets" tab
+- Right sidebar (and mobile sheet) has tabs: Bet Slip (n) | Open Bets (n). Open Bets shows at-risk / potential-win totals and clean cards per open bet (legs, odds, stake, to win, cash out + auto cash out). Auto-refreshes every 30s and right after a bet is placed; adding a pick switches back to Bet Slip. Mobile floating button also appears when only open bets exist. Component: OpenBetsPanel.jsx (useOpenBets hook).

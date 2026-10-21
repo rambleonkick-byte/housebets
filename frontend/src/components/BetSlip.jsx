@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Ticket, Trash2, X, Loader2, Zap, Share2, ArrowUp, ArrowDown } from "lucide-react";
 import { ShareSlipModal } from "@/components/ShareSlipModal";
+import { OpenBetsPanel, useOpenBets } from "@/components/OpenBetsPanel";
 import { useBetSlip } from "@/context/BetSlipContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
@@ -113,6 +114,9 @@ function GameCard({ legs, selId, onRemove }) {
 
 export function BetSlip() {
   const { items, removeSelection, clear, selId, open, setOpen, applyServerPrices, acceptChanges, acceptBetter, setAcceptBetter, boost, setBoost } = useBetSlip();
+  const [tab, setTab] = useState("slip");
+  const openBets = useOpenBets();
+  useEffect(() => { if (items.length) setTab("slip"); }, [items.length]);
   const pendingChanges = items.some((s) => s.pending);
   const { user, setAuthOpen, setBalances } = useAuth();
   const [stake, setStake] = useState("");
@@ -183,6 +187,7 @@ export function BetSlip() {
         if (lastBal) setBalances(lastBal);
       }
       toast.success(freeBet ? "Free bet placed!" : "Bet placed!");
+      window.dispatchEvent(new Event("bets:changed"));
       if (freeBet) { setFreeBets((l) => l.filter((f) => f.id !== freeBet.id)); setFreeBet(null); }
       clear();
       setStake("");
@@ -202,8 +207,8 @@ export function BetSlip() {
     }
   };
 
-  const content = (
-    <div className="flex flex-col h-full">
+  const slipContent = (
+    <div className="flex flex-col flex-1 min-h-0">
       <div className="px-4 pt-4 pb-3 space-y-3">
         <div className="flex items-center justify-between">
           <SlipLogo />
@@ -220,9 +225,6 @@ export function BetSlip() {
                 <Trash2 size={14} />
               </button>
             )}
-            <button className="lg:hidden w-7 h-7 rounded-full flex items-center justify-center text-zinc-500 hover:text-white" onClick={() => setOpen(false)}>
-              <X size={16} />
-            </button>
           </div>
         </div>
         <div className="flex items-center justify-between">
@@ -365,6 +367,23 @@ export function BetSlip() {
     </div>
   );
 
+  const openCount = openBets.bets?.length || 0;
+  const content = (
+    <div className="flex flex-col h-full">
+      <div className="flex gap-1 mx-3 mt-3 bg-[#12141C] border border-[#232838] p-1 rounded-full" data-testid="sidebar-tabs">
+        {[["slip", "Bet Slip", items.length], ["open", "Open Bets", openCount]].map(([v, l, n]) => (
+          <button key={v} data-testid={`sidebar-tab-${v}`} onClick={() => setTab(v)}
+            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2 rounded-full transition-colors ${tab === v ? "bg-emerald-500 text-black" : "text-zinc-400 hover:text-white"}`}>
+            {l}
+            <span data-testid={`sidebar-tab-${v}-count`} className={`font-mono text-[10px] rounded-full px-1.5 ${tab === v ? "bg-black/20" : "bg-[#1A1D29]"}`}>{n}</span>
+          </button>
+        ))}
+        <button className="lg:hidden w-8 flex items-center justify-center text-zinc-500 hover:text-white" onClick={() => setOpen(false)} aria-label="Close"><X size={16} /></button>
+      </div>
+      {tab === "slip" ? slipContent : <div className="flex-1 min-h-0 flex flex-col pt-3"><OpenBetsPanel data={openBets} /></div>}
+    </div>
+  );
+
   return (
     <>
       <ShareSlipModal share={share} onClose={() => setShare(null)} />
@@ -374,10 +393,10 @@ export function BetSlip() {
         </div>
       </aside>
 
-      {items.length > 0 && (
-        <button data-testid="bet-slip-mobile-open" onClick={() => setOpen(true)}
+      {(items.length > 0 || openCount > 0) && (
+        <button data-testid="bet-slip-mobile-open" onClick={() => { if (!items.length) setTab("open"); setOpen(true); }}
           className="lg:hidden fixed bottom-4 right-4 z-40 flex items-center gap-2 bg-emerald-500 text-black font-bold px-4 py-3 rounded-full shadow-lg">
-          <Ticket size={18} /> {items.length}
+          <Ticket size={18} /> {items.length || `${openCount} open`}
         </button>
       )}
       <AnimatePresence>
