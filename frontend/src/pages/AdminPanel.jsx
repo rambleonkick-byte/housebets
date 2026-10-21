@@ -131,7 +131,7 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
             <ul className="space-y-1.5" data-testid="admin-action-log">
               {log.map((a) => (
                 <li key={a.id} className="text-xs bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2">
-                  <span className="font-semibold">{a.action === "adjust" ? `${a.amount > 0 ? "+" : ""}${a.amount} ${a.coin}` : a.action === "block" ? "Locked" : "Unlocked"}</span>
+                  <span className="font-semibold">{a.action === "adjust" ? `${a.amount > 0 ? "+" : ""}${a.amount} ${a.coin}` : a.action === "block" ? "Locked" : a.action === "unblock" ? "Unlocked" : a.action?.startsWith("grade_") ? `Graded ${a.action.slice(6).toUpperCase()}` : a.action === "delete" ? "Deleted" : a.action}</span>
                   {a.reason && <span className="text-zinc-400"> · {a.reason}</span>}
                   <span className="block text-[10px] text-zinc-600">{a.admin} · {new Date(a.created_at).toLocaleString()}</span>
                 </li>

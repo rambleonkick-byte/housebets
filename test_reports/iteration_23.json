@@ -1,0 +1,36 @@
+{
+  "summary": "Tested Manual Bet Grading (POST /api/admin/bets/{id}/grade), Full Bet History (GET /api/admin/users/{uid}/history) and the admin drawer tabs (Open/Settled/Casino), plus a regression check on auto-settlement after the _finalize_bet refactor. Backend: 15/15 pytest passed. WON pays potential_payout with a 'payout' tx and graded_by set. LOST pays only the 10% lossback with a 'lossback' tx. VOID refunds the stake with a 'refund' tx. Voiding a free bet pays $0 and sets the token back to available (bet_id unset). A free bet that wins pays winnings only. A free bet that loses gets no lossback. Grading a bet that's already settled, an unknown bet or an invalid result returns 400 and the balance doesn't change. A non-admin gets 403 on grade and history; no auth gets 401. History returns 404 for an unknown or bad uid. Grades are logged as grade_won/lost/void actions. The settle-sweep on SGO event RXJ6e7zy3upVSBy1mFUP (total over 1.5 at odds 2.0) set the bet to won and paid 2x the stake. UI (1920x1080): the drawer opens and the Open tab shows (4) and '$45.00 at risk' (the free bet is excluded). Won/Lost/Void each show a confirm dialog with the correct amount, and the bet leaves the Open list. The balance went from $98 to $140 (+25 +2 +15 +0), which is correct. The Settled tab shows WON $25, LOST $0 +$2.00 lossback, VOID $15 and free-bet VOID $0, each with 'Graded manually by admin@apexodds.io' and no grade buttons. The Casino tab shows the dice game with stake and profit. One UI bug: the Admin activity log labels every grade action as 'Unlocked'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminPanel.jsx UserDrawer - Admin activity log (line ~134)", "issue": "Grade actions (grade_won/grade_lost/grade_void, and also 'delete') show as 'Unlocked · Bet TEST_xxx' because the label ternary only handles adjust and block and puts everything else under 'Unlocked'. It should show e.g. 'Graded WON'.", "selector": "admin-user-drawer > Admin activity list", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin drawer > Casino tab", "issues": ["A negative profit shows as '$-2.00'; it should be '-$2.00' (fmtUsd of a negative number).", "A losing game shows 'Dice 0x', which reads oddly. Consider hiding the multiplier or showing 'bust' when it is 0."]},
+      {"screen": "Admin drawer > grade confirm", "issues": ["The VOID confirm for a free bet says '$0.00 goes to the player's balance'. It should say the free bet token is restored instead."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_manual_grading_history.py", "/app/backend/tests/seed_ui_it23.py", "/app/test_reports/pytest/pytest_it23.xml"],
+  "action_items": [
+    "Fix the activity-log label in AdminPanel.jsx so grade_won/grade_lost/grade_void (and delete) show their own text instead of 'Unlocked'.",
+    "Optional: format negative casino profit as -$X, and change the free-bet void confirm text."
+  ],
+  "critical_code_review_comments": [
+    "admin_grade_bet and _finalize_bet are safe against races: the update is guarded on status 'open', and a lost race returns 409. Only the guarded update happens before the wallet credit, so no double pay is possible.",
+    "admin_grade_bet returns 400 'Only open bets can be graded' for an unknown bet_id. 404 would be more accurate.",
+    "The grade_* admin_actions entries have no user_email, unlike the other admin_actions docs. Add it for consistency.",
+    "admin_user_history returns at most 100 bets and 100 games, with no pagination. That's fine for now, but heavy players will see a truncated history.",
+    "server.py is ~3550 lines. Split it into routers (admin, betting, casino, wallet)."
+  ],
+  "updated_files": ["/app/backend/tests/test_manual_grading_history.py", "/app/backend/tests/seed_ui_it23.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "95% (all flows work; activity-log label bug)"},
+  "seed_data_creation": "Test players test_it23_* were created via register, funded via admin adjust, and given bets inserted directly in Mongo (ids TEST_*). All were deleted through DELETE /api/admin/users/{uid}; 0 test users, bets or free_bets remain. dhensley727 and the admin's bets were not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: REACT_APP_BACKEND_URL=... pytest tests/test_manual_grading_history.py -n 0. Use -n 0 because pytest.ini sets xdist loadscope and each class would then get its own module fixture/user. seed_ui_it23.py creates a user with 4 open bets (won/lost/void/free-bet) plus a dice game for UI tests and prints the uid and bet ids. Log in to the UI with page.request.post /api/auth/login, then goto /admin.",
+  "test_credentials": "admin@apexodds.io / admin123 (from /app/memory/test_credentials.md)"
+}

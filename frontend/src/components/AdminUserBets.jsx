@@ -47,12 +47,12 @@ function GameRow({ g }) {
   return (
     <li data-testid={`admin-user-game-${g.id}`} className="flex items-center justify-between bg-[#0E1017] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm">
       <div>
-        <p className="capitalize font-semibold">{g.game} <span className="font-mono text-xs text-zinc-500">{g.multiplier}x</span></p>
+        <p className="capitalize font-semibold">{g.game} {g.multiplier > 0 && <span className="font-mono text-xs text-zinc-500">{g.multiplier}x</span>}</p>
         <p className="text-[10px] text-zinc-500">{new Date(g.created_at).toLocaleString()}</p>
       </div>
       <div className="text-right font-mono text-xs">
         <p className="text-zinc-400">Bet {fmtUsd(g.stake)}</p>
-        <p className={profit > 0 ? "text-emerald-400" : profit < 0 ? "text-red-400" : "text-zinc-400"}>{profit > 0 ? "+" : ""}{fmtUsd(profit)}</p>
+        <p className={profit > 0 ? "text-emerald-400" : profit < 0 ? "text-red-400" : "text-zinc-400"}>{profit > 0 ? "+" : profit < 0 ? "-" : ""}{fmtUsd(Math.abs(profit))}</p>
       </div>
     </li>
   );
@@ -70,7 +70,9 @@ export function AdminUserBets({ uid, onChanged }) {
 
   const grade = async (b, result) => {
     const amt = result === "won" ? b.potential_payout - (b.free_bet ? b.stake : 0) : result === "void" ? (b.free_bet ? 0 : b.stake) : 0;
-    const msg = result === "lost" ? "Grade as LOST? The player gets the 10% lossback." : `Grade as ${result.toUpperCase()}? ${fmtUsd(amt)} goes to the player's balance.`;
+    const msg = result === "lost" ? (b.free_bet ? "Grade as LOST? Nothing is paid on a free bet." : "Grade as LOST? The player gets the 10% lossback.")
+      : result === "void" && b.free_bet ? "Grade as VOID? The player gets their free bet token back."
+      : `Grade as ${result.toUpperCase()}? ${fmtUsd(amt)} goes to the player's balance.`;
     if (!window.confirm(msg)) return;
     setBusy(true);
     try {

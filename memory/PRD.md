@@ -257,3 +257,8 @@
 
 ## 2026-06 — Admin: player open bets
 - Clicking a player in Admin opens the drawer, which now lists their open bets (legs, odds, stake, to-win, free-bet / needs-review tags) and total $ at risk. GET /api/admin/users/{uid}/bets.
+
+## 2026-06 — Manual grading + full player history (admin)
+- Player drawer tabs: Open bets (Won/Lost/Void buttons with confirm), Settled bets, Casino games.
+- POST /api/admin/bets/{id}/grade {result}: shares _finalize_bet with auto-settlement (lossback on lost, refund on void, free-bet rules); graded_by stored; logged in admin_actions. GET /api/admin/users/{uid}/history.
+- Tested: iteration_23 (backend 15/15; UI label fixes applied after).
