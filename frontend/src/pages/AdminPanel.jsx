@@ -7,6 +7,7 @@ import { usePrices, fmtUsd } from "@/lib/prices";
 import { usdValue, fmtCrypto, fmtAmt } from "@/lib/format";
 import { AdminBetReview } from "@/components/AdminBetReview";
 import { AdminTickets } from "@/components/AdminTickets";
+import { AdminPromos } from "@/components/AdminPromos";
 
 const COINS = ["USD"];
 const PAGE = 50;
@@ -203,6 +204,7 @@ export default function AdminPanel({ onWithdrawals }) {
         )}
       </div>
       {open && <UserDrawer u={open} rates={rates} onClose={() => setOpenId(null)} onChanged={load} />}
+      <AdminPromos />
       <AdminTickets />
       <AdminBetReview />
     </div>

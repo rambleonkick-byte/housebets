@@ -21,6 +21,7 @@ import { Keno } from "@/pages/games/Keno";
 import { Dice } from "@/pages/games/Dice";
 import Affiliate from "@/pages/Affiliate";
 import AdminPanel from "@/pages/AdminPanel";
+import Profile from "@/pages/Profile";
 
 function Shell() {
   const { user, setAuthOpen } = useAuth();
@@ -47,6 +48,7 @@ function Shell() {
           <Route path="/casino/blackjack" element={<Blackjack />} />
           <Route path="/affiliate" element={<Affiliate />} />
           <Route path="/admin" element={<AdminPanel onWithdrawals={() => setAdminOpen(true)} />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </div>
       <AuthModal />

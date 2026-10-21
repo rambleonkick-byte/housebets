@@ -122,6 +122,16 @@ export function BetSlip() {
   const [loading, setLoading] = useState(false);
   const [share, setShare] = useState(null);
   const [sharing, setSharing] = useState(false);
+  const [freeBets, setFreeBets] = useState([]);
+  const [freeBet, setFreeBet] = useState(null);
+  useEffect(() => {
+    if (!user || !items.length) return;
+    api.get("/free-bets").then(({ data }) => setFreeBets(data.free_bets)).catch(() => {});
+  }, [user, items.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickFreeBet = (fb) => {
+    if (freeBet?.id === fb.id) { setFreeBet(null); setStake(""); return; }
+    setFreeBet(fb); setStake(String(fb.amount));
+  };
 
   const isParlay = !!boost || (mode === "parlay" && items.length > 1);
   const rawParlay = useMemo(() => computeParlayOdds(items), [items]);
@@ -132,7 +142,7 @@ export function BetSlip() {
   const stakeNum = parseFloat(stake) || 0;
 
   const singlePayout = useMemo(() => items.reduce((sum, s) => sum + stakeNum * s.odds, 0), [items, stakeNum]);
-  const payout = isParlay ? stakeNum * parlayOdds : singlePayout;
+  const payout = (isParlay ? stakeNum * parlayOdds : singlePayout) - (freeBet ? stakeNum : 0);
   const totalStake = isParlay ? stakeNum : stakeNum * items.length;
   const bal = user?.balances?.[coin] ?? 0;
 
@@ -155,23 +165,25 @@ export function BetSlip() {
   const place = async () => {
     if (!user) { setAuthOpen(true); return; }
     if (stakeNum <= 0) { toast.error("Enter a stake"); return; }
-    if (totalStake > bal) { toast.error("Insufficient balance"); return; }
+    if (freeBet && !isParlay && items.length > 1) { toast.error("A free bet covers one bet — switch to parlay or keep one pick"); return; }
+    if (!freeBet && totalStake > bal) { toast.error("Insufficient balance"); return; }
     setLoading(true);
     try {
       if (isParlay) {
-        const { data } = await api.post("/bets", { selections: items.map(stripSel), stake: stakeNum, coin, bet_type: "parlay", accept_better: acceptBetter, boost_id: boost?.id ?? null });
+        const { data } = await api.post("/bets", { selections: items.map(stripSel), stake: stakeNum, coin, bet_type: "parlay", accept_better: acceptBetter, boost_id: boost?.id ?? null, free_bet_id: freeBet?.id ?? null });
         setBalances(data.balances);
       } else {
         let lastBal = null;
         for (const s of items) {
-          const { data } = await api.post("/bets", { selections: [stripSel(s)], stake: stakeNum, coin, bet_type: "single", accept_better: acceptBetter });
+          const { data } = await api.post("/bets", { selections: [stripSel(s)], stake: stakeNum, coin, bet_type: "single", accept_better: acceptBetter, free_bet_id: freeBet?.id ?? null });
           lastBal = data.balances;
           setBalances(data.balances);
           removeSelection(selId(s));
         }
         if (lastBal) setBalances(lastBal);
       }
-      toast.success("Bet placed!");
+      toast.success(freeBet ? "Free bet placed!" : "Bet placed!");
+      if (freeBet) { setFreeBets((l) => l.filter((f) => f.id !== freeBet.id)); setFreeBet(null); }
       clear();
       setStake("");
     } catch (e) {
@@ -281,22 +293,33 @@ export function BetSlip() {
           </div>
 
           <div>
+            {freeBets.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-2" data-testid="bet-slip-free-bets">
+                <span className="text-[11px] text-zinc-500 mr-1">Free bets:</span>
+                {freeBets.map((fb) => (
+                  <button key={fb.id} data-testid={`bet-slip-free-bet-${fb.id}`} onClick={() => pickFreeBet(fb)}
+                    className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded-full border transition-colors ${freeBet?.id === fb.id ? "bg-emerald-500 text-black border-emerald-500" : "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"}`}>
+                    ${fb.amount.toFixed(2)}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center justify-between mb-1.5 text-[11px]">
-              <span className="text-zinc-500">Stake {isParlay ? "" : "per bet"}</span>
+              <span className="text-zinc-500">{freeBet ? "Free bet stake · winnings only" : `Stake ${isParlay ? "" : "per bet"}`}</span>
               <span className="font-mono text-zinc-500">
                 <span style={{ color: COIN_META[coin].color }}>{fmtAmt(bal, coin)}</span> <Usd amount={bal} coin={coin} prefix="· " />
               </span>
             </div>
             <div className="flex gap-1.5">
-              <input data-testid="bet-slip-stake-input" type="number" min="0" value={stake}
+              <input data-testid="bet-slip-stake-input" type="number" min="0" value={stake} disabled={!!freeBet}
                 onChange={(e) => setStake(e.target.value)} placeholder="0.00"
-                className="flex-1 min-w-0 bg-[#090A0F] border border-[#232838] rounded-xl px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                className="flex-1 min-w-0 bg-[#090A0F] border border-[#232838] rounded-xl px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-60 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
               {[10, 50].map((v) => (
-                <button key={v} data-testid={`bet-slip-quick-${v}`} onClick={() => setStake(String(v))}
-                  className="px-2.5 text-[11px] font-mono text-zinc-400 border border-[#232838] rounded-xl hover:border-emerald-500/60">{v}</button>
+                <button key={v} data-testid={`bet-slip-quick-${v}`} disabled={!!freeBet} onClick={() => setStake(String(v))}
+                  className="px-2.5 text-[11px] font-mono text-zinc-400 border border-[#232838] rounded-xl hover:border-emerald-500/60 disabled:opacity-40">{v}</button>
               ))}
-              <button data-testid="bet-slip-quick-max" onClick={() => setStake(String(isParlay ? bal : bal / Math.max(items.length, 1)))}
-                className="px-2.5 text-[11px] font-mono font-bold text-emerald-400 border border-emerald-500/40 rounded-xl hover:bg-emerald-500/10">MAX</button>
+              <button data-testid="bet-slip-quick-max" disabled={!!freeBet} onClick={() => setStake(String(isParlay ? bal : bal / Math.max(items.length, 1)))}
+                className="px-2.5 text-[11px] font-mono font-bold text-emerald-400 border border-emerald-500/40 rounded-xl hover:bg-emerald-500/10 disabled:opacity-40">MAX</button>
             </div>
           </div>
 

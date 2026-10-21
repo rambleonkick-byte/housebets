@@ -135,6 +135,7 @@ class PlaceBetInput(BaseModel):
     bet_type: str = "single"
     accept_better: bool = True
     boost_id: Optional[str] = None
+    free_bet_id: Optional[str] = None
 
 
 # ----------------------------------------------------------------------------
@@ -921,6 +922,9 @@ async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
     usd = round(body.amount, 2)
     if usd < 1:
         raise HTTPException(status_code=400, detail="Minimum withdrawal is $1.00")
+    left = (await _wager_status(user["id"]))["remaining"]
+    if left > 0:
+        raise HTTPException(status_code=400, detail=f"Wager ${left:,.2f} more to unlock withdrawals (bonus wagering requirement)")
     rate = await _live_rate(body.coin)
     crypto_amt = round(usd / rate, 8)
     # Reserve the USD and queue for admin approval — no crypto is sent until approved.
@@ -968,6 +972,7 @@ async def _credit_oxa_invoice(track_id, status):
         "id": str(uuid.uuid4()), "user_id": inv["user_id"], "type": "deposit",
         "coin": "USD", "amount": usd, "crypto_coin": inv["coin"], "crypto_amount": inv["amount"], "created_at": now_iso(),
         "hash": "oxapay:" + str(track_id)})
+    await _apply_deposit_match(inv["user_id"], usd)
     return True
 
 
@@ -1088,6 +1093,7 @@ async def _credit_static_txs(sa, txs) -> float:
             "id": str(uuid.uuid4()), "user_id": sa["user_id"], "type": "deposit",
             "coin": "USD", "amount": usd, "crypto_coin": coin, "crypto_amount": amt,
             "created_at": now_iso(), "hash": "oxapay-static:" + h})
+        await _apply_deposit_match(sa["user_id"], usd)
         total += amt
     return total
 
@@ -1650,21 +1656,36 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
         total_odds = _boost_price([s.model_dump() for s in body.selections], boost["pct"])[1]
     potential = round(body.stake * total_odds, 6)
 
-    res = await db.wallets.update_one({"user_id": user["id"], f"balances.{body.coin}": {"$gte": body.stake}},
-                                      {"$inc": {f"balances.{body.coin}": -body.stake}})
-    if res.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+    if body.free_bet_id:
+        fb = await db.free_bets.find_one({"id": body.free_bet_id, "user_id": user["id"], "status": "available"})
+        if not fb:
+            raise HTTPException(status_code=400, detail="That free bet is no longer available")
+        if abs(fb["amount"] - body.stake) > 0.001:
+            raise HTTPException(status_code=400, detail=f"Free bet stake must be ${fb['amount']:.2f}")
+        claimed = await db.free_bets.update_one({"id": fb["id"], "status": "available"},
+                                                {"$set": {"status": "used", "used_at": now_iso()}})
+        if not claimed.modified_count:
+            raise HTTPException(status_code=400, detail="That free bet is no longer available")
+    else:
+        res = await db.wallets.update_one({"user_id": user["id"], f"balances.{body.coin}": {"$gte": body.stake}},
+                                          {"$inc": {f"balances.{body.coin}": -body.stake}})
+        if res.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient balance")
     bet = {"id": str(uuid.uuid4()), "user_id": user["id"],
            "selections": [s.model_dump() for s in body.selections],
            "bet_type": "parlay" if is_parlay else "single",
            "stake": body.stake, "coin": body.coin, "total_odds": total_odds,
            "potential_payout": potential, "status": "open",
            "boost": {"id": boost["id"], "label": boost["label"], "pct": boost["pct"]} if boost else None,
+           "free_bet": bool(body.free_bet_id), "free_bet_id": body.free_bet_id,
            "created_at": now_iso()}
     await db.bets.insert_one(dict(bet))
+    if body.free_bet_id:
+        await db.free_bets.update_one({"id": body.free_bet_id}, {"$set": {"bet_id": bet["id"]}})
     await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"],
-                                      "type": "bet", "coin": body.coin, "amount": body.stake,
+                                      "type": "free_bet" if body.free_bet_id else "bet", "coin": body.coin, "amount": body.stake,
                                       "created_at": now_iso(), "hash": "0x" + uuid.uuid4().hex[:24]})
+    asyncio.create_task(_check_vip(user["id"]))
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"bet": bet, "balances": wallet["balances"]}
 
@@ -1819,10 +1840,14 @@ async def _settle_bets(open_bets):
         pushed = [s for s, x in zip(b["selections"], legs) if x == "push"]
         void = won and len(pushed) == len(legs)
         payout = b["stake"] if void else round(b["potential_payout"] / math.prod(float(s["odds"]) for s in pushed), 8) if won else 0
+        if b.get("free_bet") and won:
+            payout = 0 if void else round(max(0.0, payout - b["stake"]), 8)
         res = await db.bets.update_one({"id": b["id"], "status": "open"},
                                        {"$set": {"status": "void" if void else "won" if won else "lost",
                                                  "settled_at": now_iso(), "payout": payout, "needs_review": False}})
-        if res.modified_count and not won:
+        if res.modified_count and void and b.get("free_bet"):
+            await db.free_bets.update_one({"id": b.get("free_bet_id")}, {"$set": {"status": "available"}, "$unset": {"bet_id": ""}})
+        if res.modified_count and not won and not b.get("free_bet"):
             lb = round(b["stake"] * LOSSBACK_RATE, 8)
             await db.bets.update_one({"id": b["id"]}, {"$set": {"lossback": lb}})
             await db.wallets.update_one({"user_id": user_id}, {"$inc": {f"balances.{b['coin']}": lb}})
@@ -1832,7 +1857,7 @@ async def _settle_bets(open_bets):
             await _save_notification(user_id, "lossback", {"coin": b["coin"], "amount": lb}, key_id=b["id"])
         if res.modified_count:
             await _accrue_player(user_id)
-        if won and res.modified_count:
+        if won and res.modified_count and payout > 0:
             await db.wallets.update_one({"user_id": user_id},
                                         {"$inc": {f"balances.{b['coin']}": payout}})
             await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id,
@@ -1846,6 +1871,8 @@ CASHOUT_MARGIN = 0.95
 
 def _cashout_value(b, events) -> Optional[float]:
     """Live cash-out offer for an open bet, or None when suspended/lost."""
+    if b.get("free_bet"):
+        return None
     remaining = 1.0
     for s in b["selections"]:
         ev = events.get(s["event_id"])
@@ -2071,6 +2098,7 @@ async def _record_game(user_id, game, coin, stake, multiplier, payout, won, deta
         doc.update(fair)
     await db.casino_games.insert_one(doc)
     await _accrue_player(user_id)
+    await _check_vip(user_id)
 
 
 # --- provably-fair seed engine ---
@@ -2700,6 +2728,10 @@ async def _migrate_to_usd():
 async def startup():
     asyncio.create_task(_migrate_to_usd())
     asyncio.create_task(_settle_loop())
+    await db.promo_codes.create_index("code", unique=True)
+    await db.promo_redemptions.create_index([("code", 1), ("user_id", 1)], unique=True)
+    await db.rewards.create_index("user_id", unique=True)
+    await db.free_bets.create_index([("user_id", 1), ("status", 1)])
     await db.users.create_index("email", unique=True)
     await db.affiliates.create_index("code", unique=True)
     await db.affiliates.create_index("user_id", unique=True)
@@ -2784,7 +2816,7 @@ async def _player_ngr(player_ids):
         out[uid]["USD"] += v
     async for r in db.bets.aggregate([
         {"$match": {"user_id": {"$in": player_ids}, "status": {"$in": ["won", "lost", "void", "cashed_out"]}}},
-        {"$group": {"_id": {"u": "$user_id", "c": "$coin"}, "stake": {"$sum": "$stake"},
+        {"$group": {"_id": {"u": "$user_id", "c": "$coin"}, "stake": {"$sum": {"$cond": [{"$eq": ["$free_bet", True]}, 0, "$stake"]}},
                     "paid": {"$sum": {"$add": [{"$ifNull": ["$cashout_amount", {"$ifNull": ["$payout", 0]}]},
                                                {"$ifNull": ["$lossback", 0]}]}}}}]):
         add(r["_id"]["u"], r["_id"]["c"], r["stake"] - r["paid"])
@@ -2947,7 +2979,7 @@ async def _money_flow(ids):
             {"$match": {"user_id": {"$in": ids}, "status": {"$nin": ["rejected", "failed", "canceled"]}}},
             {"$group": {"_id": "$user_id", "t": {"$sum": {"$ifNull": ["$amount_usd", 0]}}}}]):
         wd[r["_id"]] = {"USD": round(r["t"], 2)}
-    wag = await _sum_by_user("bets", {"user_id": {"$in": ids}}, "stake")
+    wag = await _sum_by_user("bets", {"user_id": {"$in": ids}, "free_bet": {"$ne": True}}, "stake")
     for u, v in (await _sum_by_user("casino_games", {"user_id": {"$in": ids}}, "stake")).items():
         for c, t in v.items():
             wag.setdefault(u, {})[c] = round(wag.get(u, {}).get(c, 0) + t, 8)
@@ -3164,6 +3196,292 @@ async def admin_ticket_status(tid: str, body: TicketStatusInput, admin: dict = D
     await _get_ticket(tid)
     await db.tickets.update_one({"id": tid}, {"$set": {"status": body.status, "updated_at": now_iso()}})
     return await _get_ticket(tid)
+
+
+# ----------------------------------------------------------------------------
+# VIP ranks, bonuses, promo codes, player profile
+# ----------------------------------------------------------------------------
+VIP_TIERS = [("Bronze", 0), ("Silver", 10_000), ("Gold", 50_000),
+             ("Platinum I", 100_000), ("Platinum II", 250_000), ("Platinum III", 500_000),
+             ("Diamond I", 1_000_000), ("Diamond II", 2_500_000), ("Diamond III", 5_000_000),
+             ("Elite I", 10_000_000), ("Elite II", 25_000_000), ("Elite III", 50_000_000),
+             ("Black I", 100_000_000), ("Black II", 250_000_000), ("Black III", 500_000_000)]
+DEFAULT_VIP_BONUS = {"Bronze": 0, "Silver": 25, "Gold": 100, "Platinum I": 200, "Platinum II": 400, "Platinum III": 750,
+                     "Diamond I": 1500, "Diamond II": 3000, "Diamond III": 5000, "Elite I": 10000, "Elite II": 20000,
+                     "Elite III": 35000, "Black I": 75000, "Black II": 150000, "Black III": 300000}
+SPORTS_POINT_MULT = 3
+LEVELUP_WAGER_MULT = 1
+
+
+async def _vip_bonuses():
+    doc = await db.settings.find_one({"_id": "vip_bonus"}) or {}
+    return {n: float((doc.get("amounts") or {}).get(n, DEFAULT_VIP_BONUS[n])) for n, _ in VIP_TIERS}
+
+
+async def _wagered(uid):
+    sports = await db.bets.aggregate([{"$match": {"user_id": uid, "free_bet": {"$ne": True}}},
+                                      {"$group": {"_id": None, "t": {"$sum": "$stake"}}}]).to_list(1)
+    casino = 0.0
+    rates = _PRICE_CACHE["rates"]
+    async for r in db.casino_games.aggregate([{"$match": {"user_id": uid}}, {"$group": {"_id": "$coin", "t": {"$sum": "$stake"}}}]):
+        casino += r["t"] if r["_id"] == "USD" else r["t"] * rates.get(r["_id"], 0)
+    return round(sports[0]["t"] if sports else 0.0, 2), round(casino, 2)
+
+
+def _tier_index(points):
+    return max(i for i, (_, need) in enumerate(VIP_TIERS) if points >= need)
+
+
+async def _rewards_doc(uid):
+    doc = await db.rewards.find_one({"user_id": uid}, {"_id": 0})
+    if doc:
+        return doc
+    s, c = await _wagered(uid)
+    reached = [n for n, _ in VIP_TIERS[:_tier_index(s * SPORTS_POINT_MULT + c) + 1]]
+    doc = {"user_id": uid, "wager_target": 0.0, "vip_awarded": reached, "created_at": now_iso()}  # no retroactive bonuses
+    try:
+        await db.rewards.insert_one(dict(doc))
+    except Exception:
+        return await db.rewards.find_one({"user_id": uid}, {"_id": 0})
+    return doc
+
+
+async def _wager_status(uid):
+    doc = await _rewards_doc(uid)
+    s, c = await _wagered(uid)
+    target = doc.get("wager_target", 0.0)
+    return {"target": round(target, 2), "wagered": round(s + c, 2), "remaining": round(max(0.0, target - s - c), 2)}
+
+
+async def _add_bonus(uid, amount, wager_mult, kind, label):
+    amount = round(float(amount), 2)
+    if amount <= 0:
+        return 0
+    doc = await _rewards_doc(uid)
+    s, c = await _wagered(uid)
+    target = max(doc.get("wager_target", 0.0), s + c) + amount * wager_mult
+    await db.rewards.update_one({"user_id": uid}, {"$set": {"wager_target": round(target, 2)}})
+    await ensure_wallet(uid)
+    await _adjust(uid, "USD", amount)
+    await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "type": "bonus", "coin": "USD",
+                                      "amount": amount, "bonus_kind": kind, "label": label, "created_at": now_iso(),
+                                      "hash": f"bonus:{kind}:{uuid.uuid4().hex[:12]}"})
+    return amount
+
+
+async def _check_vip(uid):
+    try:
+        doc = await _rewards_doc(uid)
+        s, c = await _wagered(uid)
+        idx = _tier_index(s * SPORTS_POINT_MULT + c)
+        bonuses = await _vip_bonuses()
+        for name, _ in VIP_TIERS[1:idx + 1]:
+            if name in doc.get("vip_awarded", []):
+                continue
+            res = await db.rewards.update_one({"user_id": uid, "vip_awarded": {"$ne": name}}, {"$push": {"vip_awarded": name}})
+            if res.modified_count and bonuses[name] > 0:
+                await _add_bonus(uid, bonuses[name], LEVELUP_WAGER_MULT, "vip", f"{name} level-up bonus")
+    except Exception as e:
+        logger.warning(f"vip check failed {uid}: {e}")
+
+
+async def _apply_deposit_match(uid, usd):
+    doc = await db.rewards.find_one_and_update({"user_id": uid, "pending_match": {"$ne": None}}, {"$set": {"pending_match": None}})
+    m = (doc or {}).get("pending_match")
+    if not m:
+        return
+    bonus = min(usd * m["pct"] / 100, m["max_bonus"])
+    await _add_bonus(uid, bonus, m.get("wager_mult", 1), "deposit_match", f"{m['code']}: {m['pct']:g}% deposit match")
+
+
+def _vip_view(points, bonuses, awarded):
+    idx = _tier_index(points)
+    nxt = VIP_TIERS[idx + 1] if idx + 1 < len(VIP_TIERS) else None
+    cur = VIP_TIERS[idx][1]
+    progress = 100.0 if not nxt else round((points - cur) / (nxt[1] - cur) * 100, 2)
+    return {"tier": VIP_TIERS[idx][0], "index": idx, "points": round(points, 2),
+            "next_tier": nxt[0] if nxt else None, "next_points": nxt[1] if nxt else None, "progress": progress,
+            "sports_mult": SPORTS_POINT_MULT,
+            "tiers": [{"name": n, "points": p, "bonus": bonuses[n], "reached": i <= idx} for i, (n, p) in enumerate(VIP_TIERS)]}
+
+
+@api_router.get("/profile")
+async def get_profile(user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    await _check_vip(uid)
+    s, c = await _wagered(uid)
+    doc = await _rewards_doc(uid)
+    dep = await db.transactions.aggregate([{"$match": {"user_id": uid, "type": "deposit"}},
+                                           {"$group": {"_id": None, "t": {"$sum": "$amount"}, "n": {"$sum": 1}}}]).to_list(1)
+    wd = await db.withdrawals.aggregate([{"$match": {"user_id": uid, "status": {"$nin": ["rejected", "failed", "canceled"]}}},
+                                         {"$group": {"_id": None, "t": {"$sum": {"$ifNull": ["$amount_usd", 0]}}}}]).to_list(1)
+    bonus = await db.transactions.aggregate([{"$match": {"user_id": uid, "type": "bonus"}},
+                                             {"$group": {"_id": None, "t": {"$sum": "$amount"}}}]).to_list(1)
+    sb = {"bets": 0, "won": 0, "lost": 0, "staked": 0.0, "returned": 0.0, "biggest_win": 0.0, "open": 0}
+    async for b in db.bets.find({"user_id": uid}, {"_id": 0, "status": 1, "stake": 1, "payout": 1, "cashout_amount": 1,
+                                                    "lossback": 1, "free_bet": 1}):
+        if b["status"] == "open":
+            sb["open"] += 1
+            continue
+        sb["bets"] += 1
+        stake = 0 if b.get("free_bet") else b["stake"]
+        ret = (b.get("cashout_amount") if b["status"] == "cashed_out" else b.get("payout") or 0) + (b.get("lossback") or 0)
+        sb["won"] += b["status"] == "won"
+        sb["lost"] += b["status"] == "lost"
+        sb["staked"] += stake
+        sb["returned"] += ret
+        sb["biggest_win"] = max(sb["biggest_win"], ret - stake)
+    rates = _PRICE_CACHE["rates"]
+    cb = {"games": 0, "staked": 0.0, "returned": 0.0, "biggest_win": 0.0}
+    async for g in db.casino_games.find({"user_id": uid}, {"_id": 0, "coin": 1, "stake": 1, "payout": 1}):
+        k = 1 if g.get("coin") == "USD" else rates.get(g.get("coin"), 0)
+        cb["games"] += 1
+        cb["staked"] += g["stake"] * k
+        cb["returned"] += (g.get("payout") or 0) * k
+        cb["biggest_win"] = max(cb["biggest_win"], ((g.get("payout") or 0) - g["stake"]) * k)
+    for d in (sb, cb):
+        d["pnl"] = round(d["returned"] - d["staked"], 2)
+        for k in ("staked", "returned", "biggest_win"):
+            d[k] = round(d[k], 2)
+    settled = sb["won"] + sb["lost"]
+    sb["win_rate"] = round(sb["won"] / settled * 100, 1) if settled else 0
+    free_bets = await db.free_bets.find({"user_id": uid, "status": "available"}, {"_id": 0}).sort("created_at", 1).to_list(50)
+    redemptions = await db.promo_redemptions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(20)
+    target = doc.get("wager_target", 0.0)
+    return {
+        "name": user.get("name"), "email": user.get("email"), "joined": user.get("created_at"),
+        "deposits": {"total": round(dep[0]["t"], 2) if dep else 0, "count": dep[0]["n"] if dep else 0},
+        "withdrawals": round(wd[0]["t"], 2) if wd else 0, "bonuses": round(bonus[0]["t"], 2) if bonus else 0,
+        "sports": sb, "casino": cb, "pnl": round(sb["pnl"] + cb["pnl"], 2), "wagered": round(s + c, 2),
+        "vip": _vip_view(s * SPORTS_POINT_MULT + c, await _vip_bonuses(), doc.get("vip_awarded", [])),
+        "wagering": {"target": round(target, 2), "remaining": round(max(0.0, target - s - c), 2)},
+        "free_bets": free_bets, "pending_match": doc.get("pending_match"), "redemptions": redemptions,
+    }
+
+
+@api_router.get("/free-bets")
+async def my_free_bets(user: dict = Depends(get_current_user)):
+    return {"free_bets": await db.free_bets.find({"user_id": user["id"], "status": "available"}, {"_id": 0}).sort("created_at", 1).to_list(50)}
+
+
+class PromoRedeemInput(BaseModel):
+    code: str = Field(min_length=2, max_length=32)
+
+
+class PromoCreateInput(BaseModel):
+    code: str = Field(min_length=3, max_length=24, pattern=r"^[A-Za-z0-9_-]+$")
+    type: str
+    amount: float = Field(default=0, ge=0, allow_inf_nan=False)
+    pct: float = Field(default=0, ge=0, le=500, allow_inf_nan=False)
+    max_bonus: float = Field(default=0, ge=0, allow_inf_nan=False)
+    wager_mult: float = Field(default=1, ge=0, le=50, allow_inf_nan=False)
+    max_uses: int = Field(default=0, ge=0)
+    expires_at: Optional[str] = None
+
+
+class PromoToggleInput(BaseModel):
+    active: bool
+
+
+class VipBonusInput(BaseModel):
+    amounts: dict
+
+
+def _promo_desc(p):
+    if p["type"] == "cash":
+        return f"${p['amount']:,.2f} bonus cash"
+    if p["type"] == "free_bet":
+        return f"${p['amount']:,.2f} free bet"
+    return f"{p['pct']:g}% deposit match up to ${p['max_bonus']:,.2f}"
+
+
+@api_router.post("/promo/redeem")
+async def redeem_promo(body: PromoRedeemInput, user: dict = Depends(get_current_user)):
+    from pymongo.errors import DuplicateKeyError
+    uid, code = user["id"], body.code.strip().upper()
+    p = await db.promo_codes.find_one({"code": code}, {"_id": 0})
+    if not p or not p.get("active"):
+        raise HTTPException(status_code=404, detail="That promo code isn't valid")
+    if p.get("expires_at") and p["expires_at"] < now_iso():
+        raise HTTPException(status_code=400, detail="That promo code has expired")
+    if await db.promo_redemptions.find_one({"code": code, "user_id": uid}):
+        raise HTTPException(status_code=400, detail="You've already used this code")
+    if p["type"] == "deposit_match" and (await _rewards_doc(uid)).get("pending_match"):
+        raise HTTPException(status_code=400, detail="You already have a deposit match waiting for your next deposit")
+    flt = {"code": code}
+    if p.get("max_uses"):
+        flt["uses"] = {"$lt": p["max_uses"]}
+    if not (await db.promo_codes.update_one(flt, {"$inc": {"uses": 1}})).modified_count:
+        raise HTTPException(status_code=400, detail="This promo code has run out")
+    try:
+        await db.promo_redemptions.insert_one({"code": code, "user_id": uid, "type": p["type"], "desc": _promo_desc(p), "created_at": now_iso()})
+    except DuplicateKeyError:
+        await db.promo_codes.update_one({"code": code}, {"$inc": {"uses": -1}})
+        raise HTTPException(status_code=400, detail="You've already used this code")
+    if p["type"] == "cash":
+        await _add_bonus(uid, p["amount"], p.get("wager_mult", 1), "promo", f"Promo {code}")
+        msg = f"${p['amount']:,.2f} added to your balance"
+    elif p["type"] == "free_bet":
+        await db.free_bets.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "amount": round(p["amount"], 2),
+                                       "code": code, "status": "available", "created_at": now_iso()})
+        msg = f"${p['amount']:,.2f} free bet added — pick it in your bet slip"
+    else:
+        await db.rewards.update_one({"user_id": uid}, {"$set": {"pending_match": {
+            "code": code, "pct": p["pct"], "max_bonus": p["max_bonus"], "wager_mult": p.get("wager_mult", 1), "at": now_iso()}}})
+        msg = f"{p['pct']:g}% match (up to ${p['max_bonus']:,.2f}) will be added to your next deposit"
+    return {"ok": True, "message": msg, "balances": await _balances(uid)}
+
+
+@api_router.get("/admin/promos")
+async def admin_promos(admin: dict = Depends(get_admin_user)):
+    ps = await db.promo_codes.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"promos": [p | {"desc": _promo_desc(p)} for p in ps]}
+
+
+@api_router.post("/admin/promos")
+async def admin_create_promo(body: PromoCreateInput, admin: dict = Depends(get_admin_user)):
+    from pymongo.errors import DuplicateKeyError
+    if body.type not in ("cash", "free_bet", "deposit_match"):
+        raise HTTPException(status_code=400, detail="Invalid promo type")
+    if body.type in ("cash", "free_bet") and body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Enter an amount")
+    if body.type == "deposit_match" and (body.pct <= 0 or body.max_bonus <= 0):
+        raise HTTPException(status_code=400, detail="Enter a match % and a max bonus")
+    p = body.model_dump() | {"code": body.code.upper(), "uses": 0, "active": True, "created_at": now_iso()}
+    try:
+        await db.promo_codes.insert_one(dict(p))
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="That code already exists")
+    p.pop("_id", None)
+    return p | {"desc": _promo_desc(p)}
+
+
+@api_router.post("/admin/promos/{code}/active")
+async def admin_toggle_promo(code: str, body: PromoToggleInput, admin: dict = Depends(get_admin_user)):
+    res = await db.promo_codes.update_one({"code": code.upper()}, {"$set": {"active": body.active}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Promo not found")
+    return {"active": body.active}
+
+
+@api_router.get("/admin/vip-bonuses")
+async def admin_vip_bonuses(admin: dict = Depends(get_admin_user)):
+    return {"amounts": await _vip_bonuses(), "tiers": [{"name": n, "points": p} for n, p in VIP_TIERS]}
+
+
+@api_router.put("/admin/vip-bonuses")
+async def admin_set_vip_bonuses(body: VipBonusInput, admin: dict = Depends(get_admin_user)):
+    clean = {}
+    for n, _ in VIP_TIERS:
+        try:
+            v = float(body.amounts.get(n, DEFAULT_VIP_BONUS[n]))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"Invalid amount for {n}")
+        if v < 0 or not math.isfinite(v):
+            raise HTTPException(status_code=400, detail=f"Invalid amount for {n}")
+        clean[n] = round(v, 2)
+    await db.settings.update_one({"_id": "vip_bonus"}, {"$set": {"amounts": clean}}, upsert=True)
+    return {"amounts": clean}
 
 
 app.include_router(api_router)

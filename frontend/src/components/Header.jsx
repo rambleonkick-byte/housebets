@@ -11,7 +11,7 @@ export function Header({ onWallet, onHistory, onAdmin }) {
   const { rates } = usePrices();
   const total = user && user.balances ? usdValue(user.balances, rates) : 0;
   const onCasino = pathname.startsWith("/casino");
-  const onSports = !onCasino && pathname !== "/affiliate";
+  const onSports = !onCasino && pathname !== "/affiliate" && pathname !== "/profile" && pathname !== "/admin";
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 h-16 bg-[#090A0F]/90 backdrop-blur-md border-b border-[#2A2F45]">
@@ -62,12 +62,13 @@ export function Header({ onWallet, onHistory, onAdmin }) {
                 className="hidden sm:flex items-center gap-2 text-zinc-300 hover:text-white px-2 py-2 transition-colors">
                 <History size={18} />
               </button>
-              <div className="hidden md:flex items-center gap-2 pl-2 border-l border-[#2A2F45]">
+              <Link to="/profile" data-testid="header-profile-link" title="My profile"
+                className={`flex items-center gap-2 md:pl-2 md:border-l border-[#2A2F45] hover:text-white ${pathname === "/profile" ? "text-emerald-300" : ""}`}>
                 <div className="w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center">
                   <UserIcon size={14} className="text-emerald-400" />
                 </div>
-                <span className="text-sm text-zinc-300 max-w-[120px] truncate">{user.name}</span>
-              </div>
+                <span className="hidden md:inline text-sm text-zinc-300 max-w-[120px] truncate">{user.name}</span>
+              </Link>
               <button data-testid="header-logout-button" onClick={logout}
                 className="text-zinc-400 hover:text-red-400 p-2 transition-colors">
                 <LogOut size={18} />
