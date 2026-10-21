@@ -3075,6 +3075,23 @@ async def admin_block(uid: str, body: BlockInput, admin: dict = Depends(get_admi
     return {"blocked": body.blocked}
 
 
+@api_router.delete("/admin/users/{uid}")
+async def admin_delete_user(uid: str, admin: dict = Depends(get_admin_user)):
+    u = await _admin_target(uid)
+    if uid == admin["id"] or u.get("role") == "admin":
+        raise HTTPException(400, "Admin accounts can't be deleted")
+    for coll in ("wallets", "bets", "casino_games", "bj_games", "mine_games", "fair_seeds", "transactions", "withdrawals",
+                 "tickets", "rewards", "free_bets", "promo_redemptions", "notifications", "static_addresses",
+                 "static_deposits", "oxa_invoices", "affiliates", "affiliate_earnings"):
+        await db[coll].delete_many({"user_id": uid})
+    await db.affiliate_ledger.delete_many({"$or": [{"player_id": uid}, {"affiliate_id": uid}]})
+    await db.users.update_many({"referred_by": uid}, {"$unset": {"referred_by": ""}})
+    await db.users.delete_one({"_id": u["_id"]})
+    await db.admin_actions.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "user_email": u["email"],
+                                       "admin": admin["email"], "action": "delete", "created_at": now_iso()})
+    return {"deleted": True}
+
+
 @api_router.get("/admin/users/{uid}/log")
 async def admin_user_log(uid: str, admin: dict = Depends(get_admin_user)):
     return {"actions": await db.admin_actions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(100)}

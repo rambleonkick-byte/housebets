@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Search, ShieldCheck, Users, UserX, UserPlus, Lock, Unlock, Loader2, X, ArrowDownToLine } from "lucide-react";
+import { Search, ShieldCheck, Users, UserX, UserPlus, Lock, Unlock, Loader2, X, ArrowDownToLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -77,6 +77,15 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
     } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
     finally { setBusy(false); }
   };
+  const deleteUser = async () => {
+    if (!window.confirm(`Permanently delete ${u.email}? Their balance, bets, history and tickets will be erased. This can't be undone.`)) return;
+    setBusy(true);
+    try {
+      await api.delete(`/admin/users/${u.id}`);
+      toast.success(`${u.email} deleted`);
+      onChanged(); onClose();
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); setBusy(false); }
+  };
   const Row = ({ label, v, testid }) => (
     <div className="flex justify-between gap-4 py-2 border-t border-[#1E2234]" data-testid={testid}>
       <span className="text-xs text-zinc-400">{label}<span className="block font-mono text-[11px] text-zinc-500">{fmtUsd(usdValue(v, rates))}</span></span>
@@ -106,6 +115,12 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
             className={`w-full flex items-center justify-center gap-2 font-bold text-sm py-2.5 rounded-lg border transition-colors ${u.blocked ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10" : "border-red-500/40 text-red-300 hover:bg-red-500/10"}`}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : u.blocked ? <Unlock size={15} /> : <Lock size={15} />}
             {u.blocked ? "Unlock account" : "Lock account"}
+          </button>
+        )}
+        {u.role !== "admin" && (
+          <button data-testid="admin-delete-user" onClick={deleteUser} disabled={busy}
+            className="w-full flex items-center justify-center gap-2 font-bold text-sm py-2.5 rounded-lg bg-red-600/90 hover:bg-red-500 text-white disabled:opacity-40">
+            <Trash2 size={15} /> Delete account
           </button>
         )}
         <div>

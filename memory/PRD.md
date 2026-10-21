@@ -250,3 +250,7 @@
 - Withdrawals blocked while bonus wagering remains.
 - Collections: rewards, promo_codes, promo_redemptions, free_bets, settings(vip_bonus).
 - Tested: iteration_21 & 22 (backend 100%, frontend 100%).
+
+## 2026-06 — Admin delete account
+- Admin user drawer has "Delete account" (confirm dialog). DELETE /api/admin/users/{uid} removes the user and all their data (wallet, bets, casino games, transactions, withdrawals, tickets, rewards, free bets, redemptions, notifications, deposit addresses, affiliate records); admins can't be deleted. Logged in admin_actions.
+- Preview DB only has admin@apexodds.io and dhensley727@icloud.com; live test accounts must be removed by the user via this button after redeploy.
