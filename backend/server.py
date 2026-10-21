@@ -3607,6 +3607,15 @@ async def admin_set_vip_bonuses(body: VipBonusInput, admin: dict = Depends(get_a
     return {"amounts": clean}
 
 
+@api_router.get("/marketing/ad.mp4")
+async def download_ad():
+    from fastapi.responses import FileResponse
+    path = ROOT_DIR / "assets" / "apexodds_ad_1x1.mp4"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="video/mp4", filename="ApexOdds_Ad.mp4")
+
+
 app.include_router(api_router)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
