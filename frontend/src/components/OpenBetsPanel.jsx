@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Clock, Radio, Ticket } from "lucide-react";
+import { motion } from "framer-motion";
+import { Clock, Radio, Ticket, CheckCircle2, XCircle, CircleDot, MinusCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -19,6 +20,14 @@ export function useOpenBets() {
     return () => { clearInterval(t); window.removeEventListener("bets:changed", reload); };
   }, [user, reload]);
   const has = !!bets?.length;
+  const [live, setLive] = useState({});
+  useEffect(() => {
+    if (!has) return;
+    const load = () => api.get("/bets/live").then(({ data }) => setLive(data.live)).catch(() => {});
+    load();
+    const t = setInterval(load, 20000);
+    return () => clearInterval(t);
+  }, [has, bets?.length]);
   useEffect(() => {
     if (!has) return;
     const load = () => api.get("/bets/cashout-quotes").then(({ data }) => setQuotes(data.quotes)).catch(() => {});
@@ -26,10 +35,48 @@ export function useOpenBets() {
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, [has]);
-  return { bets, setBets, quotes, reload };
+  return { bets, setBets, quotes, reload, live };
 }
 
-function OpenBetCard({ b, quote, onCashout, onSetAuto }) {
+const STATUS = {
+  won: { Icon: CheckCircle2, cls: "text-emerald-400", label: "Hit" },
+  winning: { Icon: CircleDot, cls: "text-emerald-400 animate-pulse", label: "Winning" },
+  losing: { Icon: CircleDot, cls: "text-red-400 animate-pulse", label: "Losing" },
+  lost: { Icon: XCircle, cls: "text-red-400", label: "Lost" },
+  push: { Icon: MinusCircle, cls: "text-zinc-400", label: "Push" },
+  live: { Icon: CircleDot, cls: "text-amber-300 animate-pulse", label: "Live" },
+  pending: { Icon: Clock, cls: "text-zinc-400", label: "Final · grading" },
+};
+
+function LegStatus({ l }) {
+  const st = l?.state === "pre" || !l ? null : STATUS[l.status];
+  if (!st) return <Clock size={15} className="text-zinc-600 shrink-0" />;
+  const { Icon, cls } = st;
+  return <Icon size={15} className={`shrink-0 ${cls}`} />;
+}
+
+function PropProgress({ p, status, testid }) {
+  const max = Math.max(p.line * 1.5, p.current * 1.1, 1);
+  const pct = Math.min(100, (p.current / max) * 100);
+  const linePct = (p.line / max) * 100;
+  const good = status === "won" || status === "winning";
+  const bad = status === "lost" || status === "losing";
+  return (
+    <div className="mt-1.5" data-testid={testid}>
+      <div className="relative h-1.5 rounded-full bg-[#090A0F] overflow-visible">
+        <motion.div initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, ease: "easeOut" }}
+          className={`h-full rounded-full ${good ? "bg-emerald-400" : bad ? "bg-red-400" : "bg-amber-300"}`} />
+        <span className="absolute -top-1 w-0.5 h-3.5 bg-white/70 rounded" style={{ left: `calc(${linePct}% - 1px)` }} />
+      </div>
+      <div className="flex justify-between text-[10px] font-mono mt-1 text-zinc-500">
+        <span><b className="text-zinc-200">{+p.current.toFixed(1)}</b> now</span>
+        <span>{p.side === "over" ? "Over" : "Under"} {p.line}</span>
+      </div>
+    </div>
+  );
+}
+
+function OpenBetCard({ b, quote, legs, onCashout, onSetAuto }) {
   const toWin = b.potential_payout - (b.free_bet ? b.stake : 0);
   return (
     <div data-testid={`open-bet-${b.id}`} className="bg-gradient-to-b from-[#161924] to-[#12141C] border border-[#232838] rounded-2xl p-3.5">
@@ -41,15 +88,33 @@ function OpenBetCard({ b, quote, onCashout, onSetAuto }) {
         <span>{new Date(b.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
       </div>
       <div className="space-y-2">
-        {b.selections.map((s, i) => (
-          <div key={i} className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-white truncate">{s.pick}</p>
-              <p className="text-[11px] text-zinc-500 truncate">{s.away} @ {s.home} · {s.league_label}</p>
+        {b.selections.map((s, i) => {
+          const l = legs?.[i];
+          const inPlay = l && l.state !== "pre";
+          return (
+            <div key={i} data-testid={`open-bet-leg-${b.id}-${i}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2 min-w-0">
+                  <span className="mt-0.5" data-testid={`open-bet-leg-status-${b.id}-${i}`} data-status={l?.status || l?.state || "unknown"}><LegStatus l={l} /></span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-white truncate">{s.pick}</p>
+                    <p className="text-[11px] text-zinc-500 truncate">
+                      {inPlay ? (
+                        <span data-testid={`open-bet-leg-score-${b.id}-${i}`}>
+                          <span className={l.state === "in" ? "text-red-400 font-bold" : "text-zinc-400"}>{l.state === "in" ? "● LIVE " : "FINAL "}</span>
+                          {s.away} <b className="text-zinc-200 font-mono">{l.away_score ?? "-"}</b> – <b className="text-zinc-200 font-mono">{l.home_score ?? "-"}</b> {s.home}
+                          {l.clock && l.state === "in" ? ` · ${l.clock}` : ""}
+                        </span>
+                      ) : <>{s.away} @ {s.home} · {s.league_label}</>}
+                    </p>
+                  </div>
+                </div>
+                <span className="font-mono text-sm font-bold text-zinc-200 shrink-0">{fmtOdds(s.odds)}</span>
+              </div>
+              {inPlay && l.progress && <div className="pl-6"><PropProgress p={l.progress} status={l.status} testid={`open-bet-leg-progress-${b.id}-${i}`} /></div>}
             </div>
-            <span className="font-mono text-sm font-bold text-zinc-200 shrink-0">{fmtOdds(s.odds)}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="flex justify-between mt-3 pt-2.5 border-t border-[#1E2234] text-[11px]">
         <span className="text-zinc-500">Stake <b className="font-mono text-zinc-200" data-testid={`open-bet-stake-${b.id}`}>{fmtAmt(b.stake, b.coin)}</b></span>
@@ -111,7 +176,7 @@ export function OpenBetsPanel({ data }) {
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-4 pb-4 space-y-3">
-        {bets.map((b) => <OpenBetCard key={b.id} b={b} quote={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />)}
+        {bets.map((b) => <OpenBetCard key={b.id} b={b} quote={quotes[b.id]} legs={data.live?.[b.id]} onCashout={cashout} onSetAuto={setAuto} />)}
       </div>
     </div>
   );

@@ -1760,6 +1760,7 @@ def _sgo_result_event(ev):
     st = ev.get("status", {})
     state = "in" if st.get("live") else "post" if (st.get("completed") or st.get("ended")) else "pre"
     return {"event_id": ev["eventID"], "state": state, "cancelled": bool(st.get("cancelled")), "start": st.get("startsAt"),
+            "clock": st.get("displayShort") or st.get("displayLong") or "",
             "home": {"score": _sgo_score(ev, "home")}, "away": {"score": _sgo_score(ev, "away")},
             "player_results": _sgo_player_results(ev) if state != "pre" else {},
             "rounds": sum(1 for k in (ev.get("results") or {}) if re.fullmatch(r"\d+r", k)) or None}
@@ -1771,7 +1772,7 @@ async def _fetch_sgo_results(ids):
     out, need = {}, []
     for i in set(ids):
         c = _RESULTS_CACHE.get(i)
-        if c and (c[1]["state"] == "post" or now - c[0] < 90):
+        if c and (c[1]["state"] == "post" or now - c[0] < 30):
             out[i] = c[1]
         else:
             need.append(i)
@@ -1828,7 +1829,7 @@ async def _settle_bets(open_bets):
                 legs.append("push")
             else:
                 legs.append(settle_selection(s, ev) if ev and ev["state"] == "post" else None)
-        if any(x is None for x in legs):
+        if any(x is None for x in legs) and not any(x is False for x in legs):
             stuck = [s for s, x in zip(b["selections"], legs) if x is None]
             if not b.get("needs_review") and all(
                     _hours_since((results.get(s["event_id"]) or {}).get("start") or b["created_at"]) >= SETTLE_FLAG_HOURS
@@ -2006,6 +2007,55 @@ async def cashout_bet(bet_id: str, body: CashoutInput, user: dict = Depends(get_
         raise HTTPException(status_code=400, detail="This bet can no longer be cashed out")
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"amount": value, "balances": wallet["balances"]}
+
+
+def _live_leg(sel, ev):
+    """In-play status of one leg: pre | winning | losing | won | lost | push, plus progress for lines."""
+    if not ev or ev["state"] == "pre":
+        return {"state": "pre", "start": (ev or {}).get("start")}
+    out = {"state": ev["state"], "clock": ev.get("clock", ""), "home_score": ev["home"]["score"], "away_score": ev["away"]["score"]}
+    m, side, line = sel["market"], str(sel["side"]), sel.get("line")
+    cur, ou = None, None
+    if m == "prop":
+        parts = side.split(":")
+        if len(parts) == 3:
+            cur = (ev.get("player_results") or {}).get(f"{parts[1]}:{parts[0]}")
+            ou = parts[2]
+            if cur is None and ev["state"] == "in":
+                cur = 0.0
+    elif m in ("total", "alt_total"):
+        try:
+            cur, ou = float(ev["home"]["score"]) + float(ev["away"]["score"]), side
+        except (TypeError, ValueError):
+            pass
+    if cur is not None and line is not None and ou in ("over", "under"):
+        out["progress"] = {"current": cur, "line": line, "side": ou}
+    if ev.get("cancelled"):
+        out["status"] = "push"
+        return out
+    missing_prop = m == "prop" and ev["state"] == "in" and cur == 0.0 and ou is not None
+    r = (ou == "under") if missing_prop else settle_selection(sel, ev)
+    if ev["state"] == "post":
+        out["status"] = "pending" if r is None else "push" if r == "push" else "won" if r else "lost"
+        return out
+    if r is None:
+        out["status"] = "live"
+    elif r == "push":
+        out["status"] = "push"
+    elif ou == "over" and cur is not None and line is not None and cur > line:
+        out["status"] = "won"
+    elif ou == "under" and cur is not None and line is not None and cur > line:
+        out["status"] = "lost"
+    else:
+        out["status"] = "winning" if r else "losing"
+    return out
+
+
+@api_router.get("/bets/live")
+async def live_bets(user: dict = Depends(get_current_user)):
+    bets = await db.bets.find({"user_id": user["id"], "status": "open"}, {"_id": 0, "id": 1, "selections": 1}).to_list(200)
+    results = await _fetch_sgo_results(s["event_id"] for b in bets for s in b["selections"])
+    return {"live": {b["id"]: [_live_leg(s, results.get(s["event_id"])) for s in b["selections"]] for b in bets}}
 
 
 @api_router.get("/bets")
