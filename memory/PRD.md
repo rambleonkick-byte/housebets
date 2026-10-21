@@ -254,3 +254,6 @@
 ## 2026-06 — Admin delete account
 - Admin user drawer has "Delete account" (confirm dialog). DELETE /api/admin/users/{uid} removes the user and all their data (wallet, bets, casino games, transactions, withdrawals, tickets, rewards, free bets, redemptions, notifications, deposit addresses, affiliate records); admins can't be deleted. Logged in admin_actions.
 - Preview DB only has admin@apexodds.io and dhensley727@icloud.com; live test accounts must be removed by the user via this button after redeploy.
+
+## 2026-06 — Admin: player open bets
+- Clicking a player in Admin opens the drawer, which now lists their open bets (legs, odds, stake, to-win, free-bet / needs-review tags) and total $ at risk. GET /api/admin/users/{uid}/bets.

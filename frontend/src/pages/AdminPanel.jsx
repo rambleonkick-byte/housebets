@@ -8,6 +8,7 @@ import { usdValue, fmtCrypto, fmtAmt } from "@/lib/format";
 import { AdminBetReview } from "@/components/AdminBetReview";
 import { AdminTickets } from "@/components/AdminTickets";
 import { AdminPromos } from "@/components/AdminPromos";
+import { AdminUserBets } from "@/components/AdminUserBets";
 
 const COINS = ["USD"];
 const PAGE = 50;
@@ -109,6 +110,7 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
           <Row label="Withdrawn" v={u.withdrawals} testid="admin-drawer-withdrawals" />
           <Row label="Wagered" v={u.wagered} testid="admin-drawer-wagered" />
         </div>
+        <AdminUserBets uid={u.id} />
         <AdjustForm u={u} onDone={refresh} />
         {u.role !== "admin" && (
           <button data-testid="admin-block-toggle" onClick={toggleBlock} disabled={busy}

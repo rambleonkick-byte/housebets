@@ -3092,6 +3092,13 @@ async def admin_delete_user(uid: str, admin: dict = Depends(get_admin_user)):
     return {"deleted": True}
 
 
+@api_router.get("/admin/users/{uid}/bets")
+async def admin_user_bets(uid: str, admin: dict = Depends(get_admin_user)):
+    await _admin_target(uid)
+    bets = await db.bets.find({"user_id": uid, "status": "open"}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"bets": bets}
+
+
 @api_router.get("/admin/users/{uid}/log")
 async def admin_user_log(uid: str, admin: dict = Depends(get_admin_user)):
     return {"actions": await db.admin_actions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(100)}
