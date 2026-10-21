@@ -5,6 +5,7 @@ import { api, formatApiErrorDetail, COIN_META } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { usePrices, fmtUsd } from "@/lib/prices";
 import { usdValue, fmtCrypto, fmtAmt } from "@/lib/format";
+import { AdminBetReview } from "@/components/AdminBetReview";
 
 const COINS = ["USD"];
 const PAGE = 50;
@@ -201,6 +202,7 @@ export default function AdminPanel({ onWithdrawals }) {
         )}
       </div>
       {open && <UserDrawer u={open} rates={rates} onClose={() => setOpenId(null)} onChanged={load} />}
+      <AdminBetReview />
     </div>
   );
 }

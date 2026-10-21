@@ -228,3 +228,9 @@
   - pending withdrawals get `amount_usd`; affiliate available and ledger are converted to USD.
 - `_player_ngr` is USD-only.
 - Frontend: `fmtCrypto(n, "USD")` shows `$x.xx`, and the new `fmtAmt` handles USD and crypto. `Usd` hides itself for USD. The coin selectors were removed from the bet slip, casino games and admin adjust. The wallet modal shows one USD total, keeps the deposit coin tabs, and the withdraw form takes USD with a "You receive ≈ X COIN" estimate. Alerts and notifications use amount_usd. Tested in iterations 18–19 (24/24 backend).
+
+## 2026-06 — Bet settlement fix
+- Root cause: settlement only looked at the live odds feed (oddsAvailable=true, limit 15). Finished games drop out of that feed, so their bets never settled, and settlement only ran when the bettor opened the site.
+- Fix: results are now looked up directly by event ID (SGO /events?eventIDs=), and a background sweep settles ALL open bets every 3 min. Cancelled games void the leg (stake back on singles).
+- Bets with no final result 48h after the game are flagged with needs_review and listed in Admin > "Bets needing review" (with a "Check results now" button). Endpoints: GET /api/admin/bets/review, POST /api/admin/bets/settle-sweep.
+- Backlog: Crash game (P0), prop search/filters (P1), HOT tags (P2), verified email inbox for withdrawal alerts.

@@ -1730,21 +1730,90 @@ def settle_selection(sel, ev) -> Optional[bool]:
 LOSSBACK_RATE = 0.10
 
 
+SETTLE_FLAG_HOURS = 48
+_RESULTS_CACHE = {}  # event_id -> (fetched_ts, result event)
+
+
+def _sgo_result_event(ev):
+    st = ev.get("status", {})
+    state = "in" if st.get("live") else "post" if (st.get("completed") or st.get("ended")) else "pre"
+    return {"event_id": ev["eventID"], "state": state, "cancelled": bool(st.get("cancelled")), "start": st.get("startsAt"),
+            "home": {"score": _sgo_score(ev, "home")}, "away": {"score": _sgo_score(ev, "away")},
+            "player_results": _sgo_player_results(ev) if state != "pre" else {},
+            "rounds": sum(1 for k in (ev.get("results") or {}) if re.fullmatch(r"\d+r", k)) or None}
+
+
+async def _fetch_sgo_results(ids):
+    """Look up events directly by ID — finished games drop out of the odds feed."""
+    now = datetime.now(timezone.utc).timestamp()
+    out, need = {}, []
+    for i in set(ids):
+        c = _RESULTS_CACHE.get(i)
+        if c and (c[1]["state"] == "post" or now - c[0] < 90):
+            out[i] = c[1]
+        else:
+            need.append(i)
+    if not SGO_KEY:
+        return out
+    for i in range(0, len(need), 25):
+        chunk = need[i:i + 25]
+        try:
+            async with httpx.AsyncClient(timeout=20) as hc:
+                r = await hc.get(f"{SGO_API}/events", params={"apiKey": SGO_KEY, "eventIDs": ",".join(chunk), "limit": len(chunk)})
+            for ev in (r.json().get("data") or []):
+                res = _sgo_result_event(ev)
+                _RESULTS_CACHE[res["event_id"]] = (now, res)
+                out[res["event_id"]] = res
+        except Exception as e:
+            logger.warning(f"SGO results lookup failed: {e}")
+    return out
+
+
+def _hours_since(iso):
+    try:
+        return (datetime.now(timezone.utc) - datetime.fromisoformat(str(iso).replace("Z", "+00:00"))).total_seconds() / 3600
+    except Exception:
+        return 0
+
+
 async def auto_settle(user_id: str):
-    open_bets = await db.bets.find({"user_id": user_id, "status": "open"}).to_list(200)
+    await _settle_bets(await db.bets.find({"user_id": user_id, "status": "open"}).to_list(500))
+
+
+async def settle_all_open_bets():
+    await _settle_bets(await db.bets.find({"status": "open"}).to_list(5000))
+
+
+async def _settle_loop():
+    while True:
+        try:
+            await settle_all_open_bets()
+        except Exception as e:
+            logger.warning(f"settlement sweep failed: {e}")
+        await asyncio.sleep(180)
+
+
+async def _settle_bets(open_bets):
     if not open_bets:
         return
-    results = await _fetch_sgo_sequential(SGO_LEAGUES)
-    finished = {}
-    for ev in results:
-        if ev["state"] == "post":
-            finished[ev["event_id"]] = ev
+    results = await _fetch_sgo_results(s["event_id"] for b in open_bets for s in b["selections"])
     for b in open_bets:
+        user_id = b["user_id"]
         legs = []
         for s in b["selections"]:
-            ev = finished.get(s["event_id"])
-            legs.append(settle_selection(s, ev) if ev else None)
+            ev = results.get(s["event_id"])
+            if ev and ev["cancelled"]:
+                legs.append("push")
+            else:
+                legs.append(settle_selection(s, ev) if ev and ev["state"] == "post" else None)
         if any(x is None for x in legs):
+            stuck = [s for s, x in zip(b["selections"], legs) if x is None]
+            if not b.get("needs_review") and all(
+                    _hours_since((results.get(s["event_id"]) or {}).get("start") or b["created_at"]) >= SETTLE_FLAG_HOURS
+                    for s in stuck):
+                await db.bets.update_one({"id": b["id"], "status": "open"}, {"$set": {
+                    "needs_review": True, "flagged_at": now_iso(),
+                    "review_reason": "No final result found 48h after the game"}})
             continue
         won = all(x is not False for x in legs)
         pushed = [s for s, x in zip(b["selections"], legs) if x == "push"]
@@ -1752,7 +1821,7 @@ async def auto_settle(user_id: str):
         payout = b["stake"] if void else round(b["potential_payout"] / math.prod(float(s["odds"]) for s in pushed), 8) if won else 0
         res = await db.bets.update_one({"id": b["id"], "status": "open"},
                                        {"$set": {"status": "void" if void else "won" if won else "lost",
-                                                 "settled_at": now_iso(), "payout": payout}})
+                                                 "settled_at": now_iso(), "payout": payout, "needs_review": False}})
         if res.modified_count and not won:
             lb = round(b["stake"] * LOSSBACK_RATE, 8)
             await db.bets.update_one({"id": b["id"]}, {"$set": {"lossback": lb}})
@@ -2630,6 +2699,7 @@ async def _migrate_to_usd():
 @app.on_event("startup")
 async def startup():
     asyncio.create_task(_migrate_to_usd())
+    asyncio.create_task(_settle_loop())
     await db.users.create_index("email", unique=True)
     await db.affiliates.create_index("code", unique=True)
     await db.affiliates.create_index("user_id", unique=True)
@@ -2882,6 +2952,24 @@ async def _money_flow(ids):
         for c, t in v.items():
             wag.setdefault(u, {})[c] = round(wag.get(u, {}).get(c, 0) + t, 8)
     return dep, wd, wag
+
+
+@api_router.get("/admin/bets/review")
+async def admin_review_bets(admin: dict = Depends(get_admin_user)):
+    bets = await db.bets.find({"status": "open", "needs_review": True}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    ids = [ObjectId(b["user_id"]) for b in bets if ObjectId.is_valid(b["user_id"])]
+    emails = {str(u["_id"]): u["email"] async for u in db.users.find({"_id": {"$in": ids}}, {"email": 1})}
+    for b in bets:
+        b["user_email"] = emails.get(b["user_id"], "")
+    open_count = await db.bets.count_documents({"status": "open"})
+    return {"bets": bets, "open_count": open_count}
+
+
+@api_router.post("/admin/bets/settle-sweep")
+async def admin_settle_sweep(admin: dict = Depends(get_admin_user)):
+    await settle_all_open_bets()
+    return {"open_count": await db.bets.count_documents({"status": "open"}),
+            "flagged": await db.bets.count_documents({"status": "open", "needs_review": True})}
 
 
 @api_router.get("/admin/users")
