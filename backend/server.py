@@ -3046,6 +3046,113 @@ async def admin_user_log(uid: str, admin: dict = Depends(get_admin_user)):
     return {"actions": await db.admin_actions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(100)}
 
 
+# ----------------------------------------------------------------------------
+# Support tickets
+# ----------------------------------------------------------------------------
+TICKET_TOPICS = ["Deposit", "Withdrawal", "Bet", "Casino", "Account", "Other"]
+
+
+class TicketInput(BaseModel):
+    topic: str
+    message: str = Field(min_length=1, max_length=4000)
+
+
+class TicketMessageInput(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class TicketStatusInput(BaseModel):
+    status: str
+
+
+def _ticket_summary(t):
+    last = t["messages"][-1] if t["messages"] else {}
+    return {k: t.get(k) for k in ("id", "topic", "status", "created_at", "updated_at", "user_id", "user_email",
+                                  "user_name", "user_unread", "admin_unread")} | {
+        "last_message": last.get("text", "")[:140], "last_from": last.get("from")}
+
+
+async def _get_ticket(tid, user=None):
+    flt = {"id": tid} | ({"user_id": user["id"]} if user else {})
+    t = await db.tickets.find_one(flt, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return t
+
+
+@api_router.post("/tickets")
+async def create_ticket(body: TicketInput, user: dict = Depends(get_current_user)):
+    if body.topic not in TICKET_TOPICS:
+        raise HTTPException(status_code=400, detail="Invalid topic")
+    if not body.message.strip():
+        raise HTTPException(status_code=400, detail="Message is empty")
+    t = {"id": str(uuid.uuid4()), "user_id": user["id"], "user_email": user.get("email"), "user_name": user.get("name"),
+         "topic": body.topic, "status": "open", "user_unread": False, "admin_unread": True,
+         "messages": [{"from": "user", "text": body.message.strip(), "at": now_iso()}],
+         "created_at": now_iso(), "updated_at": now_iso()}
+    await db.tickets.insert_one(dict(t))
+    t.pop("_id", None)
+    return t
+
+
+@api_router.get("/tickets")
+async def my_tickets(user: dict = Depends(get_current_user)):
+    ts = await db.tickets.find({"user_id": user["id"]}, {"_id": 0}).sort("updated_at", -1).to_list(100)
+    return {"tickets": [_ticket_summary(t) for t in ts], "unread": sum(1 for t in ts if t.get("user_unread"))}
+
+
+@api_router.get("/tickets/{tid}")
+async def my_ticket(tid: str, user: dict = Depends(get_current_user)):
+    t = await _get_ticket(tid, user)
+    await db.tickets.update_one({"id": tid}, {"$set": {"user_unread": False}})
+    return t | {"user_unread": False}
+
+
+@api_router.post("/tickets/{tid}/messages")
+async def reply_my_ticket(tid: str, body: TicketMessageInput, user: dict = Depends(get_current_user)):
+    await _get_ticket(tid, user)
+    if not body.text.strip():
+        raise HTTPException(status_code=400, detail="Message is empty")
+    await db.tickets.update_one({"id": tid}, {"$push": {"messages": {"from": "user", "text": body.text.strip(), "at": now_iso()}},
+                                              "$set": {"admin_unread": True, "status": "open", "updated_at": now_iso()}})
+    return await _get_ticket(tid, user)
+
+
+@api_router.get("/admin/tickets")
+async def admin_tickets(status: Optional[str] = None, admin: dict = Depends(get_admin_user)):
+    flt = {"status": status} if status in ("open", "closed") else {}
+    ts = await db.tickets.find(flt, {"_id": 0}).sort("updated_at", -1).to_list(300)
+    return {"tickets": [_ticket_summary(t) for t in ts],
+            "unread": await db.tickets.count_documents({"admin_unread": True}),
+            "open": await db.tickets.count_documents({"status": "open"})}
+
+
+@api_router.get("/admin/tickets/{tid}")
+async def admin_ticket(tid: str, admin: dict = Depends(get_admin_user)):
+    t = await _get_ticket(tid)
+    await db.tickets.update_one({"id": tid}, {"$set": {"admin_unread": False}})
+    return t | {"admin_unread": False}
+
+
+@api_router.post("/admin/tickets/{tid}/messages")
+async def admin_reply_ticket(tid: str, body: TicketMessageInput, admin: dict = Depends(get_admin_user)):
+    await _get_ticket(tid)
+    if not body.text.strip():
+        raise HTTPException(status_code=400, detail="Message is empty")
+    await db.tickets.update_one({"id": tid}, {"$push": {"messages": {"from": "admin", "text": body.text.strip(), "at": now_iso()}},
+                                              "$set": {"user_unread": True, "updated_at": now_iso()}})
+    return await _get_ticket(tid)
+
+
+@api_router.post("/admin/tickets/{tid}/status")
+async def admin_ticket_status(tid: str, body: TicketStatusInput, admin: dict = Depends(get_admin_user)):
+    if body.status not in ("open", "closed"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    await _get_ticket(tid)
+    await db.tickets.update_one({"id": tid}, {"$set": {"status": body.status, "updated_at": now_iso()}})
+    return await _get_ticket(tid)
+
+
 app.include_router(api_router)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
