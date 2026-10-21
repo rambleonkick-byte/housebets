@@ -3221,13 +3221,15 @@ async def _vip_bonuses():
 
 
 async def _wagered(uid):
-    sports = await db.bets.aggregate([{"$match": {"user_id": uid, "free_bet": {"$ne": True}, "status": {"$in": ["open", "won", "lost"]}}},
-                                      {"$group": {"_id": None, "t": {"$sum": "$stake"}}}]).to_list(1)
-    casino = 0.0
     rates = _PRICE_CACHE["rates"]
+    sports = 0.0
+    async for r in db.bets.aggregate([{"$match": {"user_id": uid, "free_bet": {"$ne": True}, "status": {"$in": ["open", "won", "lost"]}}},
+                                      {"$group": {"_id": "$coin", "t": {"$sum": "$stake"}}}]):
+        sports += r["t"] if r["_id"] == "USD" else r["t"] * rates.get(r["_id"], 0)
+    casino = 0.0
     async for r in db.casino_games.aggregate([{"$match": {"user_id": uid}}, {"$group": {"_id": "$coin", "t": {"$sum": "$stake"}}}]):
         casino += r["t"] if r["_id"] == "USD" else r["t"] * rates.get(r["_id"], 0)
-    return round(sports[0]["t"] if sports else 0.0, 2), round(casino, 2)
+    return round(sports, 2), round(casino, 2)
 
 
 def _tier_index(points):

@@ -1,0 +1,35 @@
+{
+  "summary": "Retest of the iteration_21 fixes. All pass. Backend: 15 of 15 pytest pass (5 new tests in test_promo_fixes_it22.py plus 10 regression tests in test_vip_promos_profile.py). Checked: POST /bets/{id}/auto-cashout on a free bet returns 400 'Free bets can't be cashed out' for both a target and null, and nothing is stored. Void and cashed_out bets are excluded from wagered, VIP points and wagering remaining; this was checked with mongo status flips and also with a real cash-out through the API (3x sports weighting confirmed: $12 staked = 36 pts, 12 pts after void + cash-out). Bonus tx carries the label 'Promo CODE'. Frontend: wallet 'Promo UI..CASH +$20.00' shows in green; free bet txs show 'Free Bet Placed $10.00' in grey with no sign; a normal bet shows -$2.00. My Bets: FREE BET badge (history-free-bet-{id}) on free bets only; open $10 free bet at 2.35 shows To win $13.50 (winnings only); won $5 free bet shows Payout $6.75 (b.payout); free bets show no buttons, so no cash-out or auto cash-out, while the normal bet still has Cash out and Set auto cash out. Admin promo form shows labels Code, Reward type, Amount $, Match %, Max bonus $, Wagering (× bonus), Max uses, Expires (optional), and the fields switch correctly by type (wagering hidden for free bets). Created cash, free_bet, deposit_match (with expiry) and cash codes through the UI; each row appeared with the right reward, wager, uses and expiry. Mobile 390px: brand, wallet, profile link (x 312-340) and logout (x 344-378) are fully inside the viewport, with no horizontal overflow. Profile regression on mobile: name, bonus status 'Wager $18.00 more' is correct, the redeem toast shows '$1.00 added', the header balance goes from $18 to $19 and the wagering remaining from 18 to 19.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/users (_money_flow)", "issue": "The admin 'Wagered' column sums all non-free bets, including void and cashed_out ones, so it no longer matches the player's profile wagered or the wagering calculation."},
+      {"endpoint": "_wagered()", "issue": "Sports stakes are summed raw, without coin conversion (casino converts with rates). Legacy non-USD bets (b.coin != USD is still handled in the UI) would be miscounted."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Profile mobile 390px", "issues": ["The floating support/headset button sits over the top-right corner of the promo 'Redeem' button area when scrolled to the promo box."]},
+      {"screen": "BetHistoryModal", "issues": ["For non-USD bets the <Usd> secondary value still uses potential_payout (not winnings-only for free bets, and not b.payout for won bets). Edge case only."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_promo_fixes_it22.py", "/app/backend/tests/test_vip_promos_profile.py", "/app/backend/tests/seed_ui_it22.py", "/app/test_reports/pytest/pytest_it22.xml"],
+  "action_items": [
+    "Optional: make the admin users 'Wagered' aggregation use the same status filter as _wagered (open/won/lost, non-free)",
+    "Optional: move the floating support button or add bottom padding on mobile so it doesn't sit over the promo Redeem button"
+  ],
+  "critical_code_review_comments": [
+    "_wagered sports aggregation doesn't convert non-USD stakes",
+    "BetHistoryModal line 129 <Usd> uses potential_payout for every status except cashed_out; it should mirror the amount shown on line 128",
+    "server.py is very large (>3300 lines) and should be split into routers (promos/vip, bets, wallet, admin)"
+  ],
+  "updated_files": ["/app/backend/tests/test_promo_fixes_it22.py", "/app/backend/tests/seed_ui_it22.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@apexodds.io / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Fresh test users and promo codes (prefixes T<tag>, UI<tag>) were created and fully removed afterwards (users, wallets, bets, txs, rewards, free_bets, redemptions, promo codes). DB now has only admin plus dhensley727, and dhensley727 was not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "pytest.ini uses xdist (-n), so don't pass -p no:xdist. The cashout endpoint needs the body {expected: quote}. seed_ui_it22.py seeds a UI player (cash promo, open and won free bets, normal bet) into /tmp/seed_ui_it22.json; run 'python seed_ui_it22.py clean' to remove it. The admin promo form is on the /admin page. Log in from the browser with fetch('/api/auth/login', credentials:'include') and then reload."
+}

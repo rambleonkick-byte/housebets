@@ -242,3 +242,11 @@
 - Limits: max 5 open tickets per player, 20 messages / 10 min.
 - Endpoints: /api/tickets (GET/POST), /api/tickets/{id} (GET), /api/tickets/{id}/messages (POST), /api/admin/tickets (GET), /api/admin/tickets/{id} (GET), /api/admin/tickets/{id}/messages (POST), /api/admin/tickets/{id}/status (POST). Collection: tickets.
 - Tested: iteration_20 (backend 100%, frontend 100%); LOW issues fixed after.
+
+## 2026-06 — Player profiles, VIP ranks, promo codes
+- /profile page (header avatar link): net P&L, deposits, withdrawals, total wagered, sportsbook & casino breakdown, bonus/wagering status, free bets.
+- VIP ranks copy BetOnline: Bronze 0 → Silver 10K → Gold 50K → Platinum I-III → Diamond I-III → Elite I-III → Black I-III (500M). Points = sports stake ×3 + casino stake ×1 (void/cashed-out/free bets excluded). Level-up cash bonus per tier (admin editable, defaults Silver $25 … Black III $300K), 1x wagering. Existing players' already-reached tiers are NOT paid retroactively.
+- Promo codes (Admin > Promo codes & VIP rewards): free cash, free bet (winnings only, no cash-out, no lossback, void restores token), deposit match (applied to next OxaPay deposit). Max uses, expiry, enable/disable, wagering multiplier.
+- Withdrawals blocked while bonus wagering remains.
+- Collections: rewards, promo_codes, promo_redemptions, free_bets, settings(vip_bonus).
+- Tested: iteration_21 & 22 (backend 100%, frontend 100%).

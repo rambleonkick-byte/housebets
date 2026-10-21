@@ -74,7 +74,7 @@ export default function Profile() {
   const s = p.sports, c = p.casino;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6" data-testid="profile-page">
+    <div className="max-w-6xl mx-auto px-4 pt-8 pb-28 space-y-6" data-testid="profile-page">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">Player profile</p>
