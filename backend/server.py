@@ -3607,13 +3607,20 @@ async def admin_set_vip_bonuses(body: VipBonusInput, admin: dict = Depends(get_a
     return {"amounts": clean}
 
 
-@api_router.get("/marketing/ad.mp4")
-async def download_ad():
+MARKETING_FILES = {"ad.mp4": ("apexodds_ad_1x1.mp4", "video/mp4", "ApexOdds_Ad.mp4"),
+                   "welcome10.png": ("welcome10_ad.png", "image/png", "ApexOdds_WELCOME10.png")}
+
+
+@api_router.get("/marketing/{name}")
+async def download_marketing(name: str):
     from fastapi.responses import FileResponse
-    path = ROOT_DIR / "assets" / "apexodds_ad_1x1.mp4"
+    if name not in MARKETING_FILES:
+        raise HTTPException(status_code=404, detail="Not found")
+    fn, mt, out = MARKETING_FILES[name]
+    path = ROOT_DIR / "assets" / fn
     if not path.exists():
         raise HTTPException(status_code=404, detail="Not found")
-    return FileResponse(path, media_type="video/mp4", filename="ApexOdds_Ad.mp4")
+    return FileResponse(path, media_type=mt, filename=out)
 
 
 app.include_router(api_router)

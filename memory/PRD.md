@@ -285,3 +285,9 @@
 ## 2026-06 — AI video advert (marketing asset)
 - 26.4s square 1080x1080 ad: /app/frontend/public/brand/apexodds_ad_1x1.mp4 (served at /brand/apexodds_ad_1x1.mp4). 5 Kling v3 Pro clips (stadium, dunk, phone odds, crypto coins, goal) + Stable Audio 2.5 dramatic trailer music + Anton/Space Grotesk titles + logo end card.
 - Sources/scripts: /app/marketing/gen_ad.py (fal via Universal Key), /app/marketing/build_ad.py (PIL titles + ffmpeg edit), clips in /app/marketing/ad/.
+
+## 2026-06 — WELCOME10 free bet advert
+- 1080x1080 image /app/frontend/public/brand/welcome10_ad.png (also backend/assets). Background AI-generated (gold $10 chip, stadium), text composited with PIL (script /app/marketing/build_welcome10.py) so wording is exact.
+- Download links with attachment header: GET /api/marketing/welcome10.png and /api/marketing/ad.mp4 (MARKETING_FILES whitelist, files in backend/assets).
+- NOTE: promo code WELCOME10 must be created in the LIVE admin panel (Free bet, $10).
+- PENDING: user asked for admin@apexodds.io inbox in admin panel — awaiting answers (domain ownership/DNS, provider Resend inbound vs SendGrid vs Cloudflare, read/reply).
