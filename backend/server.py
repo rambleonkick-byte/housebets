@@ -1840,30 +1840,37 @@ async def _settle_bets(open_bets):
         pushed = [s for s, x in zip(b["selections"], legs) if x == "push"]
         void = won and len(pushed) == len(legs)
         payout = b["stake"] if void else round(b["potential_payout"] / math.prod(float(s["odds"]) for s in pushed), 8) if won else 0
-        if b.get("free_bet") and won:
-            payout = 0 if void else round(max(0.0, payout - b["stake"]), 8)
-        res = await db.bets.update_one({"id": b["id"], "status": "open"},
-                                       {"$set": {"status": "void" if void else "won" if won else "lost",
-                                                 "settled_at": now_iso(), "payout": payout, "needs_review": False}})
-        if res.modified_count and void and b.get("free_bet"):
-            await db.free_bets.update_one({"id": b.get("free_bet_id")}, {"$set": {"status": "available"}, "$unset": {"bet_id": ""}})
-        if res.modified_count and not won and not b.get("free_bet"):
-            lb = round(b["stake"] * LOSSBACK_RATE, 8)
-            await db.bets.update_one({"id": b["id"]}, {"$set": {"lossback": lb}})
-            await db.wallets.update_one({"user_id": user_id}, {"$inc": {f"balances.{b['coin']}": lb}})
-            await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id, "type": "lossback",
-                                              "coin": b["coin"], "amount": lb, "created_at": now_iso(),
-                                              "hash": "lossback:" + b["id"]})
-            await _save_notification(user_id, "lossback", {"coin": b["coin"], "amount": lb}, key_id=b["id"])
-        if res.modified_count:
-            await _accrue_player(user_id)
-        if won and res.modified_count and payout > 0:
-            await db.wallets.update_one({"user_id": user_id},
-                                        {"$inc": {f"balances.{b['coin']}": payout}})
-            await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id,
-                                              "type": "refund" if void else "payout", "coin": b["coin"],
-                                              "amount": payout, "created_at": now_iso(),
-                                              "hash": "0x" + uuid.uuid4().hex[:24]})
+        await _finalize_bet(b, "void" if void else "won" if won else "lost", payout)
+
+
+async def _finalize_bet(b, outcome, payout, graded_by=None):
+    user_id = b["user_id"]
+    if b.get("free_bet"):
+        payout = 0 if outcome != "won" else round(max(0.0, payout - b["stake"]), 8)
+    upd = {"status": outcome, "settled_at": now_iso(), "payout": payout, "needs_review": False}
+    if graded_by:
+        upd["graded_by"] = graded_by
+    res = await db.bets.update_one({"id": b["id"], "status": "open"}, {"$set": upd})
+    if not res.modified_count:
+        return False
+    if outcome == "void" and b.get("free_bet"):
+        await db.free_bets.update_one({"id": b.get("free_bet_id")}, {"$set": {"status": "available"}, "$unset": {"bet_id": ""}})
+    if outcome == "lost" and not b.get("free_bet"):
+        lb = round(b["stake"] * LOSSBACK_RATE, 8)
+        await db.bets.update_one({"id": b["id"]}, {"$set": {"lossback": lb}})
+        await db.wallets.update_one({"user_id": user_id}, {"$inc": {f"balances.{b['coin']}": lb}})
+        await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id, "type": "lossback",
+                                          "coin": b["coin"], "amount": lb, "created_at": now_iso(),
+                                          "hash": "lossback:" + b["id"]})
+        await _save_notification(user_id, "lossback", {"coin": b["coin"], "amount": lb}, key_id=b["id"])
+    await _accrue_player(user_id)
+    if outcome != "lost" and payout > 0:
+        await db.wallets.update_one({"user_id": user_id}, {"$inc": {f"balances.{b['coin']}": payout}})
+        await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user_id,
+                                          "type": "refund" if outcome == "void" else "payout", "coin": b["coin"],
+                                          "amount": payout, "created_at": now_iso(),
+                                          "hash": "0x" + uuid.uuid4().hex[:24]})
+    return True
 
 
 CASHOUT_MARGIN = 0.95
@@ -3097,6 +3104,33 @@ async def admin_user_bets(uid: str, admin: dict = Depends(get_admin_user)):
     await _admin_target(uid)
     bets = await db.bets.find({"user_id": uid, "status": "open"}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"bets": bets}
+
+
+class GradeInput(BaseModel):
+    result: str
+
+
+@api_router.post("/admin/bets/{bet_id}/grade")
+async def admin_grade_bet(bet_id: str, body: GradeInput, admin: dict = Depends(get_admin_user)):
+    if body.result not in ("won", "lost", "void"):
+        raise HTTPException(status_code=400, detail="Result must be won, lost or void")
+    b = await db.bets.find_one({"id": bet_id, "status": "open"}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=400, detail="Only open bets can be graded")
+    payout = b["potential_payout"] if body.result == "won" else b["stake"] if body.result == "void" else 0
+    if not await _finalize_bet(b, body.result, payout, graded_by=admin["email"]):
+        raise HTTPException(status_code=409, detail="This bet was already settled")
+    await db.admin_actions.insert_one({"id": str(uuid.uuid4()), "user_id": b["user_id"], "admin": admin["email"],
+                                       "action": f"grade_{body.result}", "reason": f"Bet {bet_id[:8]}", "created_at": now_iso()})
+    return await db.bets.find_one({"id": bet_id}, {"_id": 0})
+
+
+@api_router.get("/admin/users/{uid}/history")
+async def admin_user_history(uid: str, admin: dict = Depends(get_admin_user)):
+    await _admin_target(uid)
+    bets = await db.bets.find({"user_id": uid, "status": {"$ne": "open"}}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    games = await db.casino_games.find({"user_id": uid}, {"_id": 0, "server_seed": 0}).sort("created_at", -1).to_list(100)
+    return {"bets": bets, "games": games}
 
 
 @api_router.get("/admin/users/{uid}/log")

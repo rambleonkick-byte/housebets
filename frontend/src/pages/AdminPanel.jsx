@@ -110,7 +110,7 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
           <Row label="Withdrawn" v={u.withdrawals} testid="admin-drawer-withdrawals" />
           <Row label="Wagered" v={u.wagered} testid="admin-drawer-wagered" />
         </div>
-        <AdminUserBets uid={u.id} />
+        <AdminUserBets uid={u.id} onChanged={refresh} />
         <AdjustForm u={u} onDone={refresh} />
         {u.role !== "admin" && (
           <button data-testid="admin-block-toggle" onClick={toggleBlock} disabled={busy}
