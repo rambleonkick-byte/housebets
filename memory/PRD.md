@@ -281,3 +281,7 @@
 
 ## 2026-06 — Winning slip brag
 - My Bets (history modal): won bets with payout get "Share my win" → branded share card with big WINNER stamp, green ticks on all legs, Odds / Stake / Paid, and a "+$X PROFIT" banner; Save image / Share / Copy link (plain site). Reuses OpenBetShareModal (status === "won" switches to winner variant).
+
+## 2026-06 — AI video advert (marketing asset)
+- 26.4s square 1080x1080 ad: /app/frontend/public/brand/apexodds_ad_1x1.mp4 (served at /brand/apexodds_ad_1x1.mp4). 5 Kling v3 Pro clips (stadium, dunk, phone odds, crypto coins, goal) + Stable Audio 2.5 dramatic trailer music + Anton/Space Grotesk titles + logo end card.
+- Sources/scripts: /app/marketing/gen_ad.py (fal via Universal Key), /app/marketing/build_ad.py (PIL titles + ffmpeg edit), clips in /app/marketing/ad/.
