@@ -3050,6 +3050,15 @@ async def admin_user_log(uid: str, admin: dict = Depends(get_admin_user)):
 # Support tickets
 # ----------------------------------------------------------------------------
 TICKET_TOPICS = ["Deposit", "Withdrawal", "Bet", "Casino", "Account", "Other"]
+_TICKET_MSG_LOG = {}
+
+
+def _ticket_rate_check(uid):
+    now = datetime.now(timezone.utc).timestamp()
+    recent = [t for t in _TICKET_MSG_LOG.get(uid, []) if now - t < 600]
+    if len(recent) >= 20:
+        raise HTTPException(status_code=429, detail="Too many messages — please wait a few minutes")
+    _TICKET_MSG_LOG[uid] = recent + [now]
 
 
 class TicketInput(BaseModel):
@@ -3086,6 +3095,9 @@ async def create_ticket(body: TicketInput, user: dict = Depends(get_current_user
         raise HTTPException(status_code=400, detail="Invalid topic")
     if not body.message.strip():
         raise HTTPException(status_code=400, detail="Message is empty")
+    if await db.tickets.count_documents({"user_id": user["id"], "status": "open"}) >= 5:
+        raise HTTPException(status_code=429, detail="You have 5 open tickets — please reply in an existing one")
+    _ticket_rate_check(user["id"])
     t = {"id": str(uuid.uuid4()), "user_id": user["id"], "user_email": user.get("email"), "user_name": user.get("name"),
          "topic": body.topic, "status": "open", "user_unread": False, "admin_unread": True,
          "messages": [{"from": "user", "text": body.message.strip(), "at": now_iso()}],
@@ -3113,6 +3125,7 @@ async def reply_my_ticket(tid: str, body: TicketMessageInput, user: dict = Depen
     await _get_ticket(tid, user)
     if not body.text.strip():
         raise HTTPException(status_code=400, detail="Message is empty")
+    _ticket_rate_check(user["id"])
     await db.tickets.update_one({"id": tid}, {"$push": {"messages": {"from": "user", "text": body.text.strip(), "at": now_iso()}},
                                               "$set": {"admin_unread": True, "status": "open", "updated_at": now_iso()}})
     return await _get_ticket(tid, user)

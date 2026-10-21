@@ -234,3 +234,11 @@
 - Fix: results are now looked up directly by event ID (SGO /events?eventIDs=), and a background sweep settles ALL open bets every 3 min. Cancelled games void the leg (stake back on singles).
 - Bets with no final result 48h after the game are flagged with needs_review and listed in Admin > "Bets needing review" (with a "Check results now" button). Endpoints: GET /api/admin/bets/review, POST /api/admin/bets/settle-sweep.
 - Backlog: Crash game (P0), prop search/filters (P1), HOT tags (P2), verified email inbox for withdrawal alerts.
+
+## 2026-06 — Support tickets replace Tawk.to
+- Tawk.to script removed from index.html. Headphones button now opens a ticket panel (logged-out -> login modal).
+- Player: create ticket (topic Deposit/Withdrawal/Bet/Casino/Account/Other + message), back-and-forth thread, red dot on button when admin replied (user_unread).
+- Admin panel: "Support tickets" section with Open/Closed/All filters, unread badge, reply, close/reopen. Player reply reopens a closed ticket.
+- Limits: max 5 open tickets per player, 20 messages / 10 min.
+- Endpoints: /api/tickets (GET/POST), /api/tickets/{id} (GET), /api/tickets/{id}/messages (POST), /api/admin/tickets (GET), /api/admin/tickets/{id} (GET), /api/admin/tickets/{id}/messages (POST), /api/admin/tickets/{id}/status (POST). Collection: tickets.
+- Tested: iteration_20 (backend 100%, frontend 100%); LOW issues fixed after.

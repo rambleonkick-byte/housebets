@@ -1,0 +1,32 @@
+{
+  "summary": "Tested the support ticket system that replaced Tawk.to, end to end (backend plus UI on desktop and mobile). Backend: 10/10 pytest tests pass. They cover creating a ticket, invalid topic (400), empty message (422) and whitespace-only message (400), list/unread counts, another player's ticket returning 404, non-admin getting 403 on all admin ticket endpoints, admin open clearing admin_unread, admin reply setting user_unread, player open clearing it, close/reopen with an invalid status giving 400, open/closed filters, a player reply reopening a closed ticket and setting admin_unread again, and a 404 for an unknown ticket id. UI: no tawk in the DOM or source. When logged out, the support button opens the login modal. As a player, I created a ticket using the panel, New ticket, the Withdrawal and Deposit topic chips, the message box and send, and the thread view showed the message. The send button is disabled while the message is empty. The admin /admin page shows Support tickets with the ticket, a red dot and an 'N new' badge. Opening the ticket clears the dot. Admin reply works. The player's button shows the red dot after a reload, the ticket row in the list also has a dot, and opening the ticket clears both. Close turns the button into 'Reopen' and moves the ticket from Open to the Closed filter. The player then sees the 'Reply to reopen' placeholder, replies with Enter, and the ticket is back in the Open list with the admin red dot. The admin's open thread picked up the player's reply via the 10s poll. Regression: the admin-bet-review section still renders. On mobile the support button sits clear of the content.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "POST /api/tickets, POST /api/tickets/{tid}/messages", "issue": "No rate limit or cap on how many tickets or messages a player can send, so a player could flood the admin inbox."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminTickets", "issue": "When the 10s thread poll pulls in a new player message, it clears admin_unread in the DB, but the list is not reloaded. The red dot on the selected ticket and the 'N new' badge stay stale until the next 20s list poll.", "selector": "[data-testid=admin-tickets-unread]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_support_tickets.py", "/app/test_reports/pytest/pytest_support_tickets.xml"],
+  "action_items": [
+    "Optional: in AdminTickets, call load() after the thread poll so the red dot and badge update right away.",
+    "Optional: add a data-testid such as admin-ticket-unread-{id} to the red dot in the admin list.",
+    "Optional: rate-limit ticket creation and messages per user.",
+    "Optional: wrap openTicket (SupportButton) and setStatus (AdminTickets) in try/catch with an error toast; right now they fail silently."
+  ],
+  "critical_code_review_comments": [
+    "Ticket endpoints are scoped correctly: _get_ticket filters by user_id for players, admin routes use get_admin_user, and _id is excluded everywhere.",
+    "Admin GET /admin/tickets/{id} and the 10s poll always set admin_unread=false, so having a ticket open in a background tab marks new replies as read. This is acceptable but worth knowing.",
+    "TOPICS is duplicated between the backend TICKET_TOPICS and the frontend TicketThread.TOPICS. Consider serving the list from an endpoint."
+  ],
+  "updated_files": ["/app/backend/tests/test_support_tickets.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@apexodds.io/admin123; temporary test_tkt*/test_tktui* players created and then deleted",
+  "seed_data_creation": "None left behind. All test_tkt* users and their tickets were deleted, and dhensley727@icloud.com was not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: cd /app/backend && pytest tests/test_support_tickets.py -n 0 (pytest.ini adds xdist, and these tests depend on running in order). users have no 'id' field; user_id = str(_id). The test teardown deletes the users and their tickets."
+}

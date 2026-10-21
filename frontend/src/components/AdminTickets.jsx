@@ -15,7 +15,9 @@ export const AdminTickets = () => {
   useEffect(() => { load(); const iv = setInterval(load, 20000); return () => clearInterval(iv); }, [load]);
   useEffect(() => {
     if (!ticket) return;
-    const iv = setInterval(() => api.get(`/admin/tickets/${ticket.id}`).then(({ data }) => setTicket(data)).catch(() => {}), 10000);
+    const iv = setInterval(() => api.get(`/admin/tickets/${ticket.id}`).then(({ data }) => {
+      setTicket((prev) => { if (data.messages.length !== prev?.messages.length) load(); return data; });
+    }).catch(() => {}), 10000);
     return () => clearInterval(iv);
   }, [ticket?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
