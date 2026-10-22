@@ -307,7 +307,4 @@
 - Bulk delete: checkboxes + select-all on players table, "Delete N selected" → POST /api/admin/users/bulk-delete {ids} (admins skipped), shared _purge_user.
 - Tested: backend pytest backend/tests/test_max_win_limits.py 11/11; UI flows verified via Playwright screenshot run.
 
-## 2026-06 — Casino hold changed to 90% (10% RTP), "provably fair" wording removed
-- Per user: house keeps ~90% of casino volume. EDGE=0.10 (dice, limbo, mines); Plinko/Keno tables scaled by 0.10/0.99 (backend + frontend tables); blackjack payouts ×0.10 (BJ_SCALE), felt/side-bet text updated to real multipliers.
-- All on-screen multipliers / win chances / payout tables show the real (new) values (e.g. Dice 50% → 0.20x). No RTP badge (user choice). Seed verification in History still works (fairness.js EDGE=0.1).
-- Removed "Provably fair" badge (GameKit), casino lobby copy ("1% house edge", "provably fair"), Limbo "1% edge" tag.
+- 2026-06: Casino hold change to 90% was requested then cancelled — reverted to original 1% edge and provably-fair wording.

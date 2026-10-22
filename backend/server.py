@@ -2121,7 +2121,7 @@ async def list_bets(user: dict = Depends(get_current_user)):
 # ----------------------------------------------------------------------------
 # Casino house games (provably-fair style, server-authoritative)
 # ----------------------------------------------------------------------------
-EDGE = 0.10  # house keeps 90% of volume (10% return to player)
+EDGE = 0.99  # 1% house edge
 
 PLINKO_MULT = {
     8:  {"low": [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6],
@@ -2135,16 +2135,12 @@ PLINKO_MULT = {
          "high": [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000]},
 }
 
-_TABLE_SCALE = EDGE / 0.99  # tables below were built for a 1% edge
 KENO_TABLE = {
     1: [0, 1.9], 2: [0, 0, 4.5], 3: [0, 0, 1.4, 8], 4: [0, 0, 0, 2.2, 13],
     5: [0, 0, 0, 1.5, 4, 30], 6: [0, 0, 0, 1, 2, 8, 50],
     7: [0, 0, 0, 0.5, 1.5, 4, 15, 80], 8: [0, 0, 0, 0.5, 1, 2.5, 8, 30, 100],
     9: [0, 0, 0, 0, 1, 2, 5, 12, 45, 150], 10: [0, 0, 0, 0, 0.6, 1.5, 3, 8, 20, 60, 200],
 }
-PLINKO_MULT = {r: {k: [round(m * _TABLE_SCALE, 3) for m in v] for k, v in d.items()} for r, d in PLINKO_MULT.items()}
-KENO_TABLE = {k: [round(m * _TABLE_SCALE, 3) for m in v] for k, v in KENO_TABLE.items()}
-BJ_SCALE = 0.10  # blackjack base game returns ~99.5%; scale every payout to ~10%
 
 
 class LimboInput(BaseModel):
@@ -2576,13 +2572,7 @@ async def _bj_finish(g):
         g["insurance"]["payout"] = round(g["insurance"]["bet"] * 3, 8) if dealer_bj else 0.0
         payout += g["insurance"]["payout"]
     payout += g["sides"]["pp"]["payout"] + g["sides"]["t213"]["payout"]
-    for h in g["hands"]:
-        h["payout"] = round(h["payout"] * BJ_SCALE, 8)
-    for s in (g["sides"]["pp"], g["sides"]["t213"], g["sides"]["bust"]):
-        s["payout"] = round((s.get("payout") or 0) * BJ_SCALE, 8)
-    if g.get("insurance"):
-        g["insurance"]["payout"] = round(g["insurance"]["payout"] * BJ_SCALE, 8)
-    g["status"], g["total_payout"] = "done", round(payout * BJ_SCALE, 8)
+    g["status"], g["total_payout"] = "done", round(payout, 8)
 
 
 async def _bj_settle(g):

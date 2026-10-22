@@ -7,12 +7,11 @@ import { sfx } from "@/lib/sfx";
 
 const RISKS = ["low", "medium", "high"];
 const ROWS = [8, 12, 16];
-const RAW_MULT = {
+const PLINKO_MULT = {
   8: { low: [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6], medium: [13, 3, 1.3, 0.7, 0.4, 0.7, 1.3, 3, 13], high: [29, 4, 1.5, 0.3, 0.2, 0.3, 1.5, 4, 29] },
   12: { low: [10, 3, 1.6, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 1.6, 3, 10], medium: [24, 5, 3, 1.6, 1, 0.5, 0.3, 0.5, 1, 1.6, 3, 5, 24], high: [58, 8, 3, 2, 0.5, 0.2, 0.2, 0.2, 0.5, 2, 3, 8, 58] },
   16: { low: [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, 0.5, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16], medium: [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110], high: [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000] },
 };
-const PLINKO_MULT = Object.fromEntries(Object.entries(RAW_MULT).map(([r, d]) => [r, Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v.map((m) => Math.round((m * 0.1) / 0.99 * 1000) / 1000)]))]));
 // warm heat-map from centre (yellow) to edges (red)
 const bucketColor = (i, n) => {
   const d = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);

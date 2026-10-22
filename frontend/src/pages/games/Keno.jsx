@@ -6,14 +6,12 @@ import { BetControls, useGameBase, GameLayout, PlayButton, PlayArea, TILE, StatB
 import { toast } from "sonner";
 import { sfx } from "@/lib/sfx";
 
-const RAW_TABLE = {
+const KENO_TABLE = {
   1: [0, 1.9], 2: [0, 0, 4.5], 3: [0, 0, 1.4, 8], 4: [0, 0, 0, 2.2, 13],
   5: [0, 0, 0, 1.5, 4, 30], 6: [0, 0, 0, 1, 2, 8, 50],
   7: [0, 0, 0, 0.5, 1.5, 4, 15, 80], 8: [0, 0, 0, 0.5, 1, 2.5, 8, 30, 100],
   9: [0, 0, 0, 0, 1, 2, 5, 12, 45, 150], 10: [0, 0, 0, 0, 0.6, 1.5, 3, 8, 20, 60, 200],
 };
-
-const KENO_TABLE = Object.fromEntries(Object.entries(RAW_TABLE).map(([k, v]) => [k, v.map((m) => Math.round((m * 0.1) / 0.99 * 1000) / 1000)]));
 
 function PayoutBar({ picks, hits }) {
   const row = KENO_TABLE[picks];

@@ -59,7 +59,7 @@ export function Limbo() {
   const tone = last == null ? "from-white via-slate-100 to-slate-400" : win_ ? "from-emerald-200 via-emerald-400 to-emerald-600" : "from-red-300 via-red-500 to-red-700";
 
   return (
-    <GameLayout title="Limbo" tag="hit the target" win={win} onWinClose={closeWin}
+    <GameLayout title="Limbo" tag="1% edge" win={win} onWinClose={closeWin}
       controls={
         <BetControls {...g} disabled={loading || autoOn}>
           <div>
@@ -72,7 +72,7 @@ export function Limbo() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <StatBox label="Win chance" value={`${targetNum >= 1.01 ? (10 / targetNum).toFixed(2) : "0"}%`} testId="limbo-chance" />
+            <StatBox label="Win chance" value={`${targetNum >= 1.01 ? (99 / targetNum).toFixed(2) : "0"}%`} testId="limbo-chance" />
             <StatBox label="Payout" value={`${(g.stakeNum * targetNum).toFixed(4)}`} testId="limbo-payout" accent />
           </div>
           <PlayArea g={g} play={play} onRunning={setAutoOn}
