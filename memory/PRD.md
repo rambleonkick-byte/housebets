@@ -310,3 +310,4 @@
 - 2026-06: Casino hold change to 90% was requested then cancelled — reverted to original 1% edge and provably-fair wording.
 - 2026-06: Small 'BETA' tag added under the APEX ODDS logo in the header (data-testid brand-beta-tag).
 - 2026-06: Added UEFA Europa League (SGO UEFA_EUROPA_LEAGUE) to SGO_LEAGUES + hero carousel soccer group. Odds appear once SGO quota resets.
+- 2026-06: Europa League odds now come FREE from ESPN's public scoreboard (DraftKings lines: 3-way ML, spread, total; no props). meta 'espn': 'soccer/uefa.europa' → _refresh_espn_league (default + next 10 days, dedupe, TTL 15m/5m live). Event ids 'espn-<id>'; settlement/live tracker via _espn_results (ESPN summary endpoint) inside _fetch_sgo_results. Tested: bet placement + /bets/live.
