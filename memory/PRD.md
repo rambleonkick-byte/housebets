@@ -291,3 +291,8 @@
 - Download links with attachment header: GET /api/marketing/welcome10.png and /api/marketing/ad.mp4 (MARKETING_FILES whitelist, files in backend/assets).
 - NOTE: promo code WELCOME10 must be created in the LIVE admin panel (Free bet, $10).
 - PENDING: user asked for admin@apexodds.io inbox in admin panel — awaiting answers (domain ownership/DNS, provider Resend inbound vs SendGrid vs Cloudflare, read/reply).
+
+## 2026-06 — Odds stale: SGO monthly allowance exhausted
+- Root cause: SGO Rookie plan monthly entity limit hit (100,116/100,000) → all refreshes 429. User chose to wait for monthly reset.
+- Hide stale games: _drop_stale() removes events still 'pre' 15+ min after start or any event 6h+ past start.
+- Data saving: adaptive league TTL (_league_ttl: live 5m, starting <3h 15m, quiet 45m); 429 backs off 15 min; settlement sweep every 10 min; results cache 90s and pre-game events not re-fetched until start; live tracker polls every 60s.

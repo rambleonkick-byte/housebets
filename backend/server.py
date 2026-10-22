@@ -578,7 +578,42 @@ _SGO_REFRESHING = set()
 ODDS_CACHE_VERSION = 3  # bump when the odds data shape changes so old saved copies are ignored after a deploy
 
 
+def _drop_stale(events):
+    """Hide games that should have started hours ago but the feed never moved past 'pre' (stale cache)."""
+    now = datetime.now(timezone.utc)
+    out = []
+    for e in events or []:
+        try:
+            st = datetime.fromisoformat(str(e.get("start")).replace("Z", "+00:00"))
+        except Exception:
+            out.append(e)
+            continue
+        hrs = (now - st).total_seconds() / 3600
+        if (e.get("state") == "pre" and hrs > 0.25) or hrs > 6:
+            continue
+        out.append(e)
+    return out
+
+
+def _league_ttl(events):
+    """Refresh busy leagues often and quiet ones rarely to stay inside the SGO monthly allowance."""
+    if any(e.get("state") == "in" for e in events):
+        return 300
+    now = datetime.now(timezone.utc)
+    for e in events:
+        try:
+            if (datetime.fromisoformat(str(e.get("start")).replace("Z", "+00:00")) - now).total_seconds() < 3 * 3600:
+                return 900
+        except Exception:
+            pass
+    return 2700
+
+
 async def fetch_sgo_league(meta, max_age=None):
+    return _drop_stale(await _fetch_sgo_league_raw(meta, max_age))
+
+
+async def _fetch_sgo_league_raw(meta, max_age=None):
     """Stale-while-revalidate: return last odds instantly, refresh in the background once expired."""
     if not SGO_KEY:
         return []
@@ -620,7 +655,7 @@ async def _do_refresh_sgo_league(meta):
             r = await hc.get(f"{SGO_API}/events", params=params)
         if r.status_code != 200:
             logger.warning(f"SGO {key} -> {r.status_code}")
-            _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": 30, "data": prev}
+            _SGO_CACHE[key] = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": 900 if r.status_code == 429 else 60, "data": prev}
             return prev
         for ev in (r.json().get("data") or [])[:15]:
             teams = ev.get("teams") or {}
@@ -656,6 +691,8 @@ async def _do_refresh_sgo_league(meta):
         await _enrich_ufc(events)
         if not any(e.get("card_name") for e in events):
             ttl = 60
+    else:
+        ttl = _league_ttl(events)
     entry = {"ts": datetime.now(timezone.utc).timestamp(), "ttl": ttl, "data": events, "v": ODDS_CACHE_VERSION}
     _SGO_CACHE[key] = entry
     try:
@@ -1773,7 +1810,8 @@ async def _fetch_sgo_results(ids):
     out, need = {}, []
     for i in set(ids):
         c = _RESULTS_CACHE.get(i)
-        if c and (c[1]["state"] == "post" or now - c[0] < 30):
+        if c and (c[1]["state"] == "post" or now - c[0] < 90 or
+                  (c[1]["state"] == "pre" and _hours_since(c[1].get("start") or "") < -0.1)):
             out[i] = c[1]
         elif now - _RESULTS_MISS.get(i, 0) < 600:
             continue
@@ -1821,7 +1859,7 @@ async def _settle_loop():
             await settle_all_open_bets()
         except Exception as e:
             logger.warning(f"settlement sweep failed: {e}")
-        await asyncio.sleep(180)
+        await asyncio.sleep(600)
 
 
 async def _settle_bets(open_bets):

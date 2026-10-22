@@ -32,7 +32,7 @@ export const AdminBetReview = () => {
           <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Check results now
         </button>
       </div>
-      {data && !data.bets.length && <p className="p-4 text-sm text-zinc-500" data-testid="admin-review-empty">No stuck bets. Open bets settle automatically every 3 minutes.</p>}
+      {data && !data.bets.length && <p className="p-4 text-sm text-zinc-500" data-testid="admin-review-empty">No stuck bets. Open bets settle automatically every 10 minutes.</p>}
       <ul className="divide-y divide-[#1E2234]">
         {data?.bets.map((b) => (
           <li key={b.id} className="p-4 text-sm flex flex-wrap justify-between gap-2" data-testid={`admin-review-bet-${b.id}`}>

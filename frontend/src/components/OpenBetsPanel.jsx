@@ -27,7 +27,7 @@ export function useOpenBets() {
     if (!has) return;
     const load = () => api.get("/bets/live").then(({ data }) => setLive(data.live)).catch(() => {});
     load();
-    const t = setInterval(load, 20000);
+    const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, [has, idsKey]);
   useEffect(() => {
