@@ -300,3 +300,9 @@
 ## 2026-06 — Beta max win $750
 - BETA_MAX_PROFIT = 750 (server.py). Sports: place_bet blocks when potential - stake > $750 (message gives max stake). Bet slip shows red warning with max stake.
 - Casino: Limbo & Dice blocked up front if stake*(mult-1) > $750; Plinko, Keno, Mines (cash-out value + cashout), Blackjack payouts capped at stake + $750 (_cap).
+
+## 2026-06 — Admin limit control, per-player limits, bulk delete
+- Global max win stored in settings {_id:"max_win", enabled, amount} (default on, $750), 15s cache; Admin card "Max win per bet (all players)" with ON/OFF + amount. GET/PUT /api/admin/limits.
+- Per-player override users.max_win (number; 0 = no limit; unset = global) set in drawer (Set / No limit / Default). PUT /api/admin/users/{uid}/max-win. Effective limit via _max_profit(uid); GET /api/limits/me used by bet slip warning.
+- Bulk delete: checkboxes + select-all on players table, "Delete N selected" → POST /api/admin/users/bulk-delete {ids} (admins skipped), shared _purge_user.
+- Tested: backend pytest backend/tests/test_max_win_limits.py 11/11; UI flows verified via Playwright screenshot run.

@@ -131,7 +131,7 @@ export function BetSlip() {
   useEffect(() => {
     if (!user || !items.length) return;
     api.get("/limits/me").then(({ data }) => setMaxWin(data.max_win)).catch(() => {});
-  }, [user, items.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, items.length]);
   const [freeBet, setFreeBet] = useState(null);
   useEffect(() => {
     if (!user || !items.length) return;
