@@ -45,7 +45,7 @@ export function Dice() {
   const closeWin = useCallback(() => setWin(null), []);
 
   const chance = direction === "over" ? 100 - target : target;
-  const mult = chance > 0 ? (0.99 * 100) / chance : 0;
+  const mult = chance > 0 ? (0.1 * 100) / chance : 0;
 
   const play = async () => {
     setWin(null);

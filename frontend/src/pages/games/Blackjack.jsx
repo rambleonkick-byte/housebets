@@ -8,9 +8,9 @@ import { sfx } from "@/lib/sfx";
 import { toast } from "sonner";
 
 const SIDES = [
-  { key: "side_pp", res: "pp", label: "Perfect Pairs", pays: "Up to 25:1" },
-  { key: "side_213", res: "t213", label: "21+3", pays: "Up to 100:1" },
-  { key: "side_bust", res: "bust", label: "Bust It", pays: "Up to 250:1" },
+  { key: "side_pp", res: "pp", label: "Perfect Pairs", pays: "Up to 2.6x" },
+  { key: "side_213", res: "t213", label: "21+3", pays: "Up to 10.1x" },
+  { key: "side_bust", res: "bust", label: "Bust It", pays: "Up to 25.1x" },
 ];
 const RESULT_TONE = { win: "bg-emerald-500 text-black", blackjack: "bg-amber-400 text-black", push: "bg-slate-300 text-black", lose: "bg-red-500 text-white", bust: "bg-red-500 text-white" };
 const label = (s) => s?.replace(/_/g, " ");
@@ -53,8 +53,8 @@ function Felt({ game, coin }) {
             <div className="w-9 h-9 rounded-xl border-2 border-emerald-100 flex items-center justify-center"><Zap size={18} className="text-emerald-100" fill="currentColor" /></div>
             <span className="font-display text-3xl font-black tracking-tight text-emerald-50">APEX<span className="text-emerald-300">ODDS</span></span>
           </div>
-          <p className="mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.3em] text-amber-200/50">Blackjack pays 3 to 2</p>
-          <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.25em] text-emerald-100/35">Dealer stands on all 17s · Insurance pays 2 to 1</p>
+          <p className="mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.3em] text-amber-200/50">Blackjack pays 0.25x · Win pays 0.2x</p>
+          <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.25em] text-emerald-100/35">Dealer stands on all 17s · Push returns 0.1x · Insurance pays 0.3x</p>
         </div>
         <div className="flex justify-center gap-6 flex-wrap">
           {(game?.hands || [{ cards: [] }]).map((h, i) => (

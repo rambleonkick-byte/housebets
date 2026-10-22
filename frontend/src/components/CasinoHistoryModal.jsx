@@ -66,7 +66,7 @@ export function CasinoHistoryModal({ open, onClose }) {
     const hashOk = (await sha256Hex(ss)) === gme.server_seed_hash;
     const res = await verifyGame(gme.game, ss, gme.client_seed, gme.nonce, gme.detail);
     setVerifs((v) => ({ ...v, [gme.id]: { ...res, hashOk } }));
-    if (hashOk && res.matches) toast.success("Verified — result is provably fair ✓");
+    if (hashOk && res.matches) toast.success("Verified — result matches the seeds ✓");
     else toast.error("Verification mismatch!");
   };
 

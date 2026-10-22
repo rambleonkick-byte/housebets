@@ -1,7 +1,7 @@
 // Independent, in-browser provably-fair verification using Web Crypto.
 // Mirrors the backend RNG exactly: result float = first 8 hex of
 // HMAC_SHA256(server_seed, `${client_seed}:${nonce}:${cursor}`) / 2^32.
-const EDGE = 0.99;
+const EDGE = 0.1;
 const enc = new TextEncoder();
 
 function toHex(buf) {

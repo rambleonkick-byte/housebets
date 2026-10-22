@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ShieldCheck, Volume2, VolumeX } from "lucide-react";
+import { Loader2, Volume2, VolumeX } from "lucide-react";
 import { sfx } from "@/lib/sfx";
 import { COIN_META } from "@/lib/api";
 import { fmtCrypto, fmtAmt } from "@/lib/format";
@@ -150,9 +150,6 @@ export function GameLayout({ title, tag, controls, children, footer, win, onWinC
           <h1 className="font-display text-3xl sm:text-4xl font-black tracking-tight text-white">{title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <span className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-3 py-1">
-            <ShieldCheck size={13} /> Provably fair
-          </span>
           <MuteToggle />
         </div>
       </div>
