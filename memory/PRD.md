@@ -309,3 +309,4 @@
 
 - 2026-06: Casino hold change to 90% was requested then cancelled — reverted to original 1% edge and provably-fair wording.
 - 2026-06: Small 'BETA' tag added under the APEX ODDS logo in the header (data-testid brand-beta-tag).
+- 2026-06: Added UEFA Europa League (SGO UEFA_EUROPA_LEAGUE) to SGO_LEAGUES + hero carousel soccer group. Odds appear once SGO quota resets.

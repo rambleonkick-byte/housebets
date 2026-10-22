@@ -16,7 +16,7 @@ const FEATURED = [
   { key: "NFL", label: "NFL", leagues: ["NFL", "NCAAF"] },
   { key: "NBA", label: "NBA", leagues: ["NBA", "NCAAB"] },
   { key: "UFC", label: "UFC", leagues: ["UFC"] },
-  { key: "SOCCER", label: "Football", leagues: ["EPL", "UEFA_CHAMPIONS_LEAGUE", "LA_LIGA", "BUNDESLIGA", "IT_SERIE_A", "FR_LIGUE_1", "MLS"] },
+  { key: "SOCCER", label: "Football", leagues: ["EPL", "UEFA_CHAMPIONS_LEAGUE", "UEFA_EUROPA_LEAGUE", "LA_LIGA", "BUNDESLIGA", "IT_SERIE_A", "FR_LIGUE_1", "MLS"] },
 ];
 const DURATION = 6500;
 

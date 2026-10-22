@@ -257,6 +257,7 @@ SGO_LEAGUES = [
     {"id": "EPL", "group": "soccer", "label": "Premier League", "draw": True},
     {"id": "LA_LIGA", "group": "soccer", "label": "La Liga", "draw": True},
     {"id": "UEFA_CHAMPIONS_LEAGUE", "group": "soccer", "label": "Champions League", "draw": True},
+    {"id": "UEFA_EUROPA_LEAGUE", "group": "soccer", "label": "Europa League", "draw": True},
     {"id": "BUNDESLIGA", "group": "soccer", "label": "Bundesliga", "draw": True},
     {"id": "IT_SERIE_A", "group": "soccer", "label": "Serie A", "draw": True},
     {"id": "FR_LIGUE_1", "group": "soccer", "label": "Ligue 1", "draw": True},
