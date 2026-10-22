@@ -1170,6 +1170,42 @@ async def send_withdrawal_alert(wid: str):
         logger.warning(f"Withdrawal alert email failed: {e}")
 
 
+class VaultInput(BaseModel):
+    amount: float = Field(gt=0, allow_inf_nan=False)
+
+
+async def _vault_state(uid):
+    w = await db.wallets.find_one({"user_id": uid}, {"_id": 0, "balances": 1, "vault": 1})
+    return {"vault": round(w.get("vault", 0.0), 2), "balances": w["balances"]}
+
+
+@api_router.get("/vault")
+async def get_vault(user: dict = Depends(get_current_user)):
+    await ensure_wallet(user["id"])
+    return await _vault_state(user["id"])
+
+
+@api_router.post("/vault/{direction}")
+async def move_vault(direction: str, body: VaultInput, user: dict = Depends(get_current_user)):
+    if direction not in ("deposit", "withdraw"):
+        raise HTTPException(status_code=404, detail="Not found")
+    await ensure_wallet(user["id"])
+    amt = round(body.amount, 2)
+    if amt < 0.01:
+        raise HTTPException(status_code=400, detail="Minimum is $0.01")
+    if direction == "deposit":
+        flt, inc, label = {"balances.USD": {"$gte": amt}}, {"balances.USD": -amt, "vault": amt}, "Moved to vault"
+    else:
+        flt, inc, label = {"vault": {"$gte": amt}}, {"balances.USD": amt, "vault": -amt}, "Moved from vault"
+    res = await db.wallets.update_one({"user_id": user["id"], **flt}, {"$inc": inc})
+    if not res.modified_count:
+        raise HTTPException(status_code=400, detail="Not enough in your " + ("balance" if direction == "deposit" else "vault"))
+    await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"], "type": f"vault_{direction}",
+                                      "label": label, "coin": "USD", "amount": amt, "created_at": now_iso(),
+                                      "hash": "vault:" + uuid.uuid4().hex[:16]})
+    return await _vault_state(user["id"])
+
+
 @api_router.post("/wallet/withdraw")
 async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
     await ensure_wallet(user["id"])

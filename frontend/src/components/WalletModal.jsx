@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Copy, ExternalLink, ShieldCheck, AlertTriangle } from "lucide-react";
+import { X, ArrowDownToLine, ArrowUpFromLine, Loader2, Copy, ExternalLink, ShieldCheck, AlertTriangle, Lock } from "lucide-react";
+import { VaultPanel } from "@/components/VaultPanel";
 import { api, formatApiErrorDetail, COIN_META, COIN_NETWORK, explorerUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { fmtCrypto, fmtAmt, usdValue } from "@/lib/format";
@@ -133,26 +134,27 @@ export function WalletModal({ open, onClose }) {
 
               <div className="px-4">
                 <div className="flex gap-1 bg-[#0E1017] p-1 rounded-lg">
-                  {["deposit", "withdraw"].map((t) => (
+                  {["deposit", "withdraw", "vault"].map((t) => (
                     <button key={t} data-testid={`wallet-tab-${t}`} onClick={() => setTab(t)}
                       className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-2 rounded-md capitalize transition-colors ${
                         tab === t ? "bg-emerald-500 text-black" : "text-zinc-400"
                       }`}>
-                      {t === "deposit" ? <ArrowDownToLine size={15} /> : <ArrowUpFromLine size={15} />}{t}
+                      {t === "deposit" ? <ArrowDownToLine size={15} /> : t === "vault" ? <Lock size={15} /> : <ArrowUpFromLine size={15} />}{t}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="p-4 space-y-3">
-                <div className="flex gap-1.5">
+                {tab === "vault" && <VaultPanel onMoved={load} />}
+                {tab !== "vault" && <div className="flex gap-1.5">
                   {COINS.map((c) => (
                     <button key={c} data-testid={`wallet-coin-${c}`} onClick={() => setCoin(c)}
                       className={`flex-1 text-xs font-mono font-semibold py-2 rounded-md border transition-colors ${
                         coin === c ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#2A2F45] text-zinc-400"
                       }`}>{c}</button>
                   ))}
-                </div>
+                </div>}
 
                 {tab === "deposit" && !deposit && (
                   <div className="flex items-center justify-center gap-2 text-sm text-zinc-400 py-10" data-testid="deposit-loading">
@@ -235,7 +237,7 @@ export function WalletModal({ open, onClose }) {
                   <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-600 mb-2">Recent activity</p>
                   <div className="space-y-1.5" data-testid="wallet-transactions">
                     {wallet.transactions.slice(0, 8).map((t) => {
-                      const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund" || t.type === "cashout" || t.type === "affiliate" || t.type === "lossback" || t.type === "bonus" || (t.type === "adjustment" && t.amount > 0);
+                      const positive = t.type === "payout" || t.type === "deposit" || t.type === "refund" || t.type === "cashout" || t.type === "affiliate" || t.type === "lossback" || t.type === "bonus" || t.type === "vault_withdraw" || (t.type === "adjustment" && t.amount > 0);
                       const neutral = t.type === "free_bet";
                       const po = t.payout;
                       const hash = po?.tx_hash;
