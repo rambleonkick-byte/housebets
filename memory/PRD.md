@@ -296,3 +296,7 @@
 - Root cause: SGO Rookie plan monthly entity limit hit (100,116/100,000) → all refreshes 429. User chose to wait for monthly reset.
 - Hide stale games: _drop_stale() removes events still 'pre' 15+ min after start or any event 6h+ past start.
 - Data saving: adaptive league TTL (_league_ttl: live 5m, starting <3h 15m, quiet 45m); 429 backs off 15 min; settlement sweep every 10 min; results cache 90s and pre-game events not re-fetched until start; live tracker polls every 60s.
+
+## 2026-06 — Beta max win $750
+- BETA_MAX_PROFIT = 750 (server.py). Sports: place_bet blocks when potential - stake > $750 (message gives max stake). Bet slip shows red warning with max stake.
+- Casino: Limbo & Dice blocked up front if stake*(mult-1) > $750; Plinko, Keno, Mines (cash-out value + cashout), Blackjack payouts capped at stake + $750 (_cap).

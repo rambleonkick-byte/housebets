@@ -148,6 +148,9 @@ export function BetSlip() {
   const singlePayout = useMemo(() => items.reduce((sum, s) => sum + stakeNum * s.odds, 0), [items, stakeNum]);
   const payout = (isParlay ? stakeNum * parlayOdds : singlePayout) - (freeBet ? stakeNum : 0);
   const totalStake = isParlay ? stakeNum : stakeNum * items.length;
+  const topOdds = isParlay ? parlayOdds : Math.max(1.0001, ...items.map((s) => Number(s.odds) || 1));
+  const maxStake = Math.floor((750 / (topOdds - 1)) * 100) / 100;
+  const overLimit = stakeNum > 0 && stakeNum * (topOdds - 1) > 750;
   const bal = user?.balances?.[coin] ?? 0;
 
   const oddsLabel = boost ? boost.label : isParlay ? "Combined odds" : "Single bets";
@@ -355,6 +358,11 @@ export function BetSlip() {
           {pendingChanges && (
             <p data-testid="bet-slip-odds-changed-note" className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
               Odds have changed on your slip. Review the highlighted picks and accept to continue.
+            </p>
+          )}
+          {overLimit && (
+            <p data-testid="bet-slip-max-win-note" className="text-[11px] text-red-300 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
+              Beta limit: max win per bet is $750. Lower your stake to {fmtAmt(maxStake, coin)} or less.
             </p>
           )}
           <button data-testid="bet-slip-place-button" onClick={pendingChanges ? acceptChanges : place} disabled={loading}

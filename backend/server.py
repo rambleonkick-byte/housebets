@@ -1693,6 +1693,8 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
     if boost:
         total_odds = _boost_price([s.model_dump() for s in body.selections], boost["pct"])[1]
     potential = round(body.stake * total_odds, 6)
+    if potential - body.stake > BETA_MAX_PROFIT + 1e-6:
+        raise HTTPException(status_code=400, detail=f"Beta limit: max win per bet is ${BETA_MAX_PROFIT:,.0f}. Max stake at these odds is ${BETA_MAX_PROFIT / (total_odds - 1):,.2f}")
 
     if body.free_bet_id:
         fb = await db.free_bets.find_one({"id": body.free_bet_id, "user_id": user["id"], "status": "available"})
@@ -2194,6 +2196,18 @@ async def _balances(user_id):
     return w["balances"]
 
 
+BETA_MAX_PROFIT = 750.0  # beta mode: max profit on any single bet or casino round
+
+
+def _cap(stake, payout):
+    return min(payout, round(stake + BETA_MAX_PROFIT, 6))
+
+
+def _check_max_win(stake, mult):
+    if stake * (mult - 1) > BETA_MAX_PROFIT + 1e-6:
+        raise HTTPException(status_code=400, detail=f"Beta limit: max win is ${BETA_MAX_PROFIT:,.0f}. Max stake at {mult:g}x is ${BETA_MAX_PROFIT / (mult - 1):,.2f}")
+
+
 async def _record_game(user_id, game, coin, stake, multiplier, payout, won, detail, fair=None):
     doc = {
         "id": str(uuid.uuid4()), "user_id": user_id, "game": game, "coin": coin,
@@ -2264,6 +2278,7 @@ def fair_meta(ss, cs, nonce):
 async def play_limbo(body: LimboInput, user: dict = Depends(get_current_user)):
     if body.target < 1.01 or body.target > 1000000:
         raise HTTPException(status_code=400, detail="Target must be between 1.01 and 1,000,000")
+    _check_max_win(body.stake, body.target)
     await _check_funds(user["id"], body.coin, body.stake)
     await _adjust(user["id"], body.coin, -body.stake)
     ss, cs, nonce = await next_fair(user["id"])
@@ -2290,7 +2305,7 @@ async def play_plinko(body: PlinkoInput, user: dict = Depends(get_current_user))
     path = [rfloat(ss, cs, nonce, i) < 0.5 for i in range(body.rows)]  # True=right
     bucket = sum(1 for p in path if p)
     mult = PLINKO_MULT[body.rows][body.risk][bucket]
-    payout = round(body.stake * mult, 6)
+    payout = _cap(body.stake, round(body.stake * mult, 6))
     await _adjust(user["id"], body.coin, payout)
     fair = fair_meta(ss, cs, nonce)
     await _record_game(user["id"], "plinko", body.coin, body.stake, mult, payout, mult >= 1,
@@ -2310,7 +2325,7 @@ async def play_keno(body: KenoInput, user: dict = Depends(get_current_user)):
     drawn = pick_distinct(range(1, 41), 10, ss, cs, nonce)
     hits = len([n for n in picks if n in drawn])
     mult = KENO_TABLE[len(picks)][hits]
-    payout = round(body.stake * mult, 6)
+    payout = _cap(body.stake, round(body.stake * mult, 6))
     if payout > 0:
         await _adjust(user["id"], body.coin, payout)
     fair = fair_meta(ss, cs, nonce)
@@ -2371,7 +2386,7 @@ async def mines_reveal(body: MinesActionInput, user: dict = Depends(get_current_
     mult = mines_multiplier(g["mine_count"], len(revealed))
     next_mult = mines_multiplier(g["mine_count"], len(revealed) + 1)
     return {"hit": False, "revealed": revealed, "multiplier": mult, "next_multiplier": next_mult,
-            "cashout_value": round(g["stake"] * mult, 6), "done": False}
+            "cashout_value": _cap(g["stake"], round(g["stake"] * mult, 6)), "done": False}
 
 
 @api_router.post("/casino/mines/cashout")
@@ -2382,7 +2397,7 @@ async def mines_cashout(body: MinesActionInput, user: dict = Depends(get_current
     if not g["revealed"]:
         raise HTTPException(status_code=400, detail="Reveal at least one tile first")
     mult = mines_multiplier(g["mine_count"], len(g["revealed"]))
-    payout = round(g["stake"] * mult, 6)
+    payout = _cap(g["stake"], round(g["stake"] * mult, 6))
     await _adjust(user["id"], g["coin"], payout)
     await db.mine_games.update_one({"id": g["id"]}, {"$set": {"status": "won"}})
     await _record_game(user["id"], "mines", g["coin"], g["stake"], mult, payout, True,
@@ -2543,7 +2558,7 @@ async def _bj_finish(g):
 
 async def _bj_settle(g):
     """Credit and record a finished hand; call only after the hand state is durably saved."""
-    d, payout = g["dealer"], g["total_payout"]
+    d, payout = g["dealer"], _cap(g["total_stake"], g["total_payout"])
     if payout > 0:
         await _adjust(g["user_id"], g["coin"], payout)
     mult = payout / g["total_stake"] if g["total_stake"] else 0
@@ -2709,6 +2724,8 @@ async def play_dice(body: DiceInput, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid direction")
     if not (0.01 <= body.target <= 99.99):
         raise HTTPException(status_code=400, detail="Target must be between 0.01 and 99.99")
+    chance0 = 100 - body.target if body.direction == "over" else body.target
+    _check_max_win(body.stake, round(EDGE * 100 / chance0, 4))
     await _check_funds(user["id"], body.coin, body.stake)
     await _adjust(user["id"], body.coin, -body.stake)
     ss, cs, nonce = await next_fair(user["id"])
@@ -2720,7 +2737,7 @@ async def play_dice(body: DiceInput, user: dict = Depends(get_current_user)):
         won = roll < body.target
         chance = body.target
     mult = round(EDGE * 100 / chance, 4) if chance > 0 else 0.0
-    payout = round(body.stake * mult, 6) if won else 0.0
+    payout = _cap(body.stake, round(body.stake * mult, 6)) if won else 0.0
     if won:
         await _adjust(user["id"], body.coin, payout)
     fair = fair_meta(ss, cs, nonce)
