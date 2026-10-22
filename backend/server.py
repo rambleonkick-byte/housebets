@@ -2154,6 +2154,9 @@ async def _finalize_bet(b, outcome, payout, graded_by=None):
                                           "type": "refund" if outcome == "void" else "payout", "coin": b["coin"],
                                           "amount": payout, "created_at": now_iso(),
                                           "hash": "0x" + uuid.uuid4().hex[:24]})
+    if outcome == "won":
+        profit = payout if b.get("free_bet") else payout - b["stake"]
+        asyncio.create_task(big_win_alert(user_id, profit, f"a sportsbook bet (${b['stake']:,.2f} stake)"))
     return True
 
 
@@ -2469,6 +2472,8 @@ async def _record_game(user_id, game, coin, stake, multiplier, payout, won, deta
     if fair:
         doc.update(fair)
     await db.casino_games.insert_one(doc)
+    if payout - stake > 0:
+        asyncio.create_task(big_win_alert(user_id, payout - stake, f"{game.title()} (casino, ${stake:,.2f} stake)"))
     await _accrue_player(user_id)
     await _check_vip(user_id)
 
@@ -3468,6 +3473,32 @@ async def admin_set_limits(body: LimitSettingsInput, admin: dict = Depends(get_a
     await db.admin_actions.insert_one({"id": str(uuid.uuid4()), "user_id": "global", "admin": admin["email"], "action": "limit",
                                        "reason": f"Global max win {'on' if body.enabled else 'off'} ${body.amount:,.2f}", "created_at": now_iso()})
     return await _limit_settings()
+
+
+async def _big_win_settings():
+    d = await db.settings.find_one({"_id": "big_win"}) or {}
+    return {"enabled": d.get("enabled", True), "amount": d.get("amount", 500.0)}
+
+
+async def big_win_alert(user_id, profit, what):
+    try:
+        st = await _big_win_settings()
+        if st["enabled"] and profit >= st["amount"]:
+            await tg_notify(f"🚨 Big win: {await _user_email(user_id)} won ${profit:,.2f} profit on {what}")
+            logger.info(f"Big win alert sent: {user_id} ${profit:,.2f}")
+    except Exception as e:
+        logger.warning(f"Big win alert error: {e}")
+
+
+@api_router.get("/admin/big-win")
+async def admin_big_win(admin: dict = Depends(get_admin_user)):
+    return await _big_win_settings()
+
+
+@api_router.put("/admin/big-win")
+async def admin_set_big_win(body: LimitSettingsInput, admin: dict = Depends(get_admin_user)):
+    await db.settings.update_one({"_id": "big_win"}, {"$set": {"enabled": body.enabled, "amount": round(body.amount, 2)}}, upsert=True)
+    return await _big_win_settings()
 
 
 @api_router.put("/admin/users/{uid}/max-win")

@@ -316,3 +316,4 @@
 - Rebranded bookmaker labels: match cards show "Live Odds · ApexOdds", sidebar says "Live odds from ApexOdds".
 - Telegram phone alerts (bot @Apex_odds_bot, TELEGRAM_BOT_TOKEN): pings on new ticket, ticket reply, withdrawal request, deposit. Chat id auto-saved in admin_settings{key:telegram} after admin sends /start; Admin > "Connect / test phone alerts" button (POST /api/admin/telegram/test).
 - Telegram swipe-reply: ticket pings stored in db.tg_msgs; _tg_poll_loop (getUpdates, live site only — skipped when FRONTEND_URL has .preview.) posts replies to the ticket as admin and links chat on /start.
+- Big win alerts: db.settings{_id:big_win} (default ON, $500 profit). Telegram ping from _record_game (casino) and _finalize_bet (won sportsbook bets). Admin UI AdminBigWin card; GET/PUT /api/admin/big-win.

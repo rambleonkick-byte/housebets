@@ -9,7 +9,7 @@ import { AdminBetReview } from "@/components/AdminBetReview";
 import { AdminTickets } from "@/components/AdminTickets";
 import { AdminPromos } from "@/components/AdminPromos";
 import { AdminUserBets } from "@/components/AdminUserBets";
-import { AdminGlobalLimit, PlayerLimitForm } from "@/components/AdminLimits";
+import { AdminBigWin, AdminGlobalLimit, PlayerLimitForm } from "@/components/AdminLimits";
 
 const COINS = ["USD"];
 const PAGE = 50;
@@ -252,6 +252,7 @@ export default function AdminPanel({ onWithdrawals }) {
       </div>
       {open && <UserDrawer u={open} rates={rates} onClose={() => setOpenId(null)} onChanged={load} />}
       <AdminGlobalLimit />
+      <AdminBigWin />
       <AdminPromos />
       <AdminTickets />
       <AdminBetReview />

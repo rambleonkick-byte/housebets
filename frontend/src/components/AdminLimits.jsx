@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Gauge, Loader2 } from "lucide-react";
+import { BellRing, Gauge, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 
@@ -37,6 +37,33 @@ export function AdminGlobalLimit() {
         className="text-xs font-bold px-3 py-2 rounded-lg border border-sky-500/50 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20">
         Connect / test phone alerts
       </button>
+    </div>
+  );
+}
+
+export function AdminBigWin() {
+  const [s, setS] = useState(null);
+  useEffect(() => { api.get("/admin/big-win").then(({ data }) => setS({ ...data, amount: String(data.amount) })); }, []);
+  const save = async (next) => {
+    try {
+      const { data } = await api.put("/admin/big-win", { enabled: next.enabled, amount: +next.amount });
+      setS({ ...data, amount: String(data.amount) });
+      toast.success(data.enabled ? `Big win alerts at $${data.amount}+` : "Big win alerts off");
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+  };
+  if (!s) return null;
+  return (
+    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-big-win">
+      <p className="flex items-center gap-2 font-bold mr-auto"><BellRing size={16} className="text-sky-300" /> Big win phone alert (profit per bet or game)</p>
+      <button data-testid="admin-big-win-toggle" onClick={() => save({ ...s, enabled: !s.enabled })}
+        className={`text-xs font-bold px-3 py-2 rounded-lg border ${s.enabled ? "border-emerald-500/50 text-emerald-300 bg-emerald-500/10" : "border-zinc-600 text-zinc-400"}`}>
+        {s.enabled ? "ON" : "OFF"}
+      </button>
+      <span className="text-zinc-500 text-sm">$</span>
+      <input data-testid="admin-big-win-amount" type="number" min="1" value={s.amount} disabled={!s.enabled}
+        onChange={(e) => setS({ ...s, amount: e.target.value })} className={`${inp} w-28 disabled:opacity-40`} />
+      <button data-testid="admin-big-win-save" disabled={!s.enabled || !(+s.amount > 0)} onClick={() => save(s)}
+        className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm px-4 py-2 rounded-lg disabled:opacity-40">Save</button>
     </div>
   );
 }
