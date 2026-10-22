@@ -3435,7 +3435,8 @@ async def admin_users(q: Optional[str] = None, skip: int = 0, limit: int = 50, a
     total = await db.users.count_documents(flt)
     users = await db.users.find(flt, {"password_hash": 0}).sort("created_at", -1).skip(max(0, skip)).limit(min(limit, 200)).to_list(200)
     ids = [str(u["_id"]) for u in users]
-    wallets = {w["user_id"]: w.get("balances", {}) async for w in db.wallets.find({"user_id": {"$in": ids}})}
+    wdocs = {w["user_id"]: w async for w in db.wallets.find({"user_id": {"$in": ids}})}
+    wallets = {k: w.get("balances", {}) for k, w in wdocs.items()}
     dep, wd, wag = await _money_flow(ids)
     ref_ids = list({u["referred_by"] for u in users if u.get("referred_by")})
     refs = {str(r["_id"]): r.get("name") or r["email"] async for r in db.users.find(
@@ -3444,6 +3445,7 @@ async def admin_users(q: Optional[str] = None, skip: int = 0, limit: int = 50, a
     rows = [{"id": uid, "name": u.get("name"), "email": u["email"], "role": u.get("role", "user"),
              "created_at": u.get("created_at"), "blocked": bool(u.get("blocked")), "max_win": u.get("max_win"),
              "referred_by": refs.get(u.get("referred_by")), "balances": wallets.get(uid, {}),
+             "vault": round(wdocs.get(uid, {}).get("vault", 0.0), 2),
              "deposits": dep.get(uid, {}), "withdrawals": wd.get(uid, {}), "wagered": wag.get(uid, {})}
             for u, uid in zip(users, ids)]
     return {"users": rows, "total": total,

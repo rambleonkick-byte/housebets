@@ -107,6 +107,7 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
         </div>
         <div>
           <Row label="Balance" v={u.balances} testid="admin-drawer-balance" />
+          <Row label="Vault" v={{ USD: u.vault || 0 }} testid="admin-drawer-vault" />
           <Row label="Deposited" v={u.deposits} testid="admin-drawer-deposits" />
           <Row label="Withdrawn" v={u.withdrawals} testid="admin-drawer-withdrawals" />
           <Row label="Wagered" v={u.wagered} testid="admin-drawer-wagered" />
@@ -228,7 +229,7 @@ export default function AdminPanel({ onWithdrawals }) {
                     <p className="text-xs text-zinc-500">{u.email}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap">{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</td>
-                  <td className="px-4 py-3"><p className="font-mono text-xs font-bold text-white">{fmtUsd(usdValue(u.balances, rates))}</p><Coins v={u.balances} /></td>
+                  <td className="px-4 py-3"><p className="font-mono text-xs font-bold text-white">{fmtUsd(usdValue(u.balances, rates))}</p><Coins v={u.balances} />{u.vault > 0 && <p data-testid={`admin-user-vault-${u.id}`} className="font-mono text-[10px] text-amber-300 mt-0.5">+ {fmtUsd(u.vault)} in vault</p>}</td>
                   <td className="px-4 py-3 font-mono text-xs">{fmtUsd(usdValue(u.deposits, rates))}</td>
                   <td className="px-4 py-3 font-mono text-xs">{fmtUsd(usdValue(u.withdrawals, rates))}</td>
                   <td className="px-4 py-3 font-mono text-xs">{fmtUsd(usdValue(u.wagered, rates))}</td>
