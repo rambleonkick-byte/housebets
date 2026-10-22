@@ -33,9 +33,18 @@ export function AdminGlobalLimit() {
         className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm px-4 py-2 rounded-lg disabled:opacity-40">
         {busy ? <Loader2 size={14} className="animate-spin" /> : "Save"}
       </button>
+      <button data-testid="admin-telegram-test" onClick={pingPhone}
+        className="text-xs font-bold px-3 py-2 rounded-lg border border-sky-500/50 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20">
+        Connect / test phone alerts
+      </button>
     </div>
   );
 }
+
+const pingPhone = async () => {
+  try { await api.post("/admin/telegram/test"); toast.success("Test ping sent to your Telegram"); }
+  catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+};
 
 export function PlayerLimitForm({ u, onDone }) {
   const [v, setV] = useState(u.max_win == null ? "" : String(u.max_win));

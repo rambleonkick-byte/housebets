@@ -314,3 +314,4 @@
 
 ## 2026-06 Update
 - Rebranded bookmaker labels: match cards show "Live Odds · ApexOdds", sidebar says "Live odds from ApexOdds".
+- Telegram phone alerts (bot @Apex_odds_bot, TELEGRAM_BOT_TOKEN): pings on new ticket, ticket reply, withdrawal request, deposit. Chat id auto-saved in admin_settings{key:telegram} after admin sends /start; Admin > "Connect / test phone alerts" button (POST /api/admin/telegram/test).

@@ -1029,6 +1029,63 @@ async def send_email(*, to: str, subject: str, html: str) -> Optional[str]:
     return resp.json().get("id")
 
 
+TG_API = "https://api.telegram.org/bot"
+
+
+async def _tg_chat_id(token: str):
+    s = await db.admin_settings.find_one({"key": "telegram"}) or {}
+    if s.get("chat_id"):
+        return s["chat_id"]
+    async with httpx.AsyncClient(timeout=15) as hc:
+        ups = (await hc.get(f"{TG_API}{token}/getUpdates")).json().get("result", [])
+    chats = [u["message"]["chat"]["id"] for u in ups if u.get("message")]
+    if not chats:
+        return None
+    await db.admin_settings.update_one({"key": "telegram"}, {"$set": {"chat_id": chats[-1]}}, upsert=True)
+    return chats[-1]
+
+
+async def tg_notify(text: str):
+    """Fire-and-forget Telegram ping to the admin's phone."""
+    try:
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        if not token:
+            return
+        chat = await _tg_chat_id(token)
+        if not chat:
+            logger.warning("Telegram: no chat yet — send /start to the bot first")
+            return
+        async with httpx.AsyncClient(timeout=15) as hc:
+            r = await hc.post(f"{TG_API}{token}/sendMessage",
+                              json={"chat_id": chat, "text": text, "disable_web_page_preview": True})
+        if r.status_code >= 400:
+            logger.warning(f"Telegram send failed: {r.status_code} {r.text[:200]}")
+    except Exception as e:
+        logger.warning(f"Telegram notify error: {e}")
+
+
+async def _user_email(uid):
+    u = await db.users.find_one({"id": uid}, {"email": 1})
+    return (u or {}).get("email", uid)
+
+
+async def tg_deposit(uid, usd, coin):
+    await tg_notify(f"💰 New deposit: ${usd:,.2f} ({coin}) from {await _user_email(uid)}")
+
+
+@api_router.post("/admin/telegram/test")
+async def admin_telegram_test(admin: dict = Depends(get_admin_user)):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token:
+        raise HTTPException(status_code=503, detail="Telegram bot not configured")
+    await db.admin_settings.update_one({"key": "telegram"}, {"$unset": {"chat_id": ""}}, upsert=True)
+    chat = await _tg_chat_id(token)
+    if not chat:
+        raise HTTPException(status_code=400, detail="Open your bot in Telegram and send /start first")
+    await tg_notify("✅ ApexOdds alerts are connected. You'll be pinged here for tickets, deposits and withdrawals.")
+    return {"ok": True}
+
+
 async def send_withdrawal_alert(wid: str):
     """Fire-and-forget email to the admin when a withdrawal is awaiting approval."""
     try:
@@ -1103,6 +1160,7 @@ async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
         "coin": "USD", "amount": usd, "crypto_coin": body.coin, "crypto_amount": crypto_amt, "created_at": now_iso(),
         "hash": "withdraw:" + wid})
     asyncio.create_task(send_withdrawal_alert(wid))
+    asyncio.create_task(tg_notify(f"🏧 Withdrawal awaiting approval: ${usd:,.2f} in {body.coin} from {user['email']}\nApprove it in the Admin panel."))
     wallet = await db.wallets.find_one({"user_id": user["id"]}, {"_id": 0})
     return {"balances": wallet["balances"], "withdrawal_id": wid, "status": "pending_approval"}
 
@@ -1132,6 +1190,7 @@ async def _credit_oxa_invoice(track_id, status):
         "coin": "USD", "amount": usd, "crypto_coin": inv["coin"], "crypto_amount": inv["amount"], "created_at": now_iso(),
         "hash": "oxapay:" + str(track_id)})
     await _apply_deposit_match(inv["user_id"], usd)
+    asyncio.create_task(tg_deposit(inv["user_id"], usd, inv["coin"]))
     return True
 
 
@@ -1253,6 +1312,7 @@ async def _credit_static_txs(sa, txs) -> float:
             "coin": "USD", "amount": usd, "crypto_coin": coin, "crypto_amount": amt,
             "created_at": now_iso(), "hash": "oxapay-static:" + h})
         await _apply_deposit_match(sa["user_id"], usd)
+        asyncio.create_task(tg_deposit(sa["user_id"], usd, coin))
         total += amt
     return total
 
@@ -3526,6 +3586,7 @@ async def create_ticket(body: TicketInput, user: dict = Depends(get_current_user
          "created_at": now_iso(), "updated_at": now_iso()}
     await db.tickets.insert_one(dict(t))
     t.pop("_id", None)
+    asyncio.create_task(tg_notify(f"🎫 New support ticket ({body.topic}) from {user.get('email')}:\n{body.message.strip()[:500]}"))
     return t
 
 
@@ -3550,6 +3611,7 @@ async def reply_my_ticket(tid: str, body: TicketMessageInput, user: dict = Depen
     _ticket_rate_check(user["id"])
     await db.tickets.update_one({"id": tid}, {"$push": {"messages": {"from": "user", "text": body.text.strip(), "at": now_iso()}},
                                               "$set": {"admin_unread": True, "status": "open", "updated_at": now_iso()}})
+    asyncio.create_task(tg_notify(f"💬 Ticket reply from {user.get('email')}:\n{body.text.strip()[:500]}"))
     return await _get_ticket(tid, user)
 
 
