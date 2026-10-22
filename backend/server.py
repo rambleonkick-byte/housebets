@@ -71,6 +71,7 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("apexodds")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 STARTING_BALANCES = {"USD": 0.0}
 CRYPTO_COINS = ("BTC", "ETH", "USDT", "SOL")
@@ -1032,36 +1033,81 @@ async def send_email(*, to: str, subject: str, html: str) -> Optional[str]:
 TG_API = "https://api.telegram.org/bot"
 
 
-async def _tg_chat_id(token: str):
+async def _tg_chat_id():
     s = await db.admin_settings.find_one({"key": "telegram"}) or {}
-    if s.get("chat_id"):
-        return s["chat_id"]
-    async with httpx.AsyncClient(timeout=15) as hc:
-        ups = (await hc.get(f"{TG_API}{token}/getUpdates")).json().get("result", [])
-    chats = [u["message"]["chat"]["id"] for u in ups if u.get("message")]
-    if not chats:
-        return None
-    await db.admin_settings.update_one({"key": "telegram"}, {"$set": {"chat_id": chats[-1]}}, upsert=True)
-    return chats[-1]
+    return s.get("chat_id")
 
 
-async def tg_notify(text: str):
-    """Fire-and-forget Telegram ping to the admin's phone."""
+async def tg_notify(text: str, ticket_id: Optional[str] = None):
+    """Fire-and-forget Telegram ping to the admin's phone; ticket pings accept swipe-replies."""
     try:
         token = os.environ.get("TELEGRAM_BOT_TOKEN")
         if not token:
             return
-        chat = await _tg_chat_id(token)
+        chat = await _tg_chat_id()
         if not chat:
-            logger.warning("Telegram: no chat yet — send /start to the bot first")
+            logger.warning("Telegram: no chat linked yet — send /start to the bot")
             return
+        if ticket_id:
+            text += "\n\n↩️ Swipe-reply to this message to answer the player."
         async with httpx.AsyncClient(timeout=15) as hc:
             r = await hc.post(f"{TG_API}{token}/sendMessage",
                               json={"chat_id": chat, "text": text, "disable_web_page_preview": True})
         if r.status_code >= 400:
             logger.warning(f"Telegram send failed: {r.status_code} {r.text[:200]}")
+        elif ticket_id:
+            await db.tg_msgs.insert_one({"message_id": r.json()["result"]["message_id"], "ticket_id": ticket_id,
+                                         "created_at": now_iso()})
     except Exception as e:
         logger.warning(f"Telegram notify error: {e}")
+
+
+async def _tg_handle(msg: dict):
+    chat = msg.get("chat", {}).get("id")
+    text = (msg.get("text") or "").strip()
+    linked = await _tg_chat_id()
+    if not linked:
+        if text.startswith("/start"):
+            await db.admin_settings.update_one({"key": "telegram"}, {"$set": {"chat_id": chat}}, upsert=True)
+            await tg_notify("✅ ApexOdds alerts are connected. You'll be pinged here for tickets, deposits and withdrawals.")
+        return
+    if chat != linked or not text:
+        return
+    ref = (msg.get("reply_to_message") or {}).get("message_id")
+    m = await db.tg_msgs.find_one({"message_id": ref}) if ref else None
+    if not m:
+        if not text.startswith("/"):
+            await tg_notify("To answer a player, swipe-reply to their ticket ping.")
+        return
+    t = await db.tickets.find_one({"id": m["ticket_id"]}, {"_id": 0, "user_email": 1})
+    if not t:
+        await tg_notify("That ticket no longer exists.")
+        return
+    await db.tickets.update_one({"id": m["ticket_id"]}, {
+        "$push": {"messages": {"from": "admin", "text": text[:4000], "at": now_iso()}},
+        "$set": {"user_unread": True, "admin_unread": False, "updated_at": now_iso()}})
+    await tg_notify(f"✅ Reply sent to {t.get('user_email')}")
+
+
+async def _tg_poll_loop():
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token or ".preview." in os.environ.get("FRONTEND_URL", ""):
+        return  # only the live site listens, so preview and live don't fight over messages
+    while True:
+        try:
+            s = await db.admin_settings.find_one({"key": "telegram"}) or {}
+            async with httpx.AsyncClient(timeout=40) as hc:
+                r = await hc.get(f"{TG_API}{token}/getUpdates",
+                                 params={"offset": s.get("offset", 0), "timeout": 25, "allowed_updates": '["message"]'})
+            for u in r.json().get("result", []):
+                await db.admin_settings.update_one({"key": "telegram"}, {"$set": {"offset": u["update_id"] + 1}}, upsert=True)
+                if u.get("message"):
+                    await _tg_handle(u["message"])
+            if r.status_code >= 400:
+                await asyncio.sleep(10)
+        except Exception as e:
+            logger.warning(f"Telegram poll error: {e}")
+            await asyncio.sleep(10)
 
 
 async def _user_email(uid):
@@ -1078,11 +1124,9 @@ async def admin_telegram_test(admin: dict = Depends(get_admin_user)):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise HTTPException(status_code=503, detail="Telegram bot not configured")
-    await db.admin_settings.update_one({"key": "telegram"}, {"$unset": {"chat_id": ""}}, upsert=True)
-    chat = await _tg_chat_id(token)
-    if not chat:
-        raise HTTPException(status_code=400, detail="Open your bot in Telegram and send /start first")
-    await tg_notify("✅ ApexOdds alerts are connected. You'll be pinged here for tickets, deposits and withdrawals.")
+    if not await _tg_chat_id():
+        raise HTTPException(status_code=400, detail="Open your bot in Telegram and send /start first (on the live site)")
+    await tg_notify("🔔 Test ping from ApexOdds — alerts are working.")
     return {"ok": True}
 
 
@@ -3059,6 +3103,7 @@ async def _migrate_to_usd():
 async def startup():
     asyncio.create_task(_migrate_to_usd())
     asyncio.create_task(_settle_loop())
+    asyncio.create_task(_tg_poll_loop())
     await db.promo_codes.create_index("code", unique=True)
     await db.promo_redemptions.create_index([("code", 1), ("user_id", 1)], unique=True)
     await db.rewards.create_index("user_id", unique=True)
@@ -3586,7 +3631,7 @@ async def create_ticket(body: TicketInput, user: dict = Depends(get_current_user
          "created_at": now_iso(), "updated_at": now_iso()}
     await db.tickets.insert_one(dict(t))
     t.pop("_id", None)
-    asyncio.create_task(tg_notify(f"🎫 New support ticket ({body.topic}) from {user.get('email')}:\n{body.message.strip()[:500]}"))
+    asyncio.create_task(tg_notify(f"🎫 New support ticket ({body.topic}) from {user.get('email')}:\n{body.message.strip()[:500]}", t["id"]))
     return t
 
 
@@ -3611,7 +3656,7 @@ async def reply_my_ticket(tid: str, body: TicketMessageInput, user: dict = Depen
     _ticket_rate_check(user["id"])
     await db.tickets.update_one({"id": tid}, {"$push": {"messages": {"from": "user", "text": body.text.strip(), "at": now_iso()}},
                                               "$set": {"admin_unread": True, "status": "open", "updated_at": now_iso()}})
-    asyncio.create_task(tg_notify(f"💬 Ticket reply from {user.get('email')}:\n{body.text.strip()[:500]}"))
+    asyncio.create_task(tg_notify(f"💬 Ticket reply from {user.get('email')}:\n{body.text.strip()[:500]}", tid))
     return await _get_ticket(tid, user)
 
 
