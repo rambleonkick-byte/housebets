@@ -308,3 +308,4 @@
 - Tested: backend pytest backend/tests/test_max_win_limits.py 11/11; UI flows verified via Playwright screenshot run.
 
 - 2026-06: Casino hold change to 90% was requested then cancelled — reverted to original 1% edge and provably-fair wording.
+- 2026-06: Small 'BETA' tag added under the APEX ODDS logo in the header (data-testid brand-beta-tag).

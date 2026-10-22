@@ -21,9 +21,12 @@ export function Header({ onWallet, onHistory, onAdmin }) {
             <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
               <Zap size={18} className="text-black" fill="currentColor" />
             </div>
-            <div className="leading-none">
-              <span className="font-display text-xl font-black tracking-tight">APEX</span>
-              <span className="font-display text-xl font-black tracking-tight text-emerald-400">ODDS</span>
+            <div className="leading-none flex flex-col">
+              <span>
+                <span className="font-display text-xl font-black tracking-tight">APEX</span>
+                <span className="font-display text-xl font-black tracking-tight text-emerald-400">ODDS</span>
+              </span>
+              <span data-testid="brand-beta-tag" className="text-[9px] font-mono font-bold uppercase tracking-[0.35em] text-emerald-400/80 mt-0.5">Beta</span>
             </div>
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
