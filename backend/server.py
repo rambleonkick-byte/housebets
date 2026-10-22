@@ -4050,7 +4050,8 @@ async def admin_set_vip_bonuses(body: VipBonusInput, admin: dict = Depends(get_a
 
 
 MARKETING_FILES = {"ad.mp4": ("apexodds_ad_1x1.mp4", "video/mp4", "ApexOdds_Ad.mp4"),
-                   "welcome10.png": ("welcome10_ad.png", "image/png", "ApexOdds_WELCOME10.png")}
+                   "welcome10.png": ("welcome10_ad.png", "image/png", "ApexOdds_WELCOME10.png"),
+                   "vault.mp4": ("apexodds_vault_ad.mp4", "video/mp4", "ApexOdds_Vault_Ad.mp4")}
 
 
 @api_router.get("/marketing/{name}")
