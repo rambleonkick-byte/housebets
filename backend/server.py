@@ -1693,8 +1693,9 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
     if boost:
         total_odds = _boost_price([s.model_dump() for s in body.selections], boost["pct"])[1]
     potential = round(body.stake * total_odds, 6)
-    if potential - body.stake > BETA_MAX_PROFIT + 1e-6:
-        raise HTTPException(status_code=400, detail=f"Beta limit: max win per bet is ${BETA_MAX_PROFIT:,.0f}. Max stake at these odds is ${BETA_MAX_PROFIT / (total_odds - 1):,.2f}")
+    lim = await _max_profit(user["id"])
+    if lim is not None and potential - body.stake > lim + 1e-6:
+        raise HTTPException(status_code=400, detail=f"Max win per bet is ${lim:,.0f}. Max stake at these odds is ${lim / (total_odds - 1):,.2f}")
 
     if body.free_bet_id:
         fb = await db.free_bets.find_one({"id": body.free_bet_id, "user_id": user["id"], "status": "available"})
@@ -2196,16 +2197,34 @@ async def _balances(user_id):
     return w["balances"]
 
 
-BETA_MAX_PROFIT = 750.0  # beta mode: max profit on any single bet or casino round
+DEFAULT_MAX_PROFIT = 750.0  # beta mode default: max profit on any single bet or casino round
+_LIMIT_CACHE = {"ts": 0, "doc": None}
 
 
-def _cap(stake, payout):
-    return min(payout, round(stake + BETA_MAX_PROFIT, 6))
+async def _limit_settings():
+    now = datetime.now(timezone.utc).timestamp()
+    if _LIMIT_CACHE["doc"] is None or now - _LIMIT_CACHE["ts"] > 15:
+        doc = await db.settings.find_one({"_id": "max_win"}) or {}
+        _LIMIT_CACHE.update(ts=now, doc={"enabled": doc.get("enabled", True), "amount": float(doc.get("amount", DEFAULT_MAX_PROFIT))})
+    return _LIMIT_CACHE["doc"]
 
 
-def _check_max_win(stake, mult):
-    if stake * (mult - 1) > BETA_MAX_PROFIT + 1e-6:
-        raise HTTPException(status_code=400, detail=f"Beta limit: max win is ${BETA_MAX_PROFIT:,.0f}. Max stake at {mult:g}x is ${BETA_MAX_PROFIT / (mult - 1):,.2f}")
+async def _max_profit(uid):
+    """Effective max profit per bet for a player: their own override, else the global limit (None = unlimited)."""
+    u = await db.users.find_one({"_id": ObjectId(uid)}, {"max_win": 1}) if ObjectId.is_valid(uid) else None
+    if u and u.get("max_win") is not None:
+        return None if u["max_win"] <= 0 else float(u["max_win"])
+    st = await _limit_settings()
+    return st["amount"] if st["enabled"] else None
+
+
+def _cap(stake, payout, lim):
+    return payout if lim is None else min(payout, round(stake + lim, 6))
+
+
+def _check_max_win(stake, mult, lim):
+    if lim is not None and stake * (mult - 1) > lim + 1e-6:
+        raise HTTPException(status_code=400, detail=f"Max win is ${lim:,.0f} per round. Max stake at {mult:g}x is ${lim / (mult - 1):,.2f}")
 
 
 async def _record_game(user_id, game, coin, stake, multiplier, payout, won, detail, fair=None):
@@ -2278,7 +2297,7 @@ def fair_meta(ss, cs, nonce):
 async def play_limbo(body: LimboInput, user: dict = Depends(get_current_user)):
     if body.target < 1.01 or body.target > 1000000:
         raise HTTPException(status_code=400, detail="Target must be between 1.01 and 1,000,000")
-    _check_max_win(body.stake, body.target)
+    _check_max_win(body.stake, body.target, await _max_profit(user["id"]))
     await _check_funds(user["id"], body.coin, body.stake)
     await _adjust(user["id"], body.coin, -body.stake)
     ss, cs, nonce = await next_fair(user["id"])
@@ -2305,7 +2324,7 @@ async def play_plinko(body: PlinkoInput, user: dict = Depends(get_current_user))
     path = [rfloat(ss, cs, nonce, i) < 0.5 for i in range(body.rows)]  # True=right
     bucket = sum(1 for p in path if p)
     mult = PLINKO_MULT[body.rows][body.risk][bucket]
-    payout = _cap(body.stake, round(body.stake * mult, 6))
+    payout = _cap(body.stake, round(body.stake * mult, 6), await _max_profit(user["id"]))
     await _adjust(user["id"], body.coin, payout)
     fair = fair_meta(ss, cs, nonce)
     await _record_game(user["id"], "plinko", body.coin, body.stake, mult, payout, mult >= 1,
@@ -2325,7 +2344,7 @@ async def play_keno(body: KenoInput, user: dict = Depends(get_current_user)):
     drawn = pick_distinct(range(1, 41), 10, ss, cs, nonce)
     hits = len([n for n in picks if n in drawn])
     mult = KENO_TABLE[len(picks)][hits]
-    payout = _cap(body.stake, round(body.stake * mult, 6))
+    payout = _cap(body.stake, round(body.stake * mult, 6), await _max_profit(user["id"]))
     if payout > 0:
         await _adjust(user["id"], body.coin, payout)
     fair = fair_meta(ss, cs, nonce)
@@ -2386,7 +2405,7 @@ async def mines_reveal(body: MinesActionInput, user: dict = Depends(get_current_
     mult = mines_multiplier(g["mine_count"], len(revealed))
     next_mult = mines_multiplier(g["mine_count"], len(revealed) + 1)
     return {"hit": False, "revealed": revealed, "multiplier": mult, "next_multiplier": next_mult,
-            "cashout_value": _cap(g["stake"], round(g["stake"] * mult, 6)), "done": False}
+            "cashout_value": _cap(g["stake"], round(g["stake"] * mult, 6), await _max_profit(user["id"])), "done": False}
 
 
 @api_router.post("/casino/mines/cashout")
@@ -2397,7 +2416,7 @@ async def mines_cashout(body: MinesActionInput, user: dict = Depends(get_current
     if not g["revealed"]:
         raise HTTPException(status_code=400, detail="Reveal at least one tile first")
     mult = mines_multiplier(g["mine_count"], len(g["revealed"]))
-    payout = _cap(g["stake"], round(g["stake"] * mult, 6))
+    payout = _cap(g["stake"], round(g["stake"] * mult, 6), await _max_profit(user["id"]))
     await _adjust(user["id"], g["coin"], payout)
     await db.mine_games.update_one({"id": g["id"]}, {"$set": {"status": "won"}})
     await _record_game(user["id"], "mines", g["coin"], g["stake"], mult, payout, True,
@@ -2558,7 +2577,7 @@ async def _bj_finish(g):
 
 async def _bj_settle(g):
     """Credit and record a finished hand; call only after the hand state is durably saved."""
-    d, payout = g["dealer"], _cap(g["total_stake"], g["total_payout"])
+    d, payout = g["dealer"], _cap(g["total_stake"], g["total_payout"], await _max_profit(g["user_id"]))
     if payout > 0:
         await _adjust(g["user_id"], g["coin"], payout)
     mult = payout / g["total_stake"] if g["total_stake"] else 0
@@ -2725,7 +2744,7 @@ async def play_dice(body: DiceInput, user: dict = Depends(get_current_user)):
     if not (0.01 <= body.target <= 99.99):
         raise HTTPException(status_code=400, detail="Target must be between 0.01 and 99.99")
     chance0 = 100 - body.target if body.direction == "over" else body.target
-    _check_max_win(body.stake, round(EDGE * 100 / chance0, 4))
+    _check_max_win(body.stake, round(EDGE * 100 / chance0, 4), await _max_profit(user["id"]))
     await _check_funds(user["id"], body.coin, body.stake)
     await _adjust(user["id"], body.coin, -body.stake)
     ss, cs, nonce = await next_fair(user["id"])
@@ -2737,7 +2756,7 @@ async def play_dice(body: DiceInput, user: dict = Depends(get_current_user)):
         won = roll < body.target
         chance = body.target
     mult = round(EDGE * 100 / chance, 4) if chance > 0 else 0.0
-    payout = _cap(body.stake, round(body.stake * mult, 6)) if won else 0.0
+    payout = _cap(body.stake, round(body.stake * mult, 6), await _max_profit(user["id"])) if won else 0.0
     if won:
         await _adjust(user["id"], body.coin, payout)
     fair = fair_meta(ss, cs, nonce)
@@ -3148,7 +3167,7 @@ async def admin_users(q: Optional[str] = None, skip: int = 0, limit: int = 50, a
         {"_id": {"$in": [ObjectId(x) for x in ref_ids if ObjectId.is_valid(x)]}}, {"name": 1, "email": 1})}
     today = datetime.now(timezone.utc).date().isoformat()
     rows = [{"id": uid, "name": u.get("name"), "email": u["email"], "role": u.get("role", "user"),
-             "created_at": u.get("created_at"), "blocked": bool(u.get("blocked")),
+             "created_at": u.get("created_at"), "blocked": bool(u.get("blocked")), "max_win": u.get("max_win"),
              "referred_by": refs.get(u.get("referred_by")), "balances": wallets.get(uid, {}),
              "deposits": dep.get(uid, {}), "withdrawals": wd.get(uid, {}), "wagered": wag.get(uid, {})}
             for u, uid in zip(users, ids)]
@@ -3189,6 +3208,47 @@ async def admin_adjust(uid: str, body: AdjustInput, admin: dict = Depends(get_ad
     return {"balances": await _balances(uid)}
 
 
+class MaxWinInput(BaseModel):
+    max_win: Optional[float] = Field(default=None, allow_inf_nan=False)
+
+
+class LimitSettingsInput(BaseModel):
+    enabled: bool
+    amount: float = Field(gt=0, allow_inf_nan=False)
+
+
+@api_router.get("/limits/me")
+async def my_limit(user: dict = Depends(get_current_user)):
+    return {"max_win": await _max_profit(user["id"])}
+
+
+@api_router.get("/admin/limits")
+async def admin_limits(admin: dict = Depends(get_admin_user)):
+    return await _limit_settings()
+
+
+@api_router.put("/admin/limits")
+async def admin_set_limits(body: LimitSettingsInput, admin: dict = Depends(get_admin_user)):
+    await db.settings.update_one({"_id": "max_win"}, {"$set": {"enabled": body.enabled, "amount": round(body.amount, 2)}}, upsert=True)
+    _LIMIT_CACHE["doc"] = None
+    await db.admin_actions.insert_one({"id": str(uuid.uuid4()), "user_id": "global", "admin": admin["email"], "action": "limit",
+                                       "reason": f"Global max win {'on' if body.enabled else 'off'} ${body.amount:,.2f}", "created_at": now_iso()})
+    return await _limit_settings()
+
+
+@api_router.put("/admin/users/{uid}/max-win")
+async def admin_set_user_max_win(uid: str, body: MaxWinInput, admin: dict = Depends(get_admin_user)):
+    u = await _admin_target(uid)
+    if body.max_win is not None and body.max_win < 0:
+        raise HTTPException(400, "Max win can't be negative")
+    upd = {"$unset": {"max_win": ""}} if body.max_win is None else {"$set": {"max_win": round(body.max_win, 2)}}
+    await db.users.update_one({"_id": u["_id"]}, upd)
+    label = "global default" if body.max_win is None else "no limit" if body.max_win == 0 else f"${body.max_win:,.2f}"
+    await db.admin_actions.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "admin": admin["email"], "action": "max_win",
+                                       "reason": f"Max win set to {label}", "created_at": now_iso()})
+    return {"max_win": body.max_win, "effective": await _max_profit(uid)}
+
+
 @api_router.post("/admin/users/{uid}/block")
 async def admin_block(uid: str, body: BlockInput, admin: dict = Depends(get_admin_user)):
     u = await _admin_target(uid)
@@ -3206,6 +3266,29 @@ async def admin_delete_user(uid: str, admin: dict = Depends(get_admin_user)):
     u = await _admin_target(uid)
     if uid == admin["id"] or u.get("role") == "admin":
         raise HTTPException(400, "Admin accounts can't be deleted")
+    await _purge_user(u, admin)
+    return {"deleted": True}
+
+
+class BulkDeleteInput(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=200)
+
+
+@api_router.post("/admin/users/bulk-delete")
+async def admin_bulk_delete(body: BulkDeleteInput, admin: dict = Depends(get_admin_user)):
+    deleted, skipped = 0, 0
+    for uid in set(body.ids):
+        u = await db.users.find_one({"_id": ObjectId(uid)}) if ObjectId.is_valid(uid) else None
+        if not u or uid == admin["id"] or u.get("role") == "admin":
+            skipped += 1
+            continue
+        await _purge_user(u, admin)
+        deleted += 1
+    return {"deleted": deleted, "skipped": skipped}
+
+
+async def _purge_user(u, admin):
+    uid = str(u["_id"])
     for coll in ("wallets", "bets", "casino_games", "bj_games", "mine_games", "fair_seeds", "transactions", "withdrawals",
                  "tickets", "rewards", "free_bets", "promo_redemptions", "notifications", "static_addresses",
                  "static_deposits", "oxa_invoices", "affiliates", "affiliate_earnings"):
@@ -3215,7 +3298,6 @@ async def admin_delete_user(uid: str, admin: dict = Depends(get_admin_user)):
     await db.users.delete_one({"_id": u["_id"]})
     await db.admin_actions.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "user_email": u["email"],
                                        "admin": admin["email"], "action": "delete", "created_at": now_iso()})
-    return {"deleted": True}
 
 
 @api_router.get("/admin/users/{uid}/bets")

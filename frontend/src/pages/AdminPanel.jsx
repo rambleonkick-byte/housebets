@@ -9,6 +9,7 @@ import { AdminBetReview } from "@/components/AdminBetReview";
 import { AdminTickets } from "@/components/AdminTickets";
 import { AdminPromos } from "@/components/AdminPromos";
 import { AdminUserBets } from "@/components/AdminUserBets";
+import { AdminGlobalLimit, PlayerLimitForm } from "@/components/AdminLimits";
 
 const COINS = ["USD"];
 const PAGE = 50;
@@ -111,6 +112,7 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
           <Row label="Wagered" v={u.wagered} testid="admin-drawer-wagered" />
         </div>
         <AdminUserBets uid={u.id} onChanged={refresh} />
+        {u.role !== "admin" && <PlayerLimitForm key={`${u.id}-${u.max_win}`} u={u} onDone={refresh} />}
         <AdjustForm u={u} onDone={refresh} />
         {u.role !== "admin" && (
           <button data-testid="admin-block-toggle" onClick={toggleBlock} disabled={busy}
@@ -131,7 +133,7 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
             <ul className="space-y-1.5" data-testid="admin-action-log">
               {log.map((a) => (
                 <li key={a.id} className="text-xs bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2">
-                  <span className="font-semibold">{a.action === "adjust" ? `${a.amount > 0 ? "+" : ""}${a.amount} ${a.coin}` : a.action === "block" ? "Locked" : a.action === "unblock" ? "Unlocked" : a.action?.startsWith("grade_") ? `Graded ${a.action.slice(6).toUpperCase()}` : a.action === "delete" ? "Deleted" : a.action}</span>
+                  <span className="font-semibold">{a.action === "adjust" ? `${a.amount > 0 ? "+" : ""}${a.amount} ${a.coin}` : a.action === "block" ? "Locked" : a.action === "unblock" ? "Unlocked" : a.action?.startsWith("grade_") ? `Graded ${a.action.slice(6).toUpperCase()}` : a.action === "delete" ? "Deleted" : a.action === "max_win" ? "Max win" : a.action}</span>
                   {a.reason && <span className="text-zinc-400"> · {a.reason}</span>}
                   <span className="block text-[10px] text-zinc-600">{a.admin} · {new Date(a.created_at).toLocaleString()}</span>
                 </li>
@@ -151,6 +153,19 @@ export default function AdminPanel({ onWithdrawals }) {
   const [skip, setSkip] = useState(0);
   const [data, setData] = useState(null);
   const [openId, setOpenId] = useState(null);
+  const [sel, setSel] = useState(new Set());
+  const [delBusy, setDelBusy] = useState(false);
+  const toggleSel = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const bulkDelete = async () => {
+    if (!window.confirm(`Permanently delete ${sel.size} account(s)? Their balances, bets, history and tickets will be erased. This can't be undone.`)) return;
+    setDelBusy(true);
+    try {
+      const { data: r } = await api.post("/admin/users/bulk-delete", { ids: [...sel] });
+      toast.success(`${r.deleted} account(s) deleted${r.skipped ? ` · ${r.skipped} skipped` : ""}`);
+      setSel(new Set()); load();
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+    setDelBusy(false);
+  };
 
   const load = useCallback(() => api.get("/admin/users", { params: { q, skip, limit: PAGE } }).then(({ data }) => setData(data))
     .catch((e) => toast.error(formatApiErrorDetail(e.response?.data?.detail))), [q, skip]);
@@ -158,6 +173,8 @@ export default function AdminPanel({ onWithdrawals }) {
 
   if (user?.role !== "admin") return <p className="text-center text-zinc-500 py-32" data-testid="admin-denied">Admin access required.</p>;
   const open = data?.users.find((u) => u.id === openId);
+  const selectable = (data?.users || []).filter((u) => u.role !== "admin");
+  const allSel = selectable.length > 0 && selectable.every((u) => sel.has(u.id));
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6" data-testid="admin-panel">
@@ -180,19 +197,32 @@ export default function AdminPanel({ onWithdrawals }) {
           <Search size={16} className="text-zinc-500" />
           <input data-testid="admin-user-search" value={q} onChange={(e) => { setQ(e.target.value); setSkip(0); }} placeholder="Search name or email"
             className="flex-1 bg-transparent text-sm focus:outline-none" />
+          {sel.size > 0 && (
+            <button data-testid="admin-bulk-delete" onClick={bulkDelete} disabled={delBusy}
+              className="flex items-center gap-1.5 bg-red-600/90 hover:bg-red-500 text-white text-xs font-bold px-3 py-2 rounded-lg disabled:opacity-50">
+              {delBusy ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Delete {sel.size} selected
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm" data-testid="admin-users-table">
             <thead>
               <tr className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 text-left">
+                <th className="pl-4 py-3 w-8">
+                  <input type="checkbox" data-testid="admin-select-all" checked={allSel} aria-label="Select all"
+                    onChange={() => setSel(allSel ? new Set() : new Set(selectable.map((u) => u.id)))} className="accent-emerald-500 w-4 h-4 cursor-pointer" />
+                </th>
                 {["User", "Joined", "Balance", "Deposited", "Withdrawn", "Wagered", "Status"].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {!data ? (
-                <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="animate-spin text-emerald-400 mx-auto" /></td></tr>
+                <tr><td colSpan={8} className="py-12 text-center"><Loader2 className="animate-spin text-emerald-400 mx-auto" /></td></tr>
               ) : data.users.map((u) => (
-                <tr key={u.id} data-testid={`admin-user-row-${u.id}`} onClick={() => setOpenId(u.id)} className="border-t border-[#1E2234] hover:bg-white/[0.02] cursor-pointer align-top">
+                <tr key={u.id} data-testid={`admin-user-row-${u.id}`} onClick={() => setOpenId(u.id)} className={`border-t border-[#1E2234] hover:bg-white/[0.02] cursor-pointer align-top ${sel.has(u.id) ? "bg-red-500/[0.04]" : ""}`}>
+                  <td className="pl-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    {u.role !== "admin" && <input type="checkbox" data-testid={`admin-select-${u.id}`} checked={sel.has(u.id)} onChange={() => toggleSel(u.id)} className="accent-emerald-500 w-4 h-4 cursor-pointer" />}
+                  </td>
                   <td className="px-4 py-3 min-w-[200px]">
                     <p className="font-semibold">{u.name} {u.role === "admin" && <span className="text-[9px] font-mono text-emerald-300 border border-emerald-500/40 rounded px-1 ml-1">ADMIN</span>}</p>
                     <p className="text-xs text-zinc-500">{u.email}</p>
@@ -221,6 +251,7 @@ export default function AdminPanel({ onWithdrawals }) {
         )}
       </div>
       {open && <UserDrawer u={open} rates={rates} onClose={() => setOpenId(null)} onChanged={load} />}
+      <AdminGlobalLimit />
       <AdminPromos />
       <AdminTickets />
       <AdminBetReview />
