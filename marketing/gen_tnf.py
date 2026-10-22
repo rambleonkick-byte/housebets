@@ -12,8 +12,9 @@ CLIPS = {
     "t1_stadium": "Dramatic slow aerial push-in over a packed American football stadium at night, blazing floodlights through haze, players lined up at the line of scrimmage on the bright green field, the crowd roaring, emerald green light flares, " + STYLE,
     "t2_action": "Extreme slow motion American football running back in a dark uniform bursting through the line under stadium floodlights, turf and rain droplets flying, camera tracking alongside him, green rim light, " + STYLE,
 }
-MUSIC = ("Hard hitting hype sports trailer music, heavy trap drums, booming 808 bass, stadium crowd energy, marching band brass stabs, "
-         "aggressive and exciting, big hits, instrumental, 140 bpm")
+MUSIC = ("Original epic primetime American football broadcast anthem, triumphant heroic brass fanfare with trumpets and french horns, "
+         "booming timpani rolls, snare drum marching cadence, full orchestra, majestic and patriotic, big cymbal crashes, "
+         "grand final brass hit, instrumental, 110 bpm")
 
 
 def run(endpoint, payload, timeout=1500):
