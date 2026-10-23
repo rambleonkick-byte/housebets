@@ -322,3 +322,4 @@
 - NBA & NHL switched to free ESPN odds (SGO out of credits): "espn" path on SGO_LEAGUES entries; _espn_markets now supports no-draw moneylines. To revert, remove the "espn" key from NBA/NHL.
 - New SGO key (pro tier, unlimited). All leagues incl. NBA/NHL/Europa back on SportsGameOdds (props restored). ESPN scraper code kept; _espn_results still checks europa/nba/nhl paths for any old espn- bets. To use ESPN for a league again, add "espn": "<sport/league>" to its SGO_LEAGUES entry.
 - ESPN odds scraper removed entirely (2026-10). All odds + settlement via SportsGameOdds only. ESPN still used only for UFC fighter photos/records and team logos (CDN).
+- Admin Super Boosts: db.manual_boosts {event_id, market, side, odds}; shown first in Boosted Odds strip (tier "super", fixed_odds); bet placed as single at fixed odds. Admin panel "Super Boosts" card lists/removes. Create via POST /api/admin/boosts. CHA ML 2.45 (ATL@CHA 2026-10-23) created.

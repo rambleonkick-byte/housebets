@@ -1754,6 +1754,60 @@ def _boost_price(legs, pct):
     return round(base, 2), round(1 + (base - 1) * (1 + pct), 2)
 
 
+_MANUAL_BOOSTS = []
+
+
+async def _load_manual_boosts():
+    _MANUAL_BOOSTS[:] = await db.manual_boosts.find({}, {"_id": 0}).to_list(50)
+
+
+def _manual_boost_cards(soon):
+    evs = {ev["event_id"]: ev for c in _SGO_CACHE.values() for ev in c["data"]}
+    out = []
+    for mb in _MANUAL_BOOSTS:
+        ev = evs.get(mb["event_id"])
+        if not ev or ev["state"] != "pre" or datetime.fromisoformat(ev["start"].replace("Z", "+00:00")) < soon:
+            continue
+        mk = next((m for m in ev.get("markets", []) if m["market"] == mb["market"]), None)
+        sel = next((s for s in (mk or {}).get("selections", []) if s["side"] == mb["side"] and s.get("odds")), None)
+        if not sel or sel["odds"] >= mb["odds"]:
+            continue
+        leg = _boost_leg(ev, mb["market"], sel["side"], sel["pick"], sel.get("line"), sel["odds"])
+        out.append({"id": f"manual:{mb['id']}", "tier": "super", "label": "Super Boost", "pct": 0, "fixed_odds": mb["odds"],
+                    "event_id": ev["event_id"], "league_label": ev["league_label"], "starts_at": ev["start"],
+                    "home": ev["home"]["name"], "away": ev["away"]["name"],
+                    "legs": [leg], "base_odds": sel["odds"], "boosted_odds": mb["odds"]})
+    return out
+
+
+class ManualBoostInput(BaseModel):
+    event_id: str
+    market: str = "moneyline"
+    side: str
+    odds: float = Field(gt=1, le=100, allow_inf_nan=False)
+
+
+@api_router.get("/admin/boosts")
+async def admin_list_boosts(admin: dict = Depends(get_admin_user)):
+    cards = {b["id"]: b for b in _manual_boost_cards(datetime.now(timezone.utc))}
+    return {"boosts": [{**mb, "card": cards.get(f"manual:{mb['id']}")} for mb in _MANUAL_BOOSTS]}
+
+
+@api_router.post("/admin/boosts")
+async def admin_add_boost(body: ManualBoostInput, admin: dict = Depends(get_admin_user)):
+    doc = {"id": uuid.uuid4().hex[:10], **body.model_dump(), "odds": round(body.odds, 2), "created_at": now_iso()}
+    await db.manual_boosts.insert_one(dict(doc))
+    await _load_manual_boosts()
+    return doc
+
+
+@api_router.delete("/admin/boosts/{bid}")
+async def admin_delete_boost(bid: str, admin: dict = Depends(get_admin_user)):
+    await db.manual_boosts.delete_one({"id": bid})
+    await _load_manual_boosts()
+    return {"ok": True}
+
+
 def build_boosts():
     soon = datetime.now(timezone.utc) + timedelta(minutes=5)
     cands = []
@@ -1794,7 +1848,7 @@ def build_boosts():
         if c:
             _BOOST_LOCK[("tier", tier)] = c[2]["event_id"]
             assigned.append(((tier, label, pct), c))
-    out = []
+    out = _manual_boost_cards(soon)
     for (tier, label, pct), (_, _, ev, legs) in assigned:
         base, boosted = _boost_price(legs, pct)
         out.append({"id": f"{tier}:{ev['event_id']}", "tier": tier, "label": label, "pct": pct,
@@ -1827,11 +1881,13 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
             raise HTTPException(status_code=409, detail={"msg": "This boost is no longer available", "changed": [], "unavailable": [], "boost_gone": True})
     await _verify_selections(body.selections, body.accept_better)
 
-    is_parlay = (body.bet_type == "parlay" and len(body.selections) > 1) or bool(boost)
+    is_parlay = (body.bet_type == "parlay" and len(body.selections) > 1) or bool(boost and not boost.get("fixed_odds"))
     if not is_parlay and len(body.selections) != 1:
         raise HTTPException(status_code=400, detail="Single bets take exactly one selection")
     total_odds = round(compute_parlay_odds(body.selections), 2) if is_parlay else round(body.selections[0].odds, 2)
-    if boost:
+    if boost and boost.get("fixed_odds"):
+        total_odds = boost["fixed_odds"]
+    elif boost:
         total_odds = _boost_price([s.model_dump() for s in body.selections], boost["pct"])[1]
     potential = round(body.stake * total_odds, 6)
     lim = await _max_profit(user["id"])
@@ -3017,6 +3073,7 @@ async def startup():
     asyncio.create_task(_migrate_to_usd())
     asyncio.create_task(_settle_loop())
     asyncio.create_task(_tg_poll_loop())
+    await _load_manual_boosts()
     await db.promo_codes.create_index("code", unique=True)
     await db.promo_redemptions.create_index([("code", 1), ("user_id", 1)], unique=True)
     await db.rewards.create_index("user_id", unique=True)

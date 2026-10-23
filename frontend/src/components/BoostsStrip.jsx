@@ -6,6 +6,7 @@ import { fmtOdds } from "@/lib/format";
 import { useBetSlip } from "@/context/BetSlipContext";
 
 const TIER = {
+  super: { pill: "bg-rose-500 text-white", arrow: "text-rose-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(244,63,94,0.6)]" },
   botd: { pill: "bg-emerald-500 text-black", arrow: "text-emerald-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(16,185,129,0.6)]" },
   golden: { pill: "bg-amber-400 text-black", arrow: "text-amber-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(251,191,36,0.6)]" },
   boosted: { pill: "bg-sky-500 text-white", arrow: "text-sky-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(14,165,233,0.6)]" },
@@ -52,7 +53,7 @@ function BoostCard({ b, i }) {
           </li>
         ))}
       </ul>
-      <button data-testid={`boost-add-${b.tier}`} onClick={() => loadSlip(b.legs, { id: b.id, pct: b.pct, label: b.label })}
+      <button data-testid={`boost-add-${b.tier}`} onClick={() => loadSlip(b.legs, { id: b.id, pct: b.pct, label: b.label, fixed: b.fixed_odds })}
         className="mt-4 w-full flex items-center justify-center gap-4 bg-white hover:bg-zinc-200 text-black rounded-xl py-3 font-mono text-sm transition-colors active:scale-[0.98]">
         <span className="line-through text-zinc-500" data-testid={`boost-base-${b.tier}`}>{fmtOdds(b.base_odds)}</span>
         <ChevronsRight size={16} className={t.arrow} />
@@ -76,7 +77,7 @@ export function BoostsStrip({ ready }) {
     <section className="px-4 pt-1 pb-4" data-testid="boosts-strip">
       <div className="flex items-center gap-2 mb-3">
         <Flame size={18} className="text-amber-400" />
-        <h2 className="font-display text-xl font-bold tracking-tight uppercase">Boosted Combos</h2>
+        <h2 className="font-display text-xl font-bold tracking-tight uppercase">Boosted Odds</h2>
       </div>
       <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
         {boosts.map((b, i) => <BoostCard key={b.id} b={b} i={i} />)}

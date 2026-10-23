@@ -144,7 +144,7 @@ export function BetSlip() {
 
   const isParlay = !!boost || (mode === "parlay" && items.length > 1);
   const rawParlay = useMemo(() => computeParlayOdds(items), [items]);
-  const parlayOdds = boost ? 1 + (rawParlay - 1) * (1 + boost.pct) : rawParlay;
+  const parlayOdds = boost?.fixed || (boost ? 1 + (rawParlay - 1) * (1 + boost.pct) : rawParlay);
   const groups = useMemo(() => groupByGame(items), [items]);
   const hasSgp = useMemo(() => groups.some((g) => g.length > 1), [groups]);
   const anyLive = items.some((s) => s.live);
@@ -252,7 +252,7 @@ export function BetSlip() {
         </div>
         {boost && (
           <div data-testid="bet-slip-boost-banner" className="flex items-center gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1.5">
-            <Zap size={12} fill="currentColor" /> {boost.label} · +{Math.round(boost.pct * 100)}% boost applied
+            <Zap size={12} fill="currentColor" /> {boost.label} · {boost.fixed ? `boosted to ${fmtOdds(boost.fixed)}` : `+${Math.round(boost.pct * 100)}% boost applied`}
           </div>
         )}
         {items.length > 1 && !boost && (
@@ -373,7 +373,7 @@ export function BetSlip() {
           <button data-testid="bet-slip-place-button" onClick={pendingChanges ? acceptChanges : place} disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-full transition-colors disabled:opacity-60 shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)]">
             {loading && <Loader2 size={16} className="animate-spin" />}
-            {pendingChanges ? "Accept odds changes" : user ? (isParlay ? "Place Parlay" : `Place ${items.length} Bet${items.length > 1 ? "s" : ""}`) : "Sign in to bet"}
+            {pendingChanges ? "Accept odds changes" : user ? (boost?.fixed ? "Place Bet" : isParlay ? "Place Parlay" : `Place ${items.length} Bet${items.length > 1 ? "s" : ""}`) : "Sign in to bet"}
           </button>
         </div>
       )}
