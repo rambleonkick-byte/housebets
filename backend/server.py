@@ -646,127 +646,7 @@ async def _refresh_sgo_league(meta):
         _SGO_REFRESHING.discard(key)
 
 
-ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports"
-
-
-def _espn_markets(c, ha, aa, draw=True):
-    """DraftKings lines published free on ESPN's scoreboard -> our market shape."""
-    o = (c.get("odds") or [{}])[0]
-    close = lambda x: ((x or {}).get("close") or (x or {}).get("open") or {})
-    markets = []
-    ml = o.get("moneyline") or {}
-    pairs = [("home", f"{ha} ML", close(ml.get("home")).get("odds")),
-             ("draw", "Draw", (o.get("drawOdds") or {}).get("moneyLine") or close(ml.get("draw")).get("odds")),
-             ("away", f"{aa} ML", close(ml.get("away")).get("odds"))]
-    sels = [{"side": s, "pick": p, "odds": american_to_decimal(v), "line": None} for s, p, v in pairs if american_to_decimal(v)]
-    if len(sels) == (3 if draw else 2) and (draw or all(x["side"] != "draw" for x in sels)):
-        markets.append({"market": "moneyline", "label": "Moneyline", "selections": sels})
-    sp = o.get("pointSpread") or {}
-    h, a = close(sp.get("home")), close(sp.get("away"))
-    hl, al, ho, ao = _num(h.get("line")), _num(a.get("line")), american_to_decimal(h.get("odds")), american_to_decimal(a.get("odds"))
-    if None not in (hl, al, ho, ao):
-        markets.append({"market": "spread", "label": "Spread", "selections": [
-            {"side": "home", "pick": f"{ha} {hl:+g}", "odds": ho, "line": hl},
-            {"side": "away", "pick": f"{aa} {al:+g}", "odds": ao, "line": al}]})
-    tt = o.get("total") or {}
-    ov, un = close(tt.get("over")), close(tt.get("under"))
-    line = _num(str(ov.get("line") or "").lstrip("ou")) or _num(o.get("overUnder"))
-    oo, uo = american_to_decimal(ov.get("odds")), american_to_decimal(un.get("odds"))
-    if None not in (line, oo, uo):
-        markets.append({"market": "total", "label": "Total", "selections": [
-            {"side": "over", "pick": f"Over {line:g}", "odds": oo, "line": line},
-            {"side": "under", "pick": f"Under {line:g}", "odds": uo, "line": line}]})
-    return markets
-
-
-def _espn_score(t):
-    try:
-        return int(t.get("score")) if t.get("score") not in (None, "") else None
-    except (TypeError, ValueError):
-        return None
-
-
-async def _refresh_espn_league(meta):
-    key = meta["id"]
-    prev = (_SGO_CACHE.get(key) or {}).get("data") or []
-    now = datetime.now(timezone.utc)
-    events, seen = [], set()
-    try:
-        async with httpx.AsyncClient(timeout=15) as hc:
-            days = [None] + [f"{now + timedelta(days=d):%Y%m%d}" for d in range(0, 10)]
-            resps = await asyncio.gather(*[hc.get(f"{ESPN_SITE}/{meta['espn']}/scoreboard", params={"dates": d} if d else {}) for d in days],
-                                         return_exceptions=True)
-        raw = []
-        for r in resps:
-            if not isinstance(r, Exception) and r.status_code == 200:
-                raw.extend(r.json().get("events") or [])
-        if not raw:
-            raise RuntimeError("no ESPN data")
-        for e in sorted(raw, key=lambda x: x.get("date") or ""):
-            if e["id"] in seen:
-                continue
-            seen.add(e["id"])
-            c = e["competitions"][0]
-            st = c["status"]["type"]
-            if st.get("state") == "post":
-                continue
-            tm = {t["homeAway"]: t for t in c["competitors"]}
-            h, a = tm["home"]["team"], tm["away"]["team"]
-            ha, aa = h.get("abbreviation") or h["displayName"][:3].upper(), a.get("abbreviation") or a["displayName"][:3].upper()
-            markets = _espn_markets(c, ha, aa, meta.get("draw", True))
-            if not markets:
-                continue
-            state = st.get("state", "pre")
-            events.append({
-                "event_id": f"espn-{e['id']}", "league": meta["group"], "league_key": key,
-                "league_label": meta["label"], "name": f"{aa} @ {ha}", "start": e.get("date"), "state": state,
-                "status_detail": st.get("shortDetail") or ("Live" if state == "in" else "Upcoming"),
-                "home": {"name": h["displayName"], "abbr": ha, "logo": h.get("logo"), "score": _espn_score(tm["home"]) if state != "pre" else None},
-                "away": {"name": a["displayName"], "abbr": aa, "logo": a.get("logo"), "score": _espn_score(tm["away"]) if state != "pre" else None},
-                "markets": markets, "source": "espn", "book": "DraftKings", "props": [], "player_results": {}, "rounds": None,
-            })
-            if len(events) >= 20:
-                break
-    except Exception as ex:
-        logger.warning(f"ESPN fetch failed for {key}: {ex}")
-        _SGO_CACHE[key] = {"ts": now.timestamp(), "ttl": 120, "data": prev}
-        return prev
-    entry = {"ts": now.timestamp(), "ttl": 300 if any(e["state"] == "in" for e in events) else 900, "data": events, "v": ODDS_CACHE_VERSION}
-    _SGO_CACHE[key] = entry
-    try:
-        await db.odds_cache.replace_one({"_id": key}, dict(entry), upsert=True)
-    except Exception:
-        pass
-    return events
-
-
-async def _espn_results(ids):
-    out = {}
-    paths = {m["espn"] for m in SGO_LEAGUES if m.get("espn")} | {"soccer/uefa.europa", "basketball/nba", "hockey/nhl"}
-    async with httpx.AsyncClient(timeout=15) as hc:
-        for eid in ids:
-            for path in paths:
-                try:
-                    r = await hc.get(f"{ESPN_SITE}/{path}/summary", params={"event": eid.removeprefix("espn-")})
-                    if r.status_code != 200:
-                        continue
-                    c = r.json()["header"]["competitions"][0]
-                except Exception:
-                    continue
-                st = c["status"]["type"]
-                tm = {t["homeAway"]: t for t in c["competitors"]}
-                state = st.get("state", "pre")
-                out[eid] = {"event_id": eid, "state": state, "cancelled": st.get("name") in ("STATUS_CANCELED", "STATUS_POSTPONED", "STATUS_ABANDONED"),
-                            "start": c.get("date"), "clock": st.get("shortDetail", ""),
-                            "home": {"score": _espn_score(tm["home"])}, "away": {"score": _espn_score(tm["away"])},
-                            "player_results": {}, "rounds": None}
-                break
-    return out
-
-
 async def _do_refresh_sgo_league(meta):
-    if meta.get("espn"):
-        return await _refresh_espn_league(meta)
     key = meta["id"]
     prev = (_SGO_CACHE.get(key) or {}).get("data") or []
     params = {"apiKey": SGO_KEY, "leagueID": key, "oddsAvailable": "true", "limit": 15, "includeAltLines": "true"}
@@ -2084,14 +1964,6 @@ async def _fetch_sgo_results(ids):
     if len(_RESULTS_CACHE) > 5000:
         for k in sorted(_RESULTS_CACHE, key=lambda k: _RESULTS_CACHE[k][0])[:1000]:
             _RESULTS_CACHE.pop(k, None)
-    espn = [i for i in need if i.startswith("espn-")]
-    need = [i for i in need if not i.startswith("espn-")]
-    if espn:
-        for eid, res in (await _espn_results(espn)).items():
-            _RESULTS_CACHE[eid] = (now, res)
-            out[eid] = res
-        for miss in set(espn) - set(out):
-            _RESULTS_MISS[miss] = now
     if not SGO_KEY:
         return out
     for i in range(0, len(need), 25):
