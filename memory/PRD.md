@@ -320,3 +320,4 @@
 - Player Vault: wallets.vault (USD, no interest, instant both ways, not withdrawable directly). GET /api/vault, POST /api/vault/{deposit|withdraw}. UI: Wallet modal "Vault" tab (VaultPanel.jsx).
 - Admin vault view: /api/admin/users rows include "vault"; shown under balance in player table and as "Vault" row in player drawer.
 - NBA & NHL switched to free ESPN odds (SGO out of credits): "espn" path on SGO_LEAGUES entries; _espn_markets now supports no-draw moneylines. To revert, remove the "espn" key from NBA/NHL.
+- New SGO key (pro tier, unlimited). All leagues incl. NBA/NHL/Europa back on SportsGameOdds (props restored). ESPN scraper code kept; _espn_results still checks europa/nba/nhl paths for any old espn- bets. To use ESPN for a league again, add "espn": "<sport/league>" to its SGO_LEAGUES entry.
