@@ -251,10 +251,10 @@ SGO_API = "https://api.sportsgameodds.com/v2"
 SGO_LEAGUES = [
     {"id": "NFL", "group": "football", "label": "NFL", "draw": False},
     {"id": "NCAAF", "group": "football", "label": "NCAA Football", "draw": False},
-    {"id": "NBA", "group": "basketball", "label": "NBA", "draw": False},
+    {"id": "NBA", "group": "basketball", "label": "NBA", "draw": False, "espn": "basketball/nba"},
     {"id": "NCAAB", "group": "basketball", "label": "NCAA Basketball", "draw": False},
     {"id": "MLB", "group": "baseball", "label": "MLB", "draw": False},
-    {"id": "NHL", "group": "hockey", "label": "NHL", "draw": False},
+    {"id": "NHL", "group": "hockey", "label": "NHL", "draw": False, "espn": "hockey/nhl"},
     {"id": "EPL", "group": "soccer", "label": "Premier League", "draw": True},
     {"id": "LA_LIGA", "group": "soccer", "label": "La Liga", "draw": True},
     {"id": "UEFA_CHAMPIONS_LEAGUE", "group": "soccer", "label": "Champions League", "draw": True},
@@ -649,7 +649,7 @@ async def _refresh_sgo_league(meta):
 ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports"
 
 
-def _espn_markets(c, ha, aa):
+def _espn_markets(c, ha, aa, draw=True):
     """DraftKings lines published free on ESPN's scoreboard -> our market shape."""
     o = (c.get("odds") or [{}])[0]
     close = lambda x: ((x or {}).get("close") or (x or {}).get("open") or {})
@@ -659,7 +659,7 @@ def _espn_markets(c, ha, aa):
              ("draw", "Draw", (o.get("drawOdds") or {}).get("moneyLine") or close(ml.get("draw")).get("odds")),
              ("away", f"{aa} ML", close(ml.get("away")).get("odds"))]
     sels = [{"side": s, "pick": p, "odds": american_to_decimal(v), "line": None} for s, p, v in pairs if american_to_decimal(v)]
-    if len(sels) == 3:
+    if len(sels) == (3 if draw else 2) and (draw or all(x["side"] != "draw" for x in sels)):
         markets.append({"market": "moneyline", "label": "Moneyline", "selections": sels})
     sp = o.get("pointSpread") or {}
     h, a = close(sp.get("home")), close(sp.get("away"))
@@ -713,7 +713,7 @@ async def _refresh_espn_league(meta):
             tm = {t["homeAway"]: t for t in c["competitors"]}
             h, a = tm["home"]["team"], tm["away"]["team"]
             ha, aa = h.get("abbreviation") or h["displayName"][:3].upper(), a.get("abbreviation") or a["displayName"][:3].upper()
-            markets = _espn_markets(c, ha, aa)
+            markets = _espn_markets(c, ha, aa, meta.get("draw", True))
             if not markets:
                 continue
             state = st.get("state", "pre")

@@ -319,3 +319,4 @@
 - Big win alerts: db.settings{_id:big_win} (default ON, $500 profit). Telegram ping from _record_game (casino) and _finalize_bet (won sportsbook bets). Admin UI AdminBigWin card; GET/PUT /api/admin/big-win.
 - Player Vault: wallets.vault (USD, no interest, instant both ways, not withdrawable directly). GET /api/vault, POST /api/vault/{deposit|withdraw}. UI: Wallet modal "Vault" tab (VaultPanel.jsx).
 - Admin vault view: /api/admin/users rows include "vault"; shown under balance in player table and as "Vault" row in player drawer.
+- NBA & NHL switched to free ESPN odds (SGO out of credits): "espn" path on SGO_LEAGUES entries; _espn_markets now supports no-draw moneylines. To revert, remove the "espn" key from NBA/NHL.
