@@ -324,3 +324,4 @@
 - ESPN odds scraper removed entirely (2026-10). All odds + settlement via SportsGameOdds only. ESPN still used only for UFC fighter photos/records and team logos (CDN).
 - Admin Super Boosts: db.manual_boosts {event_id, market, side, odds}; shown first in Boosted Odds strip (tier "super", fixed_odds); bet placed as single at fixed odds. Admin panel "Super Boosts" card lists/removes. Create via POST /api/admin/boosts. CHA ML 2.45 (ATL@CHA 2026-10-23) created.
 - Admin Super Boosts create form (search game, pick moneyline/spread/total side, set price > current). Preview test boosts removed.
+- Withdrawal reopen: POST /api/admin/withdrawals/{wid}/reopen moves a rejected+refunded withdrawal back to pending_approval, re-reserving amount_usd from player balance (fails if insufficient). Admin withdrawals modal: "Move back to pending" button on rejected items.

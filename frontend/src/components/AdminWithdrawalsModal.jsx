@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ShieldCheck, Loader2, Check, Ban, RefreshCw } from "lucide-react";
+import { X, ShieldCheck, Loader2, Check, Ban, RefreshCw, RotateCcw } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { fmtCrypto, fmtAmt } from "@/lib/format";
 import { Usd } from "@/components/Usd";
@@ -49,7 +49,7 @@ export function AdminWithdrawalsModal({ open, onClose }) {
     setBusyId(wid + action);
     try {
       await api.post(`/admin/withdrawals/${wid}/${action}`);
-      toast.success(action === "approve" ? "Approved — sent to OxaPay" : "Rejected — player refunded");
+      toast.success(action === "approve" ? "Approved — sent to OxaPay" : action === "reopen" ? "Back to pending — amount re-reserved from player" : "Rejected — player refunded");
       load();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
@@ -146,7 +146,15 @@ export function AdminWithdrawalsModal({ open, onClose }) {
                           </button>
                         </div>
                       ) : (
-                        w.decided_by && <p className="mt-2 text-[10px] text-zinc-600">Decided by {w.decided_by}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          {w.decided_by && <p className="text-[10px] text-zinc-600 mr-auto">Decided by {w.decided_by}</p>}
+                          {w.status === "rejected" && w.refunded && (
+                            <button data-testid={`admin-reopen-${w.id}`} onClick={() => decide(w.id, "reopen")} disabled={!!busyId}
+                              className="ml-auto flex items-center gap-1.5 border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 font-bold text-xs px-3 py-1.5 rounded-lg disabled:opacity-50">
+                              {busyId === w.id + "reopen" ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />} Move back to pending
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   );

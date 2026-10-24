@@ -1580,6 +1580,28 @@ async def admin_reject_withdrawal(wid: str, admin: dict = Depends(get_admin_user
     return out
 
 
+@api_router.post("/admin/withdrawals/{wid}/reopen")
+async def admin_reopen_withdrawal(wid: str, admin: dict = Depends(get_admin_user)):
+    wd = await db.withdrawals.find_one({"id": wid, "status": "rejected", "refunded": True})
+    if not wd:
+        raise HTTPException(status_code=404, detail="Only rejected withdrawals can be moved back to pending")
+    usd = wd.get("amount_usd")
+    if usd is None:
+        usd = round(wd["amount"] * (await get_live_rates()).get(wd["coin"], 0), 2)
+    res = await db.wallets.update_one({"user_id": wd["user_id"], "balances.USD": {"$gte": usd}}, {"$inc": {"balances.USD": -usd}})
+    if not res.modified_count:
+        raise HTTPException(status_code=400, detail=f"Player no longer has ${usd:,.2f} in their balance to re-reserve")
+    claimed = await db.withdrawals.update_one({"id": wid, "status": "rejected", "refunded": True},
+                                              {"$set": {"status": "pending_approval", "refunded": False, "reopened_by": admin["email"],
+                                                        "reopened_at": now_iso()}, "$unset": {"decided_by": "", "decided_at": ""}})
+    if not claimed.modified_count:
+        await _adjust(wd["user_id"], "USD", usd)
+        raise HTTPException(status_code=409, detail="Withdrawal changed, try again")
+    await db.transactions.insert_one({"id": str(uuid.uuid4()), "user_id": wd["user_id"], "type": "withdraw", "coin": "USD",
+                                      "amount": usd, "created_at": now_iso(), "hash": "withdraw-reopen:" + wid})
+    return await db.withdrawals.find_one({"id": wid}, {"_id": 0})
+
+
 @api_router.get("/wallet/payout/status/{track_id}")
 async def payout_status(track_id: str, user: dict = Depends(get_current_user)):
     wd = await db.withdrawals.find_one({"track_id": track_id, "user_id": user["id"]})
