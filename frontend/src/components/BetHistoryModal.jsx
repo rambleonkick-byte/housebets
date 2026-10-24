@@ -34,7 +34,7 @@ export function BetHistoryModal({ open, onClose }) {
   const hasOpen = bets.some((b) => b.status === "open");
   useEffect(() => {
     if (!open || !hasOpen) return;
-    const load = () => api.get("/bets/cashout-quotes").then(({ data }) => setQuotes(data.quotes)).catch(() => {});
+    const load = () => api.get("/bets/cashout-quotes").then(({ data }) => setQuotes(data.enabled === false ? null : data.quotes)).catch(() => {});
     load();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
@@ -142,7 +142,7 @@ export function BetHistoryModal({ open, onClose }) {
                           <Trophy size={13} /> Share my win
                         </button>
                       )}
-                      {b.status === "open" && !b.free_bet && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />}
+                      {b.status === "open" && !b.free_bet && quotes !== null && <CashoutButton bet={b} value={quotes[b.id]} onCashout={cashout} onSetAuto={setAuto} />}
                     </div>
                   );
                 })

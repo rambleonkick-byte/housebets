@@ -32,7 +32,7 @@ export function useOpenBets() {
   }, [has, idsKey]);
   useEffect(() => {
     if (!has) return;
-    const load = () => api.get("/bets/cashout-quotes").then(({ data }) => setQuotes(data.quotes)).catch(() => {});
+    const load = () => api.get("/bets/cashout-quotes").then(({ data }) => setQuotes(data.enabled === false ? null : data.quotes)).catch(() => {});
     load();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
@@ -78,7 +78,7 @@ function PropProgress({ p, status, testid }) {
   );
 }
 
-function OpenBetCard({ b, quote, legs, onCashout, onSetAuto, onShare }) {
+function OpenBetCard({ b, quote, cashoutOn, legs, onCashout, onSetAuto, onShare }) {
   const toWin = b.potential_payout - (b.free_bet ? b.stake : 0);
   return (
     <div data-testid={`open-bet-${b.id}`} className="bg-gradient-to-b from-[#161924] to-[#12141C] border border-[#232838] rounded-2xl p-3.5"
@@ -130,7 +130,7 @@ function OpenBetCard({ b, quote, legs, onCashout, onSetAuto, onShare }) {
         <span className="text-zinc-500">Stake <b className="font-mono text-zinc-200" data-testid={`open-bet-stake-${b.id}`}>{fmtAmt(b.stake, b.coin)}</b></span>
         <span className="text-zinc-500">To win <b className="font-mono text-emerald-400" data-testid={`open-bet-towin-${b.id}`}>{fmtAmt(toWin, b.coin)}</b></span>
       </div>
-      {!b.free_bet && <CashoutButton bet={b} value={quote} onCashout={onCashout} onSetAuto={onSetAuto} />}
+      {!b.free_bet && cashoutOn && <CashoutButton bet={b} value={quote} onCashout={onCashout} onSetAuto={onSetAuto} />}
     </div>
   );
 }
@@ -187,7 +187,7 @@ export function OpenBetsPanel({ data }) {
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-4 pb-4 space-y-3">
-        {bets.map((b) => <OpenBetCard key={b.id} b={b} quote={quotes[b.id]} legs={data.live?.[b.id]} onCashout={cashout} onSetAuto={setAuto}
+        {bets.map((b) => <OpenBetCard key={b.id} b={b} quote={quotes?.[b.id]} cashoutOn={quotes !== null} legs={data.live?.[b.id]} onCashout={cashout} onSetAuto={setAuto}
           onShare={(bet) => setShare({ bet, legs: data.live?.[bet.id], by: user.name || "My" })} />)}
       </div>
       <OpenBetShareModal share={share} onClose={() => setShare(null)} />

@@ -2320,8 +2320,35 @@ async def _events_index():
     return {ev["event_id"]: ev for ev in await _fetch_sgo_sequential(SGO_LEAGUES)}
 
 
+async def _cashout_on() -> bool:
+    d = await db.settings.find_one({"_id": "cashout"}) or {}
+    return d.get("enabled", False)
+
+
+async def _require_cashout():
+    if not await _cashout_on():
+        raise HTTPException(status_code=403, detail="Cash out is currently unavailable")
+
+
+@api_router.get("/admin/cashout")
+async def admin_cashout_setting(admin: dict = Depends(get_admin_user)):
+    return {"enabled": await _cashout_on()}
+
+
+class ToggleInput(BaseModel):
+    enabled: bool
+
+
+@api_router.put("/admin/cashout")
+async def admin_set_cashout(body: ToggleInput, admin: dict = Depends(get_admin_user)):
+    await db.settings.update_one({"_id": "cashout"}, {"$set": {"enabled": body.enabled}}, upsert=True)
+    return {"enabled": body.enabled}
+
+
 @api_router.get("/bets/cashout-quotes")
 async def cashout_quotes(user: dict = Depends(get_current_user)):
+    if not await _cashout_on():
+        return {"enabled": False, "quotes": {}}
     open_bets = await db.bets.find({"user_id": user["id"], "status": "open"}, {"_id": 0}).to_list(200)
     if not open_bets:
         return {"quotes": {}}
@@ -2354,7 +2381,7 @@ async def _run_auto_cashouts():
     _AUTO_CO["running"] = True
     try:
         bets = await db.bets.find({"status": "open", "auto_cashout": {"$gt": 0}}, {"_id": 0}).to_list(1000)
-        if not bets:
+        if not bets or not await _cashout_on():
             return
         events = await _events_index()
         for b in bets:
@@ -2380,6 +2407,7 @@ class AutoCashoutInput(BaseModel):
 
 @api_router.post("/bets/{bet_id}/auto-cashout")
 async def set_auto_cashout(bet_id: str, body: AutoCashoutInput, user: dict = Depends(get_current_user)):
+    await _require_cashout()
     b = await db.bets.find_one({"id": bet_id, "user_id": user["id"], "status": "open"}, {"_id": 0})
     if not b:
         raise HTTPException(status_code=400, detail="Only open bets can use auto cash out")
@@ -2409,6 +2437,7 @@ class CashoutInput(BaseModel):
 
 @api_router.post("/bets/{bet_id}/cashout")
 async def cashout_bet(bet_id: str, body: CashoutInput, user: dict = Depends(get_current_user)):
+    await _require_cashout()
     b = await db.bets.find_one({"id": bet_id, "user_id": user["id"]}, {"_id": 0})
     if not b or b["status"] != "open":
         raise HTTPException(status_code=400, detail="This bet can no longer be cashed out")

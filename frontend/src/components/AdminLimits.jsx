@@ -68,6 +68,28 @@ export function AdminBigWin() {
   );
 }
 
+export function AdminCashoutToggle() {
+  const [on, setOn] = useState(null);
+  useEffect(() => { api.get("/admin/cashout").then(({ data }) => setOn(data.enabled)); }, []);
+  const flip = async () => {
+    try {
+      const { data } = await api.put("/admin/cashout", { enabled: !on });
+      setOn(data.enabled);
+      toast.success(data.enabled ? "Cash out is back on for players" : "Cash out turned off for all bets");
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+  };
+  if (on === null) return null;
+  return (
+    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-cashout-toggle">
+      <p className="font-bold mr-auto">Sportsbook cash out <span className="text-xs font-normal text-zinc-500">(cash out + auto cash out on open bets)</span></p>
+      <button data-testid="admin-cashout-toggle-button" onClick={flip}
+        className={`text-xs font-bold px-3 py-2 rounded-lg border ${on ? "border-emerald-500/50 text-emerald-300 bg-emerald-500/10" : "border-red-500/50 text-red-300 bg-red-500/10"}`}>
+        {on ? "ON — tap to turn off" : "OFF — tap to turn on"}
+      </button>
+    </div>
+  );
+}
+
 const pingPhone = async () => {
   try { await api.post("/admin/telegram/test"); toast.success("Test ping sent to your Telegram"); }
   catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
