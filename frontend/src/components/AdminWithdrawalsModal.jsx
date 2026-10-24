@@ -148,7 +148,7 @@ export function AdminWithdrawalsModal({ open, onClose }) {
                       ) : (
                         <div className="mt-2 flex items-center gap-2">
                           {w.decided_by && <p className="text-[10px] text-zinc-600 mr-auto">Decided by {w.decided_by}</p>}
-                          {w.status === "rejected" && w.refunded && (
+                          {["rejected", "failed", "canceled", "cancelled"].includes(w.status) && w.refunded && (
                             <button data-testid={`admin-reopen-${w.id}`} onClick={() => decide(w.id, "reopen")} disabled={!!busyId}
                               className="ml-auto flex items-center gap-1.5 border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 font-bold text-xs px-3 py-1.5 rounded-lg disabled:opacity-50">
                               {busyId === w.id + "reopen" ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />} Move back to pending

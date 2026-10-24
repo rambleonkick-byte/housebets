@@ -325,3 +325,4 @@
 - Admin Super Boosts: db.manual_boosts {event_id, market, side, odds}; shown first in Boosted Odds strip (tier "super", fixed_odds); bet placed as single at fixed odds. Admin panel "Super Boosts" card lists/removes. Create via POST /api/admin/boosts. CHA ML 2.45 (ATL@CHA 2026-10-23) created.
 - Admin Super Boosts create form (search game, pick moneyline/spread/total side, set price > current). Preview test boosts removed.
 - Withdrawal reopen: POST /api/admin/withdrawals/{wid}/reopen moves a rejected+refunded withdrawal back to pending_approval, re-reserving amount_usd from player balance (fails if insufficient). Admin withdrawals modal: "Move back to pending" button on rejected items.
+- Reopen also works for failed/canceled payouts (refunded=True). Old OxaPay track_id moved to old_track_ids so stale webhooks cannot touch the reopened withdrawal.
