@@ -377,6 +377,53 @@ def _sgo_props(ev):
     return out
 
 
+def _tennis_markets(odds, ha, aa):
+    """Set winner, total games and games handicap — only present on tennis events."""
+    out = []
+    dec = lambda o: american_to_decimal(o.get("bookOdds")) if o else None  # noqa: E731
+    for n, word in (("1s", "1st"), ("2s", "2nd")):
+        h, a = dec(odds.get(f"points-home-{n}-ml-home")), dec(odds.get(f"points-away-{n}-ml-away"))
+        if h and a:
+            out.append({"market": f"set{n[0]}_ml", "label": f"{word} Set Winner", "selections": [
+                {"side": "home", "pick": f"{ha} to win {word} set", "label": ha, "odds": h, "line": None},
+                {"side": "away", "pick": f"{aa} to win {word} set", "label": aa, "odds": a, "line": None}]})
+    for key, mk, label, what in (("game", "total_games", "Total Games", "games"), ("1s", "set1_games", "1st Set Total Games", "games in 1st set")):
+        ov, un = odds.get(f"games-all-{key}-ou-over"), odds.get(f"games-all-{key}-ou-under")
+        line = _num((ov or {}).get("bookOverUnder"))
+        oo, uo = dec(ov), dec(un)
+        if None not in (line, oo, uo):
+            out.append({"market": mk, "label": label, "selections": [
+                {"side": "over", "pick": f"Over {line:g} {what}", "label": f"O {line:g}", "odds": oo, "line": line},
+                {"side": "under", "pick": f"Under {line:g} {what}", "label": f"U {line:g}", "odds": uo, "line": line}]})
+    hs, as_ = odds.get("games-home-game-sp-home"), odds.get("games-away-game-sp-away")
+    hl, al = _num((hs or {}).get("bookSpread")), _num((as_ or {}).get("bookSpread"))
+    ho, ao = dec(hs), dec(as_)
+    if None not in (hl, al, ho, ao):
+        out.append({"market": "games_spread", "label": "Games Handicap", "selections": [
+            {"side": "home", "pick": f"{ha} {hl:+g} games", "label": f"{ha} {hl:+g}", "odds": ho, "line": hl},
+            {"side": "away", "pick": f"{aa} {al:+g} games", "label": f"{aa} {al:+g}", "odds": ao, "line": al}]})
+    return out
+
+
+def _set_done(h, a):
+    hi, lo = max(h, a), min(h, a)
+    return (hi >= 6 and hi - lo >= 2) or (hi == 7 and lo in (5, 6))
+
+
+def _sgo_sets(ev):
+    res = ev.get("results") or {}
+    sets = []
+    for i in range(1, 6):
+        s = res.get(f"{i}s")
+        if not s:
+            break
+        try:
+            sets.append([int(float((s.get("home") or {}).get("games"))), int(float((s.get("away") or {}).get("games")))])
+        except (TypeError, ValueError):
+            break
+    return sets or None
+
+
 def _sgo_markets(ev, draw):
     odds = ev.get("odds", {})
     ha = _sgo_abbr(ev["teams"]["home"])
@@ -429,6 +476,12 @@ def _sgo_markets(ev, draw):
             markets.append({"market": "distance", "label": "Goes the Distance", "selections": [
                 {"side": "yes", "pick": "Fight goes the distance", "label": "Yes", "odds": yo, "line": None},
                 {"side": "no", "pick": "Fight doesn't go the distance", "label": "No", "odds": no, "line": None}]})
+    res = ev.get("results") or {}
+    st = ev.get("status") or {}
+    cur = re.match(r"(\d)s$", str(st.get("currentPeriodID") or ""))
+    on = int(cur.group(1)) if cur else max([int(k[0]) for k in res if re.fullmatch(r"\d+s", k)] or [0])
+    done = {f"set{i}" for i in (1, 2) if on > i or st.get("completed") or (st.get("live") and not cur and on == 0)}
+    markets += [m for m in _tennis_markets(odds, ha, aa) if not any(m["market"].startswith(d) for d in done)]
     main = {(x["market"], s["side"], s["line"]): s["odds"] for x in markets if x["market"] in ("spread", "total")
             for s in x["selections"]}
     alt_sp = _alt_ladder(odds.get("points-home-game-sp-home"), odds.get("points-away-game-sp-away"), "spread", negate=True)
@@ -1849,14 +1902,18 @@ def _manual_boost_cards(soon):
     out = []
     for mb in _MANUAL_BOOSTS:
         ev = evs.get(mb["event_id"])
-        if not ev or ev["state"] != "pre" or datetime.fromisoformat(ev["start"].replace("Z", "+00:00")) < soon:
+        pct = mb.get("pct")
+        if not ev or ev["state"] == "post" or (not pct and (ev["state"] != "pre" or datetime.fromisoformat(ev["start"].replace("Z", "+00:00")) < soon)):
             continue
         mk = next((m for m in ev.get("markets", []) if m["market"] == mb["market"]), None)
         sel = next((s for s in (mk or {}).get("selections", []) if s["side"] == mb["side"] and s.get("odds")), None)
+        if pct and sel:
+            mb = {**mb, "odds": round(1 + (sel["odds"] - 1) * (1 + pct), 2)}
         if not sel or sel["odds"] >= mb["odds"]:
             continue
         leg = _boost_leg(ev, mb["market"], sel["side"], sel["pick"], sel.get("line"), sel["odds"])
-        out.append({"id": f"manual:{mb['id']}", "tier": "super", "label": "Super Boost", "pct": 0, "fixed_odds": mb["odds"],
+        out.append({"id": f"manual:{mb['id']}", "tier": "super", "label": "Super Boost" + (" · Live" if ev["state"] == "in" else ""),
+                    "pct": 0, "fixed_odds": mb["odds"], "boost_pct": pct, "live": ev["state"] == "in",
                     "event_id": ev["event_id"], "league_label": ev["league_label"], "starts_at": ev["start"],
                     "home": ev["home"]["name"], "away": ev["away"]["name"],
                     "legs": [leg], "base_odds": sel["odds"], "boosted_odds": mb["odds"]})
@@ -1867,7 +1924,8 @@ class ManualBoostInput(BaseModel):
     event_id: str
     market: str = "moneyline"
     side: str
-    odds: float = Field(gt=1, le=100, allow_inf_nan=False)
+    odds: Optional[float] = Field(default=None, gt=1, le=100, allow_inf_nan=False)
+    pct: Optional[float] = Field(default=None, gt=0, le=1, allow_inf_nan=False)
 
 
 @api_router.get("/admin/boosts")
@@ -1878,7 +1936,11 @@ async def admin_list_boosts(admin: dict = Depends(get_admin_user)):
 
 @api_router.post("/admin/boosts")
 async def admin_add_boost(body: ManualBoostInput, admin: dict = Depends(get_admin_user)):
-    doc = {"id": uuid.uuid4().hex[:10], **body.model_dump(), "odds": round(body.odds, 2), "created_at": now_iso()}
+    if (body.odds is None) == (body.pct is None):
+        raise HTTPException(status_code=400, detail="Set either a boosted price or a boost percent")
+    doc = {"id": uuid.uuid4().hex[:10], **body.model_dump(), "created_at": now_iso()}
+    if body.odds:
+        doc["odds"] = round(body.odds, 2)
     await db.manual_boosts.insert_one(dict(doc))
     await _load_manual_boosts()
     return doc
@@ -2042,6 +2104,25 @@ def settle_selection(sel, ev) -> Optional[bool]:
         if n >= math.floor(line) + 2:
             return side == "over"
         return "push"
+    if m in ("set1_ml", "set2_ml", "total_games", "set1_games", "games_spread"):
+        sets = ev.get("sets")
+        if ev.get("state") != "post" or not sets:
+            return None
+        if m in ("set1_ml", "set2_ml"):
+            i = int(m[3]) - 1
+            if i >= len(sets) or not _set_done(*sets[i]):
+                return "push"  # set never finished (retirement)
+            return (sets[i][0] > sets[i][1]) == (side == "home")
+        if line is None:
+            return None
+        if m == "games_spread":
+            h, a = sum(x[0] for x in sets), sum(x[1] for x in sets)
+            mine, theirs = (h, a) if side == "home" else (a, h)
+            return "push" if mine + line == theirs else (mine + line) > theirs
+        total = sum(sets[0]) if m == "set1_games" else sum(x[0] + x[1] for x in sets)
+        if total == line:
+            return "push"
+        return total > line if side == "over" else total < line
     try:
         hs = int(ev["home"]["score"])
         as_ = int(ev["away"]["score"])
@@ -2084,7 +2165,8 @@ def _sgo_result_event(ev):
             "clock": st.get("displayShort") or st.get("displayLong") or "",
             "home": {"score": _sgo_score(ev, "home")}, "away": {"score": _sgo_score(ev, "away")},
             "player_results": _sgo_player_results(ev) if state != "pre" else {},
-            "rounds": sum(1 for k in (ev.get("results") or {}) if re.fullmatch(r"\d+r", k)) or None}
+            "rounds": sum(1 for k in (ev.get("results") or {}) if re.fullmatch(r"\d+r", k)) or None,
+            "sets": _sgo_sets(ev)}
 
 
 async def _fetch_sgo_results(ids):

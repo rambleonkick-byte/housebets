@@ -28,7 +28,7 @@ function BoostCard({ b, i }) {
   const d = new Date(b.starts_at);
   const when = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} · ${d.toTimeString().slice(0, 5)}`;
   const active = boost?.id === b.id;
-  if (left <= 5 * 60000) return null;
+  if (!b.live && left <= 5 * 60000) return null;
   return (
     <motion.div data-testid={`boost-card-${b.tier}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
       className={`w-[300px] sm:w-[320px] shrink-0 bg-[#16181F] border rounded-2xl p-4 flex flex-col transition-shadow ${t.glow} ${active ? "border-emerald-500/70" : "border-[#262A38]"}`}>
@@ -37,7 +37,7 @@ function BoostCard({ b, i }) {
           <span className="w-6 h-6 rounded-md border border-zinc-600 flex items-center justify-center text-[9px] font-black text-zinc-300">AO</span>
           <span data-testid={`boost-tier-${b.tier}`} className={`text-[11px] font-black uppercase tracking-wide rounded-md px-2 py-0.5 ${t.pill}`}>{b.label}</span>
         </div>
-        <span data-testid={`boost-countdown-${b.tier}`} className="font-mono text-[11px] font-bold bg-white text-black rounded-md px-2 py-0.5">{text}</span>
+        <span data-testid={`boost-countdown-${b.tier}`} className={`font-mono text-[11px] font-bold rounded-md px-2 py-0.5 ${b.live ? "bg-red-500 text-white animate-pulse" : "bg-white text-black"}`}>{b.live ? "● LIVE" : text}</span>
       </div>
       <div className="flex items-center justify-between mt-4 text-[12px]">
         <span className="flex items-center gap-1.5 text-zinc-400 truncate"><Trophy size={13} /> {b.league_label}</span>
