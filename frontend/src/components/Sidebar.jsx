@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { LayoutGrid, Goal, Dribbble, Shield, CircleDot, Snowflake, Dices, Swords } from "lucide-react";
+import { LayoutGrid, Goal, Dribbble, Shield, CircleDot, Snowflake, Dices, Swords, Volleyball } from "lucide-react";
 
 const ICONS = {
   all: { Icon: LayoutGrid, color: "#10B981" },
@@ -10,6 +10,7 @@ const ICONS = {
   baseball: { Icon: CircleDot, color: "#EF4444" },
   hockey: { Icon: Snowflake, color: "#38BDF8" },
   mma: { Icon: Swords, color: "#F43F5E" },
+  tennis: { Icon: Volleyball, color: "#D9F99D" },
 };
 
 function Tabs() {

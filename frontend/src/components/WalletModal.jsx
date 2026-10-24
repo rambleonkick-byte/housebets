@@ -31,6 +31,17 @@ export function WalletModal({ open, onClose }) {
   const [coin, setCoin] = useState("USDT");
   const [amount, setAmount] = useState("");
   const [address, setAddress] = useState("");
+  const [addrCheck, setAddrCheck] = useState(null);
+  useEffect(() => {
+    const a = address.trim();
+    if (a.length < 10) { setAddrCheck(null); return; }
+    setAddrCheck({ checking: true });
+    const t = setTimeout(() => {
+      api.post("/wallet/check-address", { coin, address: a })
+        .then(({ data }) => setAddrCheck(data)).catch(() => setAddrCheck(null));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [address, coin]);
   const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(false);
   const [deposit, setDeposit] = useState(null);     // generated address payload
@@ -216,7 +227,10 @@ export function WalletModal({ open, onClose }) {
                     </div>
                     <input data-testid="wallet-address-input" value={address}
                       onChange={(e) => setAddress(e.target.value)} placeholder={`${coin} wallet address`}
-                      className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-xs break-all focus:outline-none focus:border-emerald-500" />
+                      className={`w-full bg-[#090A0F] border rounded-lg px-3 py-2.5 font-mono text-xs break-all focus:outline-none ${addrCheck?.ok === false ? "border-red-500/70 focus:border-red-500" : "border-[#2A2F45] focus:border-emerald-500"}`} />
+                    {addrCheck?.checking && <p className="text-[11px] text-zinc-500 flex items-center gap-1.5" data-testid="wallet-address-checking"><Loader2 size={11} className="animate-spin" /> Checking address…</p>}
+                    {addrCheck?.ok === false && <p className="text-[11px] text-red-400 flex items-start gap-1.5" data-testid="wallet-address-error"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> {addrCheck.error}</p>}
+                    {addrCheck?.ok && <p className="text-[11px] text-emerald-400 flex items-center gap-1.5" data-testid="wallet-address-ok"><ShieldCheck size={12} /> Address looks good</p>}
                     <input data-testid="wallet-amount-input" type="number" min="0" value={amount}
                       onChange={(e) => setAmount(e.target.value)} placeholder="Amount in USD"
                       className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
@@ -224,7 +238,7 @@ export function WalletModal({ open, onClose }) {
                       <span>Available {fmtAmt(total, "USD")}</span>
                       <span>You receive ≈ {fmtCrypto(estCrypto, coin)} {coin}</span>
                     </div>
-                    <button data-testid="wallet-submit-button" onClick={act} disabled={loading}
+                    <button data-testid="wallet-submit-button" onClick={act} disabled={loading || addrCheck?.ok === false || addrCheck?.checking}
                       className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-60">
                       {loading && <Loader2 size={16} className="animate-spin" />} Withdraw to Address
                     </button>

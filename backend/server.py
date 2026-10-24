@@ -264,6 +264,8 @@ SGO_LEAGUES = [
     {"id": "FR_LIGUE_1", "group": "soccer", "label": "Ligue 1", "draw": True},
     {"id": "MLS", "group": "soccer", "label": "MLS", "draw": True},
     {"id": "UFC", "group": "mma", "label": "UFC", "draw": False},
+    {"id": "ATP", "group": "tennis", "label": "ATP", "draw": False},
+    {"id": "WTA", "group": "tennis", "label": "WTA", "draw": False},
 ]
 GROUPS = [
     {"key": "soccer", "label": "Soccer", "icon": "goal"},
@@ -272,6 +274,7 @@ GROUPS = [
     {"key": "baseball", "label": "Baseball", "icon": "circle-dot"},
     {"key": "hockey", "label": "Ice Hockey", "icon": "snowflake"},
     {"key": "mma", "label": "MMA", "icon": "swords"},
+    {"key": "tennis", "label": "Tennis", "icon": "tennis"},
 ]
 _SGO_CACHE = {}
 
@@ -309,7 +312,7 @@ def _sgo_score(ev, side):
 
 def _sgo_abbr(team):
     n = team.get("names", {}) or {}
-    if str(team.get("teamID", "")).endswith("_UFC") and n.get("lastName"):
+    if str(team.get("teamID", "")).endswith(("_UFC", "_ATP", "_WTA")) and n.get("lastName"):
         return n["lastName"]
     return n.get("short") or n.get("medium") or n.get("long") or team.get("teamID", "TBD")
 
@@ -1086,6 +1089,58 @@ async def move_vault(direction: str, body: VaultInput, user: dict = Depends(get_
     return await _vault_state(user["id"])
 
 
+B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+EVM_RPC = "https://ethereum-rpc.publicnode.com"
+
+
+def _b58_len(s):
+    n = 0
+    for ch in s:
+        n = n * 58 + B58.index(ch)
+    return (n.bit_length() + 7) // 8 + (len(s) - len(s.lstrip("1")))
+
+
+async def _check_address(coin: str, address: str):
+    """Return None if the address looks payable on the coin's network, else a player-facing reason."""
+    a = address.strip()
+    net = COIN_NETWORK.get(coin)
+    if net == "ERC20":
+        if not re.fullmatch(r"0x[0-9a-fA-F]{40}", a):
+            return "That isn't a valid Ethereum (ERC20) address — it should start with 0x and be 42 characters"
+        if int(a, 16) == 0:
+            return "That address can't receive funds"
+        try:
+            async with httpx.AsyncClient(timeout=8) as hc:
+                code = (await hc.post(EVM_RPC, json={"jsonrpc": "2.0", "id": 1, "method": "eth_getCode",
+                                                     "params": [a, "latest"]})).json().get("result")
+            if code and code != "0x":
+                return ("That's a smart-contract or smart-wallet address, which payouts can't be sent to. "
+                        "Use a regular wallet address (e.g. MetaMask, Trust Wallet or an exchange deposit address)")
+        except Exception as e:
+            logger.warning(f"Address contract check skipped: {e}")
+        return None
+    if net == "BTC":
+        if re.fullmatch(r"(bc1|BC1)[ac-hj-np-zAC-HJ-NP-Z02-9]{11,71}", a) or re.fullmatch(r"[13][1-9A-HJ-NP-Za-km-z]{25,34}", a):
+            return None
+        return "That isn't a valid Bitcoin address — it should start with bc1, 1 or 3"
+    if net == "SOL":
+        if re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{32,44}", a) and _b58_len(a) == 32:
+            return None
+        return "That isn't a valid Solana address"
+    return None
+
+
+class AddressCheckInput(BaseModel):
+    coin: str
+    address: str
+
+
+@api_router.post("/wallet/check-address")
+async def check_address(body: AddressCheckInput, user: dict = Depends(get_current_user)):
+    err = await _check_address(body.coin, body.address)
+    return {"ok": err is None, "error": err}
+
+
 @api_router.post("/wallet/withdraw")
 async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
     await ensure_wallet(user["id"])
@@ -1095,6 +1150,9 @@ async def withdraw(body: WithdrawInput, user: dict = Depends(get_current_user)):
     address = (body.address or "").strip()
     if len(address) < 10:
         raise HTTPException(status_code=400, detail="Enter a valid wallet address")
+    addr_err = await _check_address(body.coin, address)
+    if addr_err:
+        raise HTTPException(status_code=400, detail=addr_err)
     usd = round(body.amount, 2)
     if usd < 1:
         raise HTTPException(status_code=400, detail="Minimum withdrawal is $1.00")
