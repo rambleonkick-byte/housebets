@@ -2227,8 +2227,28 @@ async def _settle_loop():
         await asyncio.sleep(600)
 
 
+class ToggleInput(BaseModel):
+    enabled: bool
+
+
+async def _auto_settle_on() -> bool:
+    d = await db.settings.find_one({"_id": "auto_settle"}) or {}
+    return d.get("enabled", False)
+
+
+@api_router.get("/admin/auto-settle")
+async def admin_auto_settle(admin: dict = Depends(get_admin_user)):
+    return {"enabled": await _auto_settle_on()}
+
+
+@api_router.put("/admin/auto-settle")
+async def admin_set_auto_settle(body: ToggleInput, admin: dict = Depends(get_admin_user)):
+    await db.settings.update_one({"_id": "auto_settle"}, {"$set": {"enabled": body.enabled}}, upsert=True)
+    return {"enabled": body.enabled}
+
+
 async def _settle_bets(open_bets):
-    if not open_bets:
+    if not open_bets or not await _auto_settle_on():
         return
     results = await _fetch_sgo_results(s["event_id"] for b in open_bets for s in b["selections"])
     for b in open_bets:
@@ -2333,10 +2353,6 @@ async def _require_cashout():
 @api_router.get("/admin/cashout")
 async def admin_cashout_setting(admin: dict = Depends(get_admin_user)):
     return {"enabled": await _cashout_on()}
-
-
-class ToggleInput(BaseModel):
-    enabled: bool
 
 
 @api_router.put("/admin/cashout")
@@ -3533,13 +3549,30 @@ async def _money_flow(ids):
 
 @api_router.get("/admin/bets/review")
 async def admin_review_bets(admin: dict = Depends(get_admin_user)):
-    bets = await db.bets.find({"status": "open", "needs_review": True}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    manual = not await _auto_settle_on()
+    flt = {"status": "open"} if manual else {"status": "open", "needs_review": True}
+    bets = await db.bets.find(flt, {"_id": 0}).sort("created_at", 1).to_list(200)
+    if manual and bets:
+        results = await _fetch_sgo_results({s["event_id"] for b in bets for s in b["selections"]})
+        for b in bets:
+            for sel in b["selections"]:
+                ev = results.get(sel["event_id"])
+                if ev and ev["state"] in ("in", "post"):
+                    sel["score"] = f"{sel.get('away')} {ev['away']['score']} - {ev['home']['score']} {sel.get('home')}" + (" (final)" if ev["state"] == "post" else " (live)")
+                if ev and ev["cancelled"]:
+                    sel["suggest"] = "push"
+                elif ev and ev["state"] == "post":
+                    try:
+                        r = settle_selection(sel, ev)
+                        sel["suggest"] = {True: "won", False: "lost"}.get(r, r)
+                    except Exception:
+                        pass
     ids = [ObjectId(b["user_id"]) for b in bets if ObjectId.is_valid(b["user_id"])]
     emails = {str(u["_id"]): u["email"] async for u in db.users.find({"_id": {"$in": ids}}, {"email": 1})}
     for b in bets:
         b["user_email"] = emails.get(b["user_id"], "")
     open_count = await db.bets.count_documents({"status": "open"})
-    return {"bets": bets, "open_count": open_count}
+    return {"bets": bets, "open_count": open_count, "manual": manual}
 
 
 @api_router.post("/admin/bets/settle-sweep")
