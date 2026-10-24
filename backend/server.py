@@ -1177,10 +1177,10 @@ async def oxapay_invoice(body: WalletTxInput, user: dict = Depends(get_current_u
         result = r.json()
     except Exception as e:
         logger.warning(f"OxaPay white-label error: {e}")
-        raise HTTPException(status_code=502, detail="Payment gateway unreachable")
+        raise HTTPException(status_code=400, detail="Payment gateway unreachable")
     if r.status_code >= 400 or result.get("status") != 200:
         logger.warning(f"OxaPay white-label rejected: {r.status_code} {result}")
-        raise HTTPException(status_code=502, detail=(result.get("message") or "Gateway error creating deposit"))
+        raise HTTPException(status_code=400, detail=(result.get("message") or "Gateway error creating deposit"))
     data = result["data"]
     pay_amount = float(data.get("pay_amount") or body.amount)
     await db.oxa_invoices.insert_one({
@@ -1305,10 +1305,10 @@ async def get_deposit_address(coin: str, user: dict = Depends(get_current_user))
         result = r.json()
     except Exception as e:
         logger.warning(f"OxaPay static-address error: {e}")
-        raise HTTPException(status_code=502, detail="Payment gateway unreachable")
+        raise HTTPException(status_code=400, detail="Payment gateway unreachable")
     if r.status_code >= 400 or result.get("status") != 200:
         logger.warning(f"OxaPay static-address rejected: {r.status_code} {result}")
-        raise HTTPException(status_code=502, detail=(result.get("message") or "Gateway error creating address"))
+        raise HTTPException(status_code=400, detail=(result.get("message") or "Gateway error creating address"))
     d = result["data"]
     sa = {"user_id": user["id"], "coin": coin, "net": net, "address": d.get("address"), "network": d.get("network"),
           "memo": d.get("memo") or "", "qr_code": d.get("qr_code"), "track_id": str(d.get("track_id")),
@@ -1549,7 +1549,7 @@ async def admin_list_withdrawals(status: Optional[str] = None, admin: dict = Dep
 @api_router.post("/admin/withdrawals/{wid}/approve")
 async def admin_approve_withdrawal(wid: str, admin: dict = Depends(get_admin_user)):
     if not OXAPAY_PAYOUT_KEY:
-        raise HTTPException(status_code=503, detail="Payouts not configured — add an OxaPay payout key")
+        raise HTTPException(status_code=400, detail="Payouts not configured — add an OxaPay payout key")
     wd = await db.withdrawals.find_one_and_update(
         {"id": wid, "status": "pending_approval"},
         {"$set": {"status": "approving", "decided_by": admin["email"], "decided_at": now_iso()}})
@@ -1561,7 +1561,7 @@ async def admin_approve_withdrawal(wid: str, admin: dict = Depends(get_admin_use
             {"id": wid, "refunded": {"$ne": True}},
             {"$set": {"status": "failed", "refunded": True, "refunded_at": now_iso()}})
         await _do_refund(wd)
-        raise HTTPException(status_code=502, detail=f"{res} — amount refunded to the player")
+        raise HTTPException(status_code=400, detail=f"{res} — amount refunded to the player")
     await db.withdrawals.update_one({"id": wid},
                                     {"$set": {"track_id": res["track_id"], "status": res["status"]}})
     out = await db.withdrawals.find_one({"id": wid}, {"_id": 0})
