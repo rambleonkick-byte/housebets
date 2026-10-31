@@ -22,6 +22,7 @@ import { Dice } from "@/pages/games/Dice";
 import Affiliate from "@/pages/Affiliate";
 import AdminPanel from "@/pages/AdminPanel";
 import Profile from "@/pages/Profile";
+import Maintenance from "@/pages/Maintenance";
 
 function Shell() {
   const { user, setAuthOpen } = useAuth();
@@ -63,7 +64,10 @@ function Shell() {
   );
 }
 
+const MAINTENANCE = true;
+
 function App() {
+  if (MAINTENANCE) return <Maintenance />;
   return (
     <BrowserRouter>
       <AuthProvider>

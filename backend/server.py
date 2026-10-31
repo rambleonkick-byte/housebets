@@ -7,7 +7,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -4221,6 +4221,18 @@ async def download_marketing(name: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(path, media_type=mt, filename=out)
+
+
+MAINTENANCE = True
+MAINTENANCE_OPEN = ("/api/auth/", "/api/admin/", "/api/oxapay/", "/api/marketing/")
+
+
+@app.middleware("http")
+async def maintenance_gate(request: Request, call_next):
+    p = request.url.path
+    if MAINTENANCE and p.startswith("/api/") and not p.startswith(MAINTENANCE_OPEN):
+        return JSONResponse(status_code=423, content={"detail": "ApexOdds is offline for maintenance (12-24 hours). Thank you for your patience."})
+    return await call_next(request)
 
 
 app.include_router(api_router)
