@@ -31,7 +31,7 @@ export function AltLineSlider({ ev, m, main, meta }) {
   const tid = `${ev.event_id}-${m.market}`;
 
   return (
-    <div data-testid={`alt-slider-${tid}`} className="rounded-lg border border-[#1E2234] bg-[#0E1017]/60 p-3">
+    <div data-testid={`alt-slider-${tid}`} className="rounded-lg border border-[#162848] bg-[#0A1530]/60 p-3">
       <div className="flex items-center justify-between mb-2.5">
         <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500">
           <SlidersHorizontal size={11} /> {m.label}
@@ -42,17 +42,17 @@ export function AltLineSlider({ ev, m, main, meta }) {
       </div>
       <div className="flex items-center gap-2">
       <button data-testid={`alt-step-down-${tid}`} aria-label="Previous line" onClick={() => setIdx(Math.max(0, i - 1))} disabled={i === 0}
-        className="w-6 h-6 shrink-0 rounded-md border border-[#2A2F45] flex items-center justify-center text-zinc-400 hover:text-emerald-300 hover:border-emerald-500/50 disabled:opacity-30"><Minus size={12} /></button>
+        className="w-6 h-6 shrink-0 rounded-md border border-[#1D3157] flex items-center justify-center text-zinc-400 hover:text-emerald-300 hover:border-emerald-500/50 disabled:opacity-30"><Minus size={12} /></button>
       <SliderPrimitive.Root data-testid={`alt-slider-input-${tid}`} min={0} max={rows.length - 1} step={1} value={[i]}
         onValueChange={([v]) => setIdx(v)} className="relative flex w-full touch-none select-none items-center h-5">
-        <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-[#2A2F45]">
+        <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-[#1D3157]">
           <SliderPrimitive.Range className="absolute h-full bg-emerald-500/70" />
         </SliderPrimitive.Track>
         <SliderPrimitive.Thumb aria-label={`${m.label} line`}
-          className="block h-5 w-5 rounded-full border-2 border-emerald-400 bg-[#090A0F] shadow-[0_0_12px_rgba(16,185,129,0.6)] transition-transform hover:scale-110 focus-visible:outline-none" />
+          className="block h-5 w-5 rounded-full border-2 border-emerald-400 bg-[#071024] shadow-[0_0_12px_rgba(34,211,238,0.6)] transition-transform hover:scale-110 focus-visible:outline-none" />
       </SliderPrimitive.Root>
       <button data-testid={`alt-step-up-${tid}`} aria-label="Next line" onClick={() => setIdx(Math.min(rows.length - 1, i + 1))} disabled={i === rows.length - 1}
-        className="w-6 h-6 shrink-0 rounded-md border border-[#2A2F45] flex items-center justify-center text-zinc-400 hover:text-emerald-300 hover:border-emerald-500/50 disabled:opacity-30"><Plus size={12} /></button>
+        className="w-6 h-6 shrink-0 rounded-md border border-[#1D3157] flex items-center justify-center text-zinc-400 hover:text-emerald-300 hover:border-emerald-500/50 disabled:opacity-30"><Plus size={12} /></button>
       </div>
       <div className="flex justify-between text-[9px] font-mono text-zinc-600 mt-1 mb-2 px-8">
         <span>{spread ? fmtLine(rows[0].key) : rows[0].key}</span>
@@ -62,7 +62,7 @@ export function AltLineSlider({ ev, m, main, meta }) {
       <div className="grid grid-cols-2 gap-1.5">
         {[a, b].map((side) => r[side]
           ? <OddsButton key={`${side}-${r.key}`} sel={{ ...r[side], market: m.market }} meta={meta} />
-          : <div key={side} className="py-2 rounded-md border border-dashed border-[#2A2F45] text-center text-[10px] text-zinc-600">Not offered</div>)}
+          : <div key={side} className="py-2 rounded-md border border-dashed border-[#1D3157] text-center text-[10px] text-zinc-600">Not offered</div>)}
       </div>
     </div>
   );

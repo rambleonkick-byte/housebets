@@ -8,7 +8,7 @@ const pts = (n) => (n >= 1e6 ? `${n / 1e6}M` : n >= 1e3 ? `${n / 1e3}K` : `${n}`
 export function VipCard({ vip }) {
   const { color } = tierStyle(vip.tier);
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5 space-y-5" data-testid="vip-card">
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-5 space-y-5" data-testid="vip-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">VIP rank</p>
@@ -20,7 +20,7 @@ export function VipCard({ vip }) {
         </div>
       </div>
       <div>
-        <div className="h-2.5 rounded-full bg-[#090A0F] overflow-hidden">
+        <div className="h-2.5 rounded-full bg-[#071024] overflow-hidden">
           <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, vip.progress)}%` }} transition={{ duration: 0.9, ease: "easeOut" }}
             className="h-full rounded-full" style={{ background: color }} data-testid="vip-progress-bar" />
         </div>
@@ -32,7 +32,7 @@ export function VipCard({ vip }) {
       <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2" data-testid="vip-ladder">
         {vip.tiers.map((t) => (
           <li key={t.name} data-testid={`vip-tier-${t.name.replace(/\s+/g, "-").toLowerCase()}`}
-            className={`rounded-xl border p-2.5 ${t.name === vip.tier ? "border-emerald-500/60 bg-emerald-500/5" : "border-[#1E2234]"} ${t.reached ? "" : "opacity-60"}`}>
+            className={`rounded-xl border p-2.5 ${t.name === vip.tier ? "border-emerald-500/60 bg-emerald-500/5" : "border-[#162848]"} ${t.reached ? "" : "opacity-60"}`}>
             <div className="flex items-center justify-between"><TierBadge name={t.name} />{t.reached ? <Check size={13} className="text-emerald-400" /> : <Lock size={12} className="text-zinc-600" />}</div>
             <p className="text-[10px] font-mono text-zinc-500 mt-1.5">{pts(t.points)} pts</p>
             {t.bonus > 0 && <p className="text-[11px] font-semibold text-emerald-300">{fmtUsd(t.bonus)} level-up</p>}

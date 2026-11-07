@@ -17,12 +17,12 @@ function PayoutBar({ picks, hits }) {
   const row = KENO_TABLE[picks];
   if (!row) return <p className="text-center text-xs text-slate-500 py-3">Pick 1–10 numbers to see payouts</p>;
   return (
-    <div data-testid="keno-payout-table" className="bg-[#12141C] border border-[#2A2F45] rounded-xl p-1.5 flex gap-1 overflow-x-auto">
+    <div data-testid="keno-payout-table" className="bg-[#0C1A36] border border-[#1D3157] rounded-xl p-1.5 flex gap-1 overflow-x-auto">
       {row.map((m, h) => {
         const on = hits === h;
         return (
           <div key={h} data-testid={`keno-payout-${h}`}
-            className={`flex-1 min-w-[44px] rounded-lg py-1.5 text-center border transition-[transform,background-color] ${on ? "bg-emerald-500/20 border-emerald-400 scale-105 shadow-[0_0_12px_rgba(16,185,129,0.35)]" : "bg-[#1A1D28] border-transparent"}`}>
+            className={`flex-1 min-w-[44px] rounded-lg py-1.5 text-center border transition-[transform,background-color] ${on ? "bg-emerald-500/20 border-emerald-400 scale-105 shadow-[0_0_12px_rgba(34,211,238,0.35)]" : "bg-[#132543] border-transparent"}`}>
             <p className={`font-mono text-[11px] font-bold ${on ? "text-emerald-300" : m > 0 ? "text-white" : "text-slate-500"}`}>{m}×</p>
             <p className="flex items-center justify-center gap-0.5 font-mono text-[10px] text-slate-500">{h}<Gem size={9} className="text-emerald-400" /></p>
           </div>
@@ -95,11 +95,11 @@ export function Keno() {
           </div>
           <div className="flex gap-2">
             <button data-testid="keno-auto" onClick={auto} disabled={loading || autoOn}
-              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-300 bg-[#1A1D28] border border-[#2A2F45] rounded-lg py-2 hover:text-white hover:border-violet-400/50 disabled:opacity-50 transition-colors">
+              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-300 bg-[#132543] border border-[#1D3157] rounded-lg py-2 hover:text-white hover:border-violet-400/50 disabled:opacity-50 transition-colors">
               <Shuffle size={13} /> Auto pick
             </button>
             <button data-testid="keno-clear" onClick={clear} disabled={loading || autoOn}
-              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-300 bg-[#1A1D28] border border-[#2A2F45] rounded-lg py-2 hover:text-white hover:border-red-400/50 disabled:opacity-50 transition-colors">
+              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-300 bg-[#132543] border border-[#1D3157] rounded-lg py-2 hover:text-white hover:border-red-400/50 disabled:opacity-50 transition-colors">
               <Eraser size={13} /> Clear
             </button>
           </div>

@@ -61,8 +61,8 @@ export const AdminBetReview = () => {
 
   const manual = data?.manual;
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl" data-testid="admin-bet-review">
-      <div className="p-4 border-b border-[#1E2234] flex flex-wrap items-center justify-between gap-3">
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl" data-testid="admin-bet-review">
+      <div className="p-4 border-b border-[#162848] flex flex-wrap items-center justify-between gap-3">
         <p className="flex items-center gap-2 font-bold">
           {manual ? <Hand size={16} className="text-sky-300" /> : <AlertTriangle size={16} className="text-amber-400" />}
           {manual ? "Open bets to grade" : "Bets needing review"}
@@ -77,20 +77,20 @@ export const AdminBetReview = () => {
           )}
           {!manual && (
             <button data-testid="admin-settle-sweep" onClick={sweep} disabled={busy}
-              className="flex items-center gap-2 border border-[#2A2F45] hover:bg-white/5 text-sm px-3 py-1.5 rounded-lg disabled:opacity-40">
+              className="flex items-center gap-2 border border-[#1D3157] hover:bg-white/5 text-sm px-3 py-1.5 rounded-lg disabled:opacity-40">
               <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Check results now
             </button>
           )}
           {manual && (
             <button data-testid="admin-review-refresh" onClick={() => run(load)} disabled={busy}
-              className="flex items-center gap-2 border border-[#2A2F45] hover:bg-white/5 text-sm px-3 py-1.5 rounded-lg disabled:opacity-40">
+              className="flex items-center gap-2 border border-[#1D3157] hover:bg-white/5 text-sm px-3 py-1.5 rounded-lg disabled:opacity-40">
               <RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh
             </button>
           )}
         </div>
       </div>
       {data && !data.bets.length && <p className="p-4 text-sm text-zinc-500" data-testid="admin-review-empty">{manual ? "No open bets to grade." : "No stuck bets. Open bets settle automatically every 10 minutes."}</p>}
-      <ul className="divide-y divide-[#1E2234] max-h-[600px] overflow-y-auto">
+      <ul className="divide-y divide-[#162848] max-h-[600px] overflow-y-auto">
         {data?.bets.map((b) => <ReviewBet key={b.id} b={b} manual={manual} busy={busy} onGrade={grade} />)}
       </ul>
     </div>

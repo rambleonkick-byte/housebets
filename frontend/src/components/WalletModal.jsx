@@ -124,10 +124,10 @@ export function WalletModal({ open, onClose }) {
       {open && (
         <motion.div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} data-testid="wallet-modal">
-          <motion.div className="w-full max-w-lg bg-[#12141C] border border-[#2A2F45] rounded-xl overflow-hidden max-h-[90vh] flex flex-col"
+          <motion.div className="w-full max-w-lg bg-[#0C1A36] border border-[#1D3157] rounded-xl overflow-hidden max-h-[90vh] flex flex-col"
             initial={{ scale: 0.96, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 15 }}
             onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A2F45]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1D3157]">
               <div>
                 <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">Wallet · USD</p>
                 <p data-testid="wallet-total-usd" className="font-mono text-2xl font-bold">${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -144,7 +144,7 @@ export function WalletModal({ open, onClose }) {
               </div>
 
               <div className="px-4">
-                <div className="flex gap-1 bg-[#0E1017] p-1 rounded-lg">
+                <div className="flex gap-1 bg-[#0A1530] p-1 rounded-lg">
                   {["deposit", "withdraw", "vault"].map((t) => (
                     <button key={t} data-testid={`wallet-tab-${t}`} onClick={() => setTab(t)}
                       className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium py-2 rounded-md capitalize transition-colors ${
@@ -162,7 +162,7 @@ export function WalletModal({ open, onClose }) {
                   {COINS.map((c) => (
                     <button key={c} data-testid={`wallet-coin-${c}`} onClick={() => setCoin(c)}
                       className={`flex-1 text-xs font-mono font-semibold py-2 rounded-md border transition-colors ${
-                        coin === c ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#2A2F45] text-zinc-400"
+                        coin === c ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#1D3157] text-zinc-400"
                       }`}>{c}</button>
                   ))}
                 </div>}
@@ -176,10 +176,10 @@ export function WalletModal({ open, onClose }) {
                 {tab === "deposit" && deposit && (
                   <div className="space-y-3" data-testid="deposit-address-panel">
                     <div className="flex justify-center py-2">
-                      <div className="relative p-2.5 bg-white rounded-xl shadow-[0_0_0_1px_#2A2F45,0_8px_30px_-8px_rgba(16,185,129,0.35)]">
+                      <div className="relative p-2.5 bg-white rounded-xl shadow-[0_0_0_1px_#1D3157,0_8px_30px_-8px_rgba(34,211,238,0.35)]">
                         <img src={deposit.qr_code} alt="Deposit QR" data-testid="deposit-qr"
                           className="w-40 h-40 object-contain block [image-rendering:pixelated]" />
-                        <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#12141C] border"
+                        <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#0C1A36] border"
                           style={{ color: COIN_META[coin].color, borderColor: COIN_META[coin].color }}>{coin}</span>
                       </div>
                     </div>
@@ -202,7 +202,7 @@ export function WalletModal({ open, onClose }) {
                         </p>
                       </div>
                     </div>
-                    <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-center justify-between gap-2">
+                    <div className="bg-[#0A1530] border border-[#1D3157] rounded-lg p-3 flex items-center justify-between gap-2">
                       <code className="font-mono text-xs text-zinc-200 break-all" data-testid="deposit-address">{deposit.address}</code>
                       <button data-testid="deposit-copy-address" onClick={() => { navigator.clipboard?.writeText(deposit.address); toast("Address copied"); }}
                         className="text-zinc-500 hover:text-emerald-400 shrink-0"><Copy size={15} /></button>
@@ -221,19 +221,19 @@ export function WalletModal({ open, onClose }) {
 
                 {tab === "withdraw" && (
                   <>
-                    <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3 flex items-start gap-2">
+                    <div className="bg-[#0A1530] border border-[#1D3157] rounded-lg p-3 flex items-start gap-2">
                       <ArrowUpFromLine size={15} className="text-emerald-400 mt-0.5 shrink-0" />
                       <p className="text-[11px] text-zinc-400">Withdraw dollars and receive {coin} at the live price, sent to any external wallet on the <span className="text-zinc-200">{COIN_NETWORK[coin]}</span> network. Payouts are sent on-chain via OxaPay — double-check the address, crypto sent can't be reversed.</p>
                     </div>
                     <input data-testid="wallet-address-input" value={address}
                       onChange={(e) => setAddress(e.target.value)} placeholder={`${coin} wallet address`}
-                      className={`w-full bg-[#090A0F] border rounded-lg px-3 py-2.5 font-mono text-xs break-all focus:outline-none ${addrCheck?.ok === false ? "border-red-500/70 focus:border-red-500" : "border-[#2A2F45] focus:border-emerald-500"}`} />
+                      className={`w-full bg-[#071024] border rounded-lg px-3 py-2.5 font-mono text-xs break-all focus:outline-none ${addrCheck?.ok === false ? "border-red-500/70 focus:border-red-500" : "border-[#1D3157] focus:border-emerald-500"}`} />
                     {addrCheck?.checking && <p className="text-[11px] text-zinc-500 flex items-center gap-1.5" data-testid="wallet-address-checking"><Loader2 size={11} className="animate-spin" /> Checking address…</p>}
                     {addrCheck?.ok === false && <p className="text-[11px] text-red-400 flex items-start gap-1.5" data-testid="wallet-address-error"><AlertTriangle size={12} className="mt-0.5 shrink-0" /> {addrCheck.error}</p>}
                     {addrCheck?.ok && <p className="text-[11px] text-emerald-400 flex items-center gap-1.5" data-testid="wallet-address-ok"><ShieldCheck size={12} /> Address looks good</p>}
                     <input data-testid="wallet-amount-input" type="number" min="0" value={amount}
                       onChange={(e) => setAmount(e.target.value)} placeholder="Amount in USD"
-                      className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
+                      className="w-full bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500" />
                     <div className="flex justify-between text-[11px] font-mono text-zinc-500" data-testid="wallet-withdraw-estimate">
                       <span>Available {fmtAmt(total, "USD")}</span>
                       <span>You receive ≈ {fmtCrypto(estCrypto, coin)} {coin}</span>
@@ -257,7 +257,7 @@ export function WalletModal({ open, onClose }) {
                       const hash = po?.tx_hash;
                       const explorer = explorerUrl(t.crypto_coin || po?.coin || t.coin, hash, po?.network);
                       return (
-                        <div key={t.id} className="bg-[#0E1017] rounded-md px-3 py-2" data-testid={`wallet-tx-${t.id}`}>
+                        <div key={t.id} className="bg-[#0A1530] rounded-md px-3 py-2" data-testid={`wallet-tx-${t.id}`}>
                           <div className="flex items-center justify-between text-sm">
                             <span className="capitalize text-zinc-300">{neutral ? "Free bet placed" : t.label || t.type}</span>
                             <span className={`font-mono text-xs ${positive ? "text-emerald-400" : "text-zinc-400"}`}>

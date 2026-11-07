@@ -1,4 +1,5 @@
-import { Zap, CreditCard, MonitorPlay, Clock } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
+import { CreditCard, MonitorPlay, Clock } from "lucide-react";
 
 const ITEMS = [
   { Icon: CreditCard, title: "Upgrading our payment systems", text: "Faster, smoother crypto deposits and withdrawals." },
@@ -7,7 +8,7 @@ const ITEMS = [
 
 export default function Maintenance() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#07080C] text-zinc-100 flex items-center" data-testid="maintenance-page">
+    <div className="relative min-h-screen overflow-hidden bg-[#050C1D] text-zinc-100 flex items-center" data-testid="maintenance-page">
       <div className="pointer-events-none absolute -top-40 -left-40 w-[560px] h-[560px] rounded-full bg-emerald-500/15 blur-[120px]" />
       <div className="pointer-events-none absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full bg-emerald-400/10 blur-[120px]" />
       <div className="pointer-events-none absolute inset-0 opacity-[0.04]"
@@ -15,10 +16,7 @@ export default function Maintenance() {
 
       <main className="relative w-full max-w-5xl mx-auto px-6 sm:px-10 py-16">
         <div className="flex items-center gap-3 mb-16 animate-in fade-in slide-in-from-top-2 duration-700">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500 grid place-items-center shadow-[0_0_30px_rgba(16,185,129,0.45)]">
-            <Zap size={20} className="text-black" fill="currentColor" />
-          </div>
-          <span className="font-display text-2xl font-black tracking-tight">APEX<span className="text-emerald-400">ODDS</span></span>
+          <BrandLogo className="h-10" testid="maintenance-brand-logo" />
         </div>
 
         <p className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-emerald-300 border border-emerald-500/30 bg-emerald-500/10 rounded-full px-3 py-1.5 mb-6"

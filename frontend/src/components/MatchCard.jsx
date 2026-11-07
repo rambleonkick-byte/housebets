@@ -11,7 +11,7 @@ function TeamLogo({ team }) {
     return <img src={team.logo} alt="" className="w-6 h-6 object-contain" onError={() => setErr(true)} />;
   }
   return (
-    <div className="w-6 h-6 rounded-md bg-[#222636] flex items-center justify-center text-[9px] font-bold text-zinc-300 shrink-0">
+    <div className="w-6 h-6 rounded-md bg-[#182B4C] flex items-center justify-center text-[9px] font-bold text-zinc-300 shrink-0">
       {(team.abbr || "").slice(0, 3)}
     </div>
   );
@@ -44,7 +44,7 @@ export function OddsButton({ sel, meta }) {
       className={`flex flex-col items-center justify-center py-2 rounded-md border transition-all ${
         active
           ? "bg-emerald-500 border-emerald-400 text-black"
-          : "bg-[#0E1017] border-[#2A2F45] hover:border-emerald-500/60 hover:bg-[#161922] text-zinc-200"
+          : "bg-[#0A1530] border-[#1D3157] hover:border-emerald-500/60 hover:bg-[#161922] text-zinc-200"
       }`}>
       <span className={`text-[10px] font-medium truncate max-w-full px-1 ${active ? "text-black/70" : "text-zinc-500"}`}>
         {sel.label || sel.pick}
@@ -69,8 +69,8 @@ export function MatchCard({ ev }) {
 
   return (
     <div data-testid={`match-card-${ev.event_id}`}
-      className="bg-[#12141C] border border-[#2A2F45] rounded-lg overflow-hidden hover:border-[#374063] transition-colors">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[#1E2234]">
+      className="bg-[#0C1A36] border border-[#1D3157] rounded-lg overflow-hidden hover:border-[#374063] transition-colors">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[#162848]">
         <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">{ev.league_label}</span>
         {live ? (
           <span className="flex items-center gap-1.5 text-[11px] font-mono text-red-400">
@@ -86,7 +86,7 @@ export function MatchCard({ ev }) {
       {ev.book && (
         <div className="flex items-center gap-1.5 px-4 pt-2">
           <span className="text-[9px] font-mono uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">
-            Live Odds · ApexOdds
+            Live Odds · Housebets
           </span>
         </div>
       )}

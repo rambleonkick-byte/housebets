@@ -6,7 +6,7 @@ function Item({ ev }) {
   const when = d.toDateString() === new Date().toDateString()
     ? d.toTimeString().slice(0, 5) : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   return (
-    <div className="flex items-center gap-3 px-4 border-r border-[#2A2F45] shrink-0 h-full">
+    <div className="flex items-center gap-3 px-4 border-r border-[#1D3157] shrink-0 h-full">
       {live
         ? <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-red-400"><span className="live-dot w-1.5 h-1.5 rounded-full bg-red-500" />LIVE</span>
         : <span className="text-[10px] font-mono text-zinc-500">{when}</span>}
@@ -29,14 +29,14 @@ export function LiveScoresTicker({ events }) {
   }, [events]);
   if (!items.length) return null;
   return (
-    <div data-testid="live-scores-ticker" className="ticker group relative mx-4 mt-3 h-10 rounded-xl bg-[#0B0D14] border border-[#2A2F45] overflow-hidden">
-      <div className="absolute left-0 inset-y-0 z-10 flex items-center px-3 bg-[#0B0D14] border-r border-[#2A2F45] shadow-[12px_0_16px_-4px_#0B0D14]">
+    <div data-testid="live-scores-ticker" className="ticker group relative mx-4 mt-3 h-10 rounded-xl bg-[#08122A] border border-[#1D3157] overflow-hidden">
+      <div className="absolute left-0 inset-y-0 z-10 flex items-center px-3 bg-[#08122A] border-r border-[#1D3157] shadow-[12px_0_16px_-4px_#08122A]">
         <span className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-emerald-400">Scores</span>
       </div>
       <div className="ticker-track flex h-full w-max pl-24" style={{ animationDuration: `${items.length * 4}s` }}>
         {[...items, ...items].map((ev, i) => <Item key={`${ev.event_id}-${i}`} ev={ev} />)}
       </div>
-      <div className="absolute right-0 inset-y-0 w-12 bg-gradient-to-l from-[#0B0D14] to-transparent pointer-events-none" />
+      <div className="absolute right-0 inset-y-0 w-12 bg-gradient-to-l from-[#08122A] to-transparent pointer-events-none" />
     </div>
   );
 }

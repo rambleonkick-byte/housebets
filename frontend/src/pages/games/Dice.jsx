@@ -12,16 +12,16 @@ function Track({ target, direction, last }) {
   return (
     <div className="relative">
       <div className="relative h-4 rounded-full bg-gradient-to-r from-red-600 to-rose-500 shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] overflow-hidden">
-        <div className="absolute inset-y-0 bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-[left,width] duration-150"
+        <div className="absolute inset-y-0 bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_15px_rgba(34,211,238,0.5)] transition-[left,width] duration-150"
           style={{ left: `${winLeft}%`, width: `${winWidth}%` }} />
       </div>
-      <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-lg bg-white border-4 border-[#1C2030] shadow-[0_0_12px_rgba(255,255,255,0.6)] transition-[left] duration-150"
+      <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-lg bg-white border-4 border-[#14274A] shadow-[0_0_12px_rgba(255,255,255,0.6)] transition-[left] duration-150"
         style={{ left: `${target}%` }} />
       {last && (
         <motion.div key={last.nonce ?? last.roll} initial={{ left: "50%", opacity: 0, y: -6 }}
           animate={{ left: `${Math.min(100, Math.max(0, last.roll))}%`, opacity: 1, y: 0 }} transition={{ type: "spring", damping: 16 }}
           className="absolute -top-14 -translate-x-1/2" data-testid="dice-roll-marker">
-          <div className={`font-mono text-base font-black px-3 py-1.5 rounded-xl border-t border-white/20 ${last.won ? "bg-emerald-500 text-emerald-950 shadow-[0_0_20px_rgba(16,185,129,0.6)]" : "bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.5)]"}`}>
+          <div className={`font-mono text-base font-black px-3 py-1.5 rounded-xl border-t border-white/20 ${last.won ? "bg-emerald-500 text-emerald-950 shadow-[0_0_20px_rgba(34,211,238,0.6)]" : "bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.5)]"}`}>
             {last.roll.toFixed(2)}
           </div>
           <div className={`w-3 h-3 rotate-45 mx-auto -mt-1.5 ${last.won ? "bg-emerald-500" : "bg-red-500"}`} />
@@ -92,7 +92,7 @@ export function Dice() {
         </BetControls>
       }>
       <div className="flex-1 flex flex-col justify-center px-2 sm:px-8">
-        <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl px-5 pt-20 pb-5">
+        <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl px-5 pt-20 pb-5">
           <div className="relative">
             <Track target={target} direction={direction} last={last} />
             <input data-testid="dice-target-slider" type="range" min="2" max="98" step="1" value={target} disabled={loading || autoOn}

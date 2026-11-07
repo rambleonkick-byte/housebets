@@ -12,7 +12,7 @@ const copy = (text, what) => navigator.clipboard.writeText(text).then(() => toas
 
 function Stat({ icon: Icon, label, value, sub, testid, accent = "text-white" }) {
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5" data-testid={testid}>
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-5" data-testid={testid}>
       <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-zinc-500"><Icon size={14} /> {label}</div>
       <p className={`font-display text-3xl font-black mt-2 ${accent}`}>{value}</p>
       {sub && <p className="text-[11px] text-zinc-500 mt-1">{sub}</p>}
@@ -40,13 +40,13 @@ function CodeCard({ data, onSaved }) {
     finally { setSaving(false); }
   };
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-[#0F1F1A] to-[#12141C] p-6">
+    <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-[#0F1F1A] to-[#0C1A36] p-6">
       <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-emerald-500/10 blur-3xl" />
       <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">Your affiliate code</p>
       <div className="flex flex-wrap items-center gap-3 mt-3">
         {edit ? (
           <input data-testid="aff-code-input" value={code} maxLength={16} onChange={(e) => setCode(e.target.value.toUpperCase())}
-            className="bg-[#090A0F] border border-emerald-500/50 rounded-xl px-4 py-2 font-mono text-2xl font-bold tracking-widest w-60 focus:outline-none" />
+            className="bg-[#071024] border border-emerald-500/50 rounded-xl px-4 py-2 font-mono text-2xl font-bold tracking-widest w-60 focus:outline-none" />
         ) : (
           <span data-testid="aff-code" className="font-mono text-3xl font-black tracking-widest">{data.code}</span>
         )}
@@ -58,7 +58,7 @@ function CodeCard({ data, onSaved }) {
         ) : (
           <>
             <button data-testid="aff-copy-code" onClick={() => copy(data.code, "Code")}
-              className="flex items-center gap-1.5 text-sm text-zinc-300 border border-[#2A2F45] hover:border-emerald-500/60 px-3 py-2 rounded-xl transition-colors"><Copy size={14} /> Copy</button>
+              className="flex items-center gap-1.5 text-sm text-zinc-300 border border-[#1D3157] hover:border-emerald-500/60 px-3 py-2 rounded-xl transition-colors"><Copy size={14} /> Copy</button>
             <button data-testid="aff-edit-code" onClick={() => { setCode(data.code); setEdit(true); }}
               className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white px-2 py-2 transition-colors"><Pencil size={14} /> Customize</button>
           </>
@@ -66,7 +66,7 @@ function CodeCard({ data, onSaved }) {
       </div>
       {!edit && (
         <div className="mt-4 flex flex-wrap items-center gap-2" data-testid="aff-link-box">
-          <span data-testid="aff-link" className="font-mono text-xs sm:text-sm text-emerald-200 bg-[#090A0F] border border-emerald-500/30 rounded-xl px-3 py-2 break-all">{link}</span>
+          <span data-testid="aff-link" className="font-mono text-xs sm:text-sm text-emerald-200 bg-[#071024] border border-emerald-500/30 rounded-xl px-3 py-2 break-all">{link}</span>
           <button data-testid="aff-copy-link" onClick={() => copy(link, "Link")}
             className="flex items-center gap-1.5 text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-black px-3 py-2 rounded-xl transition-colors"><Copy size={14} /> Copy link</button>
         </div>
@@ -92,7 +92,7 @@ function PlayersTable({ players, rates }) {
           {players.map((p, i) => {
             const ngr = Object.values(p.ngr).length ? usdValue(p.ngr, rates) : 0;
             return (
-              <tr key={i} className="border-t border-[#1E2234]" data-testid={`aff-player-row-${i}`}>
+              <tr key={i} className="border-t border-[#162848]" data-testid={`aff-player-row-${i}`}>
                 <td className="py-3 pr-4 font-semibold">{p.name}</td>
                 <td className="py-3 pr-4 text-zinc-500 text-xs">{p.joined ? new Date(p.joined).toLocaleDateString() : "—"}</td>
                 <td className={`py-3 pr-4 font-mono text-xs ${ngr < 0 ? "text-red-400" : "text-zinc-300"}`}>{fmtUsd(ngr)}</td>
@@ -150,7 +150,7 @@ export default function Affiliate() {
       <CodeCard data={data} onSaved={load} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Stat icon={Users} label="Referred players" value={data.referrals} testid="aff-stat-referrals" />
-        <div className="bg-[#12141C] border border-emerald-500/40 rounded-2xl p-5" data-testid="aff-stat-available">
+        <div className="bg-[#0C1A36] border border-emerald-500/40 rounded-2xl p-5" data-testid="aff-stat-available">
           <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-zinc-500"><Coins size={14} /> Ready to claim</div>
           <p className="font-display text-3xl font-black mt-2 text-emerald-400" data-testid="aff-available-usd">{fmtUsd(availUsd)}</p>
           <div className="mt-1"><CoinList amounts={data.available} /></div>
@@ -162,7 +162,7 @@ export default function Affiliate() {
         <Stat icon={TrendingUp} label="Lifetime earned" value={fmtUsd(lifeUsd)} testid="aff-stat-lifetime" sub="If a player is up overall, commission resumes once the house is back in profit." />
       </div>
       <AffiliateChart rates={rates} refreshKey={data.referrals} />
-      <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5">
+      <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-5">
         <h2 className="font-display text-lg font-bold uppercase tracking-tight mb-2">Your players</h2>
         <PlayersTable players={data.players} rates={rates} />
       </div>

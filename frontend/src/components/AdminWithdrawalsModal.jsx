@@ -71,10 +71,10 @@ export function AdminWithdrawalsModal({ open, onClose }) {
       {open && (
         <motion.div className="fixed inset-0 z-[96] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} data-testid="admin-withdrawals-modal">
-          <motion.div className="w-full max-w-2xl bg-[#12141C] border border-[#2A2F45] rounded-xl overflow-hidden max-h-[90vh] flex flex-col"
+          <motion.div className="w-full max-w-2xl bg-[#0C1A36] border border-[#1D3157] rounded-xl overflow-hidden max-h-[90vh] flex flex-col"
             initial={{ scale: 0.96, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 15 }}
             onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A2F45]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1D3157]">
               <div className="flex items-center gap-2">
                 <ShieldCheck size={18} className="text-emerald-400" />
                 <div>
@@ -90,7 +90,7 @@ export function AdminWithdrawalsModal({ open, onClose }) {
               </div>
             </div>
 
-            <div className="flex gap-1 p-3 border-b border-[#2A2F45]">
+            <div className="flex gap-1 p-3 border-b border-[#1D3157]">
               {TABS.map((t) => (
                 <button key={t.key} data-testid={`admin-tab-${t.key}`} onClick={() => setFilter(t.key)}
                   className={`flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-md transition-colors ${
@@ -117,7 +117,7 @@ export function AdminWithdrawalsModal({ open, onClose }) {
                   const st = STATUS_STYLE[w.status] || { label: w.status, cls: "text-zinc-300 bg-zinc-500/10 border-zinc-500/30" };
                   const isPending = w.status === "pending_approval";
                   return (
-                    <div key={w.id} data-testid={`admin-withdrawal-${w.id}`} className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3">
+                    <div key={w.id} data-testid={`admin-withdrawal-${w.id}`} className="bg-[#0A1530] border border-[#1D3157] rounded-lg p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate">{w.user_email}</p>
@@ -130,7 +130,7 @@ export function AdminWithdrawalsModal({ open, onClose }) {
                           {st.label}
                         </span>
                       </div>
-                      <div className="mt-2 bg-[#090A0F] border border-[#2A2F45] rounded px-2.5 py-1.5">
+                      <div className="mt-2 bg-[#071024] border border-[#1D3157] rounded px-2.5 py-1.5">
                         <code className="font-mono text-[11px] text-zinc-300 break-all">{w.address}</code>
                       </div>
                       {w.tx_hash && <p className="mt-1 font-mono text-[10px] text-zinc-500 break-all">tx: {w.tx_hash}</p>}

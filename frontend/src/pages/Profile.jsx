@@ -10,7 +10,7 @@ import { TierBadge } from "@/components/TierBadge";
 
 function Stat({ icon: Icon, label, value, sub, tone, testid }) {
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-4" data-testid={testid}>
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-4" data-testid={testid}>
       <p className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-zinc-500"><Icon size={14} /> {label}</p>
       <p className={`font-display text-2xl font-black mt-1 ${tone || ""}`}>{value}</p>
       {sub && <p className="text-[11px] text-zinc-500 mt-0.5">{sub}</p>}
@@ -23,7 +23,7 @@ const signed = (v) => `${v > 0 ? "+" : ""}${fmtUsd(v)}`;
 
 function Breakdown({ title, icon: Icon, rows, testid }) {
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5" data-testid={testid}>
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-5" data-testid={testid}>
       <p className="flex items-center gap-2 font-bold mb-3"><Icon size={16} className="text-emerald-400" /> {title}</p>
       <dl className="space-y-2 text-sm">
         {rows.map(([k, v, tone]) => (
@@ -38,12 +38,12 @@ function Bonuses({ p }) {
   const w = p.wagering;
   const pct = w.target > 0 ? Math.min(100, ((w.target - w.remaining) / w.target) * 100) : 100;
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5 space-y-4" data-testid="bonus-status">
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-5 space-y-4" data-testid="bonus-status">
       <p className="flex items-center gap-2 font-bold"><Ticket size={16} className="text-emerald-400" /> My bonuses</p>
       {w.remaining > 0 ? (
         <div data-testid="wagering-locked">
           <p className="text-sm flex items-center gap-1.5 text-amber-300"><Lock size={13} /> Wager {fmtUsd(w.remaining)} more to unlock withdrawals</p>
-          <div className="h-2 rounded-full bg-[#090A0F] mt-2 overflow-hidden"><div className="h-full bg-amber-400" style={{ width: `${pct}%` }} /></div>
+          <div className="h-2 rounded-full bg-[#071024] mt-2 overflow-hidden"><div className="h-full bg-amber-400" style={{ width: `${pct}%` }} /></div>
         </div>
       ) : <p className="text-sm text-zinc-400" data-testid="wagering-clear">No wagering requirement — withdrawals unlocked.</p>}
       {p.pending_match && <p className="text-sm text-sky-300" data-testid="pending-match">{p.pending_match.pct}% deposit match (up to {fmtUsd(p.pending_match.max_bonus)}) waiting for your next deposit</p>}

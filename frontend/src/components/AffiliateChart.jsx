@@ -9,7 +9,7 @@ function ChartTip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2 text-xs font-mono">
+    <div className="bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2 text-xs font-mono">
       <p className="text-zinc-400 mb-1">{label}</p>
       <p className="text-emerald-400">Commission {fmtUsd(d.usd)}</p>
       <p className="text-sky-400">New sign-ups {d.signups}</p>
@@ -28,7 +28,7 @@ export function AffiliateChart({ rates, refreshKey }) {
   const totalSignups = rows.reduce((s, r) => s + r.signups, 0);
 
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-5" data-testid="aff-chart">
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-5" data-testid="aff-chart">
       <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
         <div>
           <h2 className="font-display text-lg font-bold uppercase tracking-tight flex items-center gap-2"><BarChart3 size={18} className="text-emerald-400" /> Last 30 days</h2>
@@ -41,16 +41,16 @@ export function AffiliateChart({ rates, refreshKey }) {
       </div>
       <div className="h-64">
         {days === null ? (
-          <div className="h-full rounded-xl bg-[#090A0F] animate-pulse" />
+          <div className="h-full rounded-xl bg-[#071024] animate-pulse" />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={rows} margin={{ top: 5, right: 0, left: -10, bottom: 0 }}>
-              <CartesianGrid stroke="#1E2234" vertical={false} />
+              <CartesianGrid stroke="#162848" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: "#71717a", fontSize: 10 }} tickLine={false} axisLine={false} interval={4} />
               <YAxis yAxisId="usd" tick={{ fill: "#71717a", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
               <YAxis yAxisId="n" orientation="right" allowDecimals={false} tick={{ fill: "#71717a", fontSize: 10 }} tickLine={false} axisLine={false} />
-              <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(16,185,129,0.06)" }} />
-              <Bar yAxisId="usd" dataKey="usd" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={18} />
+              <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(34,211,238,0.06)" }} />
+              <Bar yAxisId="usd" dataKey="usd" fill="#22D3EE" radius={[4, 4, 0, 0]} maxBarSize={18} />
               <Line yAxisId="n" type="monotone" dataKey="signups" stroke="#38BDF8" strokeWidth={2} dot={{ r: 2, fill: "#38BDF8" }} />
             </ComposedChart>
           </ResponsiveContainer>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Zap, Hand, Plus, Square, Split, ShieldCheck } from "lucide-react";
+import { Hand, Plus, Square, Split, ShieldCheck } from "lucide-react";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { BetControls, useGameBase, GameLayout, PlayButton, FieldLabel } from "@/components/casino/GameKit";
 import { PlayingCard } from "@/components/casino/PlayingCard";
@@ -50,8 +50,7 @@ function Felt({ game, coin }) {
         </div>
         <div className="flex flex-col items-center pointer-events-none select-none my-3" data-testid="bj-table-logo">
           <div className="flex items-center gap-2 opacity-30">
-            <div className="w-9 h-9 rounded-xl border-2 border-emerald-100 flex items-center justify-center"><Zap size={18} className="text-emerald-100" fill="currentColor" /></div>
-            <span className="font-display text-3xl font-black tracking-tight text-emerald-50">APEX<span className="text-emerald-300">ODDS</span></span>
+            <span className="font-display text-3xl font-black tracking-tight text-emerald-50">HOUSE<span className="text-emerald-300">BETS</span></span>
           </div>
           <p className="mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.3em] text-amber-200/50">Blackjack pays 3 to 2</p>
           <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.25em] text-emerald-100/35">Dealer stands on all 17s · Insurance pays 2 to 1</p>
@@ -158,14 +157,14 @@ export function Blackjack() {
             <FieldLabel>Side bets</FieldLabel>
             <div className="space-y-1.5">
               {SIDES.map((s) => (
-                <div key={s.key} className="flex items-center gap-2 bg-[#090A0F] border border-[#2A2F45] rounded-xl pl-3 pr-1 py-1">
+                <div key={s.key} className="flex items-center gap-2 bg-[#071024] border border-[#1D3157] rounded-xl pl-3 pr-1 py-1">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-white">{s.label}</p>
                     <p className="text-[10px] text-amber-300/80">{s.pays}</p>
                   </div>
                   <input data-testid={`bj-${s.key}`} type="number" min="0" placeholder="0" value={sides[s.key]} disabled={inPlay || loading}
                     onChange={(e) => setSides((x) => ({ ...x, [s.key]: e.target.value }))}
-                    className="w-24 bg-[#12141C] border border-[#2A2F45] rounded-lg px-2 py-1.5 font-mono text-xs text-right text-white outline-none focus:border-amber-400 disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                    className="w-24 bg-[#0C1A36] border border-[#1D3157] rounded-lg px-2 py-1.5 font-mono text-xs text-right text-white outline-none focus:border-amber-400 disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
                 </div>
               ))}
             </div>
@@ -183,7 +182,7 @@ export function Blackjack() {
             <div className="grid grid-cols-2 gap-2">
               {ACTIONS.map(({ a, label: l, Icon }) => (
                 <button key={a} data-testid={`bj-action-${a}`} disabled={!can(a) || loading} onClick={() => act(a)}
-                  className="flex items-center justify-center gap-1.5 py-3 rounded-xl font-display font-black text-sm uppercase tracking-wider bg-gradient-to-b from-[#2D3346] to-[#1C2030] text-white border-t border-white/10 shadow-[0_4px_0_#0B0D14] active:translate-y-1 active:shadow-none disabled:opacity-30 transition-[transform,box-shadow]">
+                  className="flex items-center justify-center gap-1.5 py-3 rounded-xl font-display font-black text-sm uppercase tracking-wider bg-gradient-to-b from-[#22385F] to-[#14274A] text-white border-t border-white/10 shadow-[0_4px_0_#08122A] active:translate-y-1 active:shadow-none disabled:opacity-30 transition-[transform,box-shadow]">
                   <Icon size={14} /> {l}
                 </button>
               ))}

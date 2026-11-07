@@ -24,7 +24,7 @@ function NotificationRow({ n }) {
   const sign = dep || n.stage === "refunded" ? "+" : "-";
   return (
     <div data-testid={`notification-item-${n.id}`}
-      className={`flex items-start gap-3 px-4 py-3 border-b border-[#1E2234] last:border-0 ${n.read ? "" : "bg-emerald-500/[0.04]"}`}>
+      className={`flex items-start gap-3 px-4 py-3 border-b border-[#162848] last:border-0 ${n.read ? "" : "bg-emerald-500/[0.04]"}`}>
       <div className={`w-8 h-8 rounded-full ${t.bg} flex items-center justify-center shrink-0`}>
         <meta.Icon size={15} className={t.text} />
       </div>
@@ -83,8 +83,8 @@ export function NotificationBell() {
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={10} data-testid="notifications-panel"
-        className="z-[60] w-[360px] p-0 bg-[#12141C] border-[#2A2F45] rounded-xl overflow-hidden text-zinc-100">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2A2F45]">
+        className="z-[60] w-[360px] p-0 bg-[#0C1A36] border-[#1D3157] rounded-xl overflow-hidden text-zinc-100">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1D3157]">
           <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400">Notifications</p>
           {unread > 0 && (
             <button data-testid="notifications-mark-read" onClick={markRead}

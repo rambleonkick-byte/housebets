@@ -21,12 +21,12 @@ function NewTicket({ onCreated }) {
       <div className="flex flex-wrap gap-1.5">
         {TOPICS.map((t) => (
           <button key={t} data-testid={`support-topic-${t.toLowerCase()}`} onClick={() => setTopic(t)}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${topic === t ? "bg-emerald-500 text-black border-emerald-500 font-bold" : "border-[#2A2F45] text-zinc-300 hover:border-emerald-500/50"}`}>{t}</button>
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${topic === t ? "bg-emerald-500 text-black border-emerald-500 font-bold" : "border-[#1D3157] text-zinc-300 hover:border-emerald-500/50"}`}>{t}</button>
         ))}
       </div>
       <textarea data-testid="support-new-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={6} maxLength={4000}
         placeholder="Describe your issue (bet ID, amount, coin…)"
-        className="w-full resize-none bg-[#0B0D13] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/60" />
+        className="w-full resize-none bg-[#08122A] border border-[#1D3157] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/60" />
       <button data-testid="support-new-submit" onClick={submit} disabled={busy || !message.trim()}
         className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm py-2.5 rounded-lg disabled:opacity-40">
         {busy ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Send ticket"}
@@ -38,7 +38,7 @@ function NewTicket({ onCreated }) {
 function TicketList({ tickets, onOpen }) {
   if (!tickets.length) return <p className="p-6 text-sm text-zinc-500 text-center" data-testid="support-empty">No tickets yet. Start one and our team will reply here.</p>;
   return (
-    <ul className="divide-y divide-[#1E2234]" data-testid="support-ticket-list">
+    <ul className="divide-y divide-[#162848]" data-testid="support-ticket-list">
       {tickets.map((t) => (
         <li key={t.id}>
           <button data-testid={`support-ticket-${t.id}`} onClick={() => onOpen(t.id)} className="w-full text-left p-4 hover:bg-white/[0.03] flex gap-3">
@@ -90,14 +90,14 @@ export function SupportButton() {
   return (
     <>
       <button data-testid="support-chat-button" onClick={() => (user ? setOpen(true) : setAuthOpen(true))} aria-label="Support" title="Support"
-        className="fixed bottom-20 lg:bottom-5 right-4 z-[60] w-11 h-11 rounded-full bg-[#12141C] border border-[#2A2F45] text-emerald-400 flex items-center justify-center shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] hover:border-emerald-500/60 hover:scale-105 transition-transform">
+        className="fixed bottom-20 lg:bottom-5 right-4 z-[60] w-11 h-11 rounded-full bg-[#0C1A36] border border-[#1D3157] text-emerald-400 flex items-center justify-center shadow-[0_8px_24px_-8px_rgba(34,211,238,0.6)] hover:border-emerald-500/60 hover:scale-105 transition-transform">
         <Headphones size={19} />
-        {unread > 0 && <span data-testid="support-chat-unread" className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 ring-2 ring-[#0B0D13]" />}
+        {unread > 0 && <span data-testid="support-chat-unread" className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 ring-2 ring-[#08122A]" />}
       </button>
       {open && (
         <div className="fixed inset-0 z-[70] flex justify-end bg-black/50" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-md h-full bg-[#12141C] border-l border-[#2A2F45] flex flex-col" onClick={(e) => e.stopPropagation()} data-testid="support-panel">
-            <div className="p-4 border-b border-[#1E2234] flex items-center gap-2">
+          <div className="w-full max-w-md h-full bg-[#0C1A36] border-l border-[#1D3157] flex flex-col" onClick={(e) => e.stopPropagation()} data-testid="support-panel">
+            <div className="p-4 border-b border-[#162848] flex items-center gap-2">
               {view !== "list" && <button data-testid="support-back" onClick={() => { setView("list"); setTicket(null); }} className="text-zinc-400 hover:text-white"><ArrowLeft size={18} /></button>}
               <p className="font-display text-lg font-bold flex-1 flex items-center gap-2">{title} {view === "thread" && ticket && <StatusPill status={ticket.status} />}</p>
               {view === "list" && <button data-testid="support-new-button" onClick={() => setView("new")} className="flex items-center gap-1 text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black px-3 py-1.5 rounded-lg"><Plus size={14} /> New ticket</button>}

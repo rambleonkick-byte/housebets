@@ -17,7 +17,7 @@ const PAGE = 50;
 
 function Stat({ icon: Icon, label, value, testid }) {
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-4" data-testid={testid}>
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-4" data-testid={testid}>
       <p className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-zinc-500"><Icon size={14} /> {label}</p>
       <p className="font-display text-2xl font-black mt-1">{value}</p>
     </div>
@@ -46,7 +46,7 @@ function AdjustForm({ u, onDone }) {
     } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
     finally { setBusy(false); }
   };
-  const inp = "bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/60";
+  const inp = "bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/60";
   return (
     <div className="space-y-2" data-testid="admin-adjust-form">
       <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">Adjust balance</p>
@@ -90,14 +90,14 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
     } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); setBusy(false); }
   };
   const Row = ({ label, v, testid }) => (
-    <div className="flex justify-between gap-4 py-2 border-t border-[#1E2234]" data-testid={testid}>
+    <div className="flex justify-between gap-4 py-2 border-t border-[#162848]" data-testid={testid}>
       <span className="text-xs text-zinc-400">{label}<span className="block font-mono text-[11px] text-zinc-500">{fmtUsd(usdValue(v, rates))}</span></span>
       <span className="text-right"><Coins v={v} /></span>
     </div>
   );
   return (
     <div className="fixed inset-0 z-[95] bg-black/60 backdrop-blur-sm flex justify-end" onClick={onClose}>
-      <div className="w-full max-w-md h-full bg-[#12141C] border-l border-[#2A2F45] overflow-y-auto scrollbar-thin p-5 space-y-5" onClick={(e) => e.stopPropagation()} data-testid="admin-user-drawer">
+      <div className="w-full max-w-md h-full bg-[#0C1A36] border-l border-[#1D3157] overflow-y-auto scrollbar-thin p-5 space-y-5" onClick={(e) => e.stopPropagation()} data-testid="admin-user-drawer">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
             <p className="font-display text-xl font-bold truncate" data-testid="admin-drawer-name">{u.name}</p>
@@ -134,7 +134,7 @@ function UserDrawer({ u, rates, onClose, onChanged }) {
           {log.length === 0 ? <p className="text-xs text-zinc-600">No changes yet.</p> : (
             <ul className="space-y-1.5" data-testid="admin-action-log">
               {log.map((a) => (
-                <li key={a.id} className="text-xs bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2">
+                <li key={a.id} className="text-xs bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2">
                   <span className="font-semibold">{a.action === "adjust" ? `${a.amount > 0 ? "+" : ""}${a.amount} ${a.coin}` : a.action === "block" ? "Locked" : a.action === "unblock" ? "Unlocked" : a.action?.startsWith("grade_") ? `Graded ${a.action.slice(6).toUpperCase()}` : a.action === "delete" ? "Deleted" : a.action === "max_win" ? "Max win" : a.action}</span>
                   {a.reason && <span className="text-zinc-400"> · {a.reason}</span>}
                   <span className="block text-[10px] text-zinc-600">{a.admin} · {new Date(a.created_at).toLocaleString()}</span>
@@ -194,8 +194,8 @@ export default function AdminPanel({ onWithdrawals }) {
         <Stat icon={UserPlus} label="Signed up today" value={data?.signups_today ?? "—"} testid="admin-stat-today" />
         <Stat icon={UserX} label="Locked accounts" value={data?.blocked ?? "—"} testid="admin-stat-blocked" />
       </div>
-      <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl">
-        <div className="p-4 border-b border-[#1E2234] flex items-center gap-2">
+      <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl">
+        <div className="p-4 border-b border-[#162848] flex items-center gap-2">
           <Search size={16} className="text-zinc-500" />
           <input data-testid="admin-user-search" value={q} onChange={(e) => { setQ(e.target.value); setSkip(0); }} placeholder="Search name or email"
             className="flex-1 bg-transparent text-sm focus:outline-none" />
@@ -221,7 +221,7 @@ export default function AdminPanel({ onWithdrawals }) {
               {!data ? (
                 <tr><td colSpan={8} className="py-12 text-center"><Loader2 className="animate-spin text-emerald-400 mx-auto" /></td></tr>
               ) : data.users.map((u) => (
-                <tr key={u.id} data-testid={`admin-user-row-${u.id}`} onClick={() => setOpenId(u.id)} className={`border-t border-[#1E2234] hover:bg-white/[0.02] cursor-pointer align-top ${sel.has(u.id) ? "bg-red-500/[0.04]" : ""}`}>
+                <tr key={u.id} data-testid={`admin-user-row-${u.id}`} onClick={() => setOpenId(u.id)} className={`border-t border-[#162848] hover:bg-white/[0.02] cursor-pointer align-top ${sel.has(u.id) ? "bg-red-500/[0.04]" : ""}`}>
                   <td className="pl-4 py-3" onClick={(e) => e.stopPropagation()}>
                     {u.role !== "admin" && <input type="checkbox" data-testid={`admin-select-${u.id}`} checked={sel.has(u.id)} onChange={() => toggleSel(u.id)} className="accent-emerald-500 w-4 h-4 cursor-pointer" />}
                   </td>
@@ -243,11 +243,11 @@ export default function AdminPanel({ onWithdrawals }) {
           </table>
         </div>
         {data && data.total > PAGE && (
-          <div className="flex items-center justify-between p-4 border-t border-[#1E2234] text-xs text-zinc-400">
+          <div className="flex items-center justify-between p-4 border-t border-[#162848] text-xs text-zinc-400">
             <span>{skip + 1}–{Math.min(skip + PAGE, data.total)} of {data.total}</span>
             <div className="flex gap-2">
-              <button data-testid="admin-page-prev" disabled={skip === 0} onClick={() => setSkip(skip - PAGE)} className="px-3 py-1.5 border border-[#2A2F45] rounded-lg disabled:opacity-40">Prev</button>
-              <button data-testid="admin-page-next" disabled={skip + PAGE >= data.total} onClick={() => setSkip(skip + PAGE)} className="px-3 py-1.5 border border-[#2A2F45] rounded-lg disabled:opacity-40">Next</button>
+              <button data-testid="admin-page-prev" disabled={skip === 0} onClick={() => setSkip(skip - PAGE)} className="px-3 py-1.5 border border-[#1D3157] rounded-lg disabled:opacity-40">Prev</button>
+              <button data-testid="admin-page-next" disabled={skip + PAGE >= data.total} onClick={() => setSkip(skip + PAGE)} className="px-3 py-1.5 border border-[#1D3157] rounded-lg disabled:opacity-40">Next</button>
             </div>
           </div>
         )}

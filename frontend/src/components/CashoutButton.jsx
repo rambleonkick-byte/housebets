@@ -14,7 +14,7 @@ export function CashoutButton({ bet, value, onCashout, onSetAuto }) {
     return (
       <>
       <div data-testid={`cashout-suspended-${bet.id}`}
-        className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 border border-dashed border-[#2A2F45] rounded-lg py-2">
+        className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 border border-dashed border-[#1D3157] rounded-lg py-2">
         <Lock size={12} /> Cash out unavailable right now
       </div>
       {auto}

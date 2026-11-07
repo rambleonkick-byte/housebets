@@ -27,10 +27,10 @@ export function CasinoStrip() {
               style={{ borderColor: `${g.accent}55` }}
               onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 8px 28px -8px ${g.accent}aa`)}
               onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "none")}>
-              <div className="aspect-[3/4] relative bg-[#0B0D14]">
+              <div className="aspect-[3/4] relative bg-[#08122A]">
                 <img src={g.img} alt={g.name} loading="lazy"
                   className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#070810] via-[#070810]/20 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#050C1D] via-[#050C1D]/20 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-2 flex flex-col items-center gap-1">
                   <h3 className="font-display text-base font-black tracking-tight uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
                     {g.name}
@@ -39,7 +39,7 @@ export function CasinoStrip() {
                     style={g.soon
                       ? { background: "rgba(113,113,122,0.5)", color: "#d4d4d8" }
                       : { background: `${g.accent}26`, color: g.accent, border: `1px solid ${g.accent}66` }}>
-                    {g.soon ? "Soon" : "Apex"}
+                    {g.soon ? "Soon" : "House"}
                   </span>
                 </div>
               </div>

@@ -3,7 +3,7 @@ import { BellRing, Gauge, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 
-const inp = "bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500";
+const inp = "bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500";
 
 export function AdminGlobalLimit() {
   const [s, setS] = useState(null);
@@ -20,7 +20,7 @@ export function AdminGlobalLimit() {
   };
   if (!s) return null;
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-global-limit">
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-global-limit">
       <p className="flex items-center gap-2 font-bold mr-auto"><Gauge size={16} className="text-amber-300" /> Max win per bet (all players)</p>
       <button data-testid="admin-limit-toggle" disabled={busy} onClick={() => save({ ...s, enabled: !s.enabled })}
         className={`text-xs font-bold px-3 py-2 rounded-lg border ${s.enabled ? "border-emerald-500/50 text-emerald-300 bg-emerald-500/10" : "border-zinc-600 text-zinc-400"}`}>
@@ -53,7 +53,7 @@ export function AdminBigWin() {
   };
   if (!s) return null;
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-big-win">
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-big-win">
       <p className="flex items-center gap-2 font-bold mr-auto"><BellRing size={16} className="text-sky-300" /> Big win phone alert (profit per bet or game)</p>
       <button data-testid="admin-big-win-toggle" onClick={() => save({ ...s, enabled: !s.enabled })}
         className={`text-xs font-bold px-3 py-2 rounded-lg border ${s.enabled ? "border-emerald-500/50 text-emerald-300 bg-emerald-500/10" : "border-zinc-600 text-zinc-400"}`}>
@@ -80,7 +80,7 @@ export function AdminCashoutToggle() {
   };
   if (on === null) return null;
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-cashout-toggle">
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-cashout-toggle">
       <p className="font-bold mr-auto">Sportsbook cash out <span className="text-xs font-normal text-zinc-500">(cash out + auto cash out on open bets)</span></p>
       <button data-testid="admin-cashout-toggle-button" onClick={flip}
         className={`text-xs font-bold px-3 py-2 rounded-lg border ${on ? "border-emerald-500/50 text-emerald-300 bg-emerald-500/10" : "border-red-500/50 text-red-300 bg-red-500/10"}`}>
@@ -118,9 +118,9 @@ export function PlayerLimitForm({ u, onDone }) {
         <button data-testid="admin-player-limit-save" disabled={busy || v === "" || +v < 0} onClick={() => save(+v)}
           className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs px-3 rounded-lg disabled:opacity-40">Set</button>
         <button data-testid="admin-player-limit-unlimited" disabled={busy} onClick={() => save(0)}
-          className="text-xs px-3 rounded-lg border border-[#2A2F45] hover:bg-white/5">No limit</button>
+          className="text-xs px-3 rounded-lg border border-[#1D3157] hover:bg-white/5">No limit</button>
         <button data-testid="admin-player-limit-reset" disabled={busy || u.max_win == null} onClick={() => save(null)}
-          className="text-xs px-3 rounded-lg border border-[#2A2F45] hover:bg-white/5 disabled:opacity-40">Default</button>
+          className="text-xs px-3 rounded-lg border border-[#1D3157] hover:bg-white/5 disabled:opacity-40">Default</button>
       </div>
     </div>
   );

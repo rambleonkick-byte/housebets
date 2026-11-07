@@ -52,7 +52,7 @@ export function PropsSection({ ev, meta }) {
   const playerCount = useMemo(() => new Set(ev.props.map((p) => p.player)).size, [ev.props]);
 
   return (
-    <div className="px-4 pb-4 border-t border-[#1E2234] pt-3">
+    <div className="px-4 pb-4 border-t border-[#162848] pt-3">
       <button data-testid={`props-toggle-${tid}`} onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-zinc-400 hover:text-emerald-300 transition-colors">
         <span>Player Props ({ev.props.length} · {playerCount} players)</span>
@@ -60,7 +60,7 @@ export function PropsSection({ ev, meta }) {
       </button>
       {open && (
         <div className="mt-3 space-y-2">
-          <div className="flex items-center gap-2 bg-[#090A0F] border border-[#2A2F45] rounded-lg px-2.5 py-1.5 focus-within:border-emerald-500/50">
+          <div className="flex items-center gap-2 bg-[#071024] border border-[#1D3157] rounded-lg px-2.5 py-1.5 focus-within:border-emerald-500/50">
             <Search size={13} className="text-zinc-500" />
             <input data-testid={`props-search-${tid}`} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search player or stat"
               className="flex-1 bg-transparent text-xs focus:outline-none" />
@@ -68,7 +68,7 @@ export function PropsSection({ ev, meta }) {
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
             {GROUPS.filter((g) => g.key === "all" || available.has(g.key)).map((g) => (
               <button key={g.key} data-testid={`props-filter-${tid}-${g.key}`} onClick={() => setGroup(g.key)}
-                className={`shrink-0 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors ${group === g.key ? "bg-emerald-500 text-black border-emerald-500" : "border-[#2A2F45] text-zinc-400 hover:text-white"}`}>
+                className={`shrink-0 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors ${group === g.key ? "bg-emerald-500 text-black border-emerald-500" : "border-[#1D3157] text-zinc-400 hover:text-white"}`}>
                 {g.label}
               </button>
             ))}
@@ -77,7 +77,7 @@ export function PropsSection({ ev, meta }) {
             {players.length === 0 && <p className="text-xs text-zinc-500 py-4 text-center" data-testid={`props-empty-${tid}`}>No props match.</p>}
             {players.map(([name, list]) => (
               <div key={name} data-testid={`props-player-${tid}`}>
-                <p className="text-xs font-semibold mb-1.5 sticky top-0 bg-[#12141C] py-0.5">{name} <span className="text-[10px] font-normal text-zinc-500">({list.length})</span></p>
+                <p className="text-xs font-semibold mb-1.5 sticky top-0 bg-[#0C1A36] py-0.5">{name} <span className="text-[10px] font-normal text-zinc-500">({list.length})</span></p>
                 <div className="space-y-1.5">{list.map((p) => <PropRow key={`${p.stat}-${p.player_id}`} p={p} meta={meta} />)}</div>
               </div>
             ))}

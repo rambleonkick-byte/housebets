@@ -102,7 +102,7 @@ export function Sportsbook() {
           <EventList events={shown} />
           {pendingShown.map((k) => (
             <div key={k} data-testid={`league-loading-${k}`}
-              className="h-56 bg-[#12141C] border border-[#2A2F45] rounded-lg animate-pulse flex items-end p-4">
+              className="h-56 bg-[#0C1A36] border border-[#1D3157] rounded-lg animate-pulse flex items-end p-4">
               <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-600">Loading {leagues.find((l) => l.key === k)?.label || k}…</span>
             </div>
           ))}
@@ -137,7 +137,7 @@ function Chip({ label, active, onClick, testid }) {
   return (
     <button data-testid={testid} onClick={onClick}
       className={`whitespace-nowrap text-xs font-medium px-3 py-2 rounded-full border transition-colors ${
-        active ? "bg-emerald-500 border-emerald-400 text-black" : "border-[#2A2F45] text-zinc-400"
+        active ? "bg-emerald-500 border-emerald-400 text-black" : "border-[#1D3157] text-zinc-400"
       }`}>{label}</button>
   );
 }

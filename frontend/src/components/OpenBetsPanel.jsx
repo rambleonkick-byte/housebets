@@ -65,7 +65,7 @@ function PropProgress({ p, status, testid }) {
   const bad = status === "lost" || status === "losing";
   return (
     <div className="mt-1.5" data-testid={testid}>
-      <div className="relative h-1.5 rounded-full bg-[#090A0F] overflow-visible">
+      <div className="relative h-1.5 rounded-full bg-[#071024] overflow-visible">
         <motion.div initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, ease: "easeOut" }}
           className={`h-full rounded-full ${good ? "bg-emerald-400" : bad ? "bg-red-400" : "bg-amber-300"}`} />
         <span className="absolute -top-1 w-0.5 h-3.5 bg-white/70 rounded" style={{ left: `calc(${linePct}% - 1px)` }} />
@@ -81,9 +81,9 @@ function PropProgress({ p, status, testid }) {
 function OpenBetCard({ b, quote, cashoutOn, legs, onCashout, onSetAuto, onShare }) {
   const toWin = b.potential_payout - (b.free_bet ? b.stake : 0);
   return (
-    <div data-testid={`open-bet-${b.id}`} className="bg-gradient-to-b from-[#161924] to-[#12141C] border border-[#232838] rounded-2xl p-3.5"
-      style={{ backgroundImage: "radial-gradient(90% 50% at 100% 0%, rgba(16,185,129,0.10), transparent 60%)" }}>
-      <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-[#1E2234]">
+    <div data-testid={`open-bet-${b.id}`} className="bg-gradient-to-b from-[#11213F] to-[#0C1A36] border border-[#1A2D50] rounded-2xl p-3.5"
+      style={{ backgroundImage: "radial-gradient(90% 50% at 100% 0%, rgba(34,211,238,0.10), transparent 60%)" }}>
+      <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-[#162848]">
         <BrandMark />
         <button data-testid={`open-bet-share-${b.id}`} onClick={() => onShare(b)} title="Share this bet"
           className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/10 rounded-full px-2.5 py-1 transition-colors">
@@ -126,7 +126,7 @@ function OpenBetCard({ b, quote, cashoutOn, legs, onCashout, onSetAuto, onShare 
           );
         })}
       </div>
-      <div className="flex justify-between mt-3 pt-2.5 border-t border-[#1E2234] text-[11px]">
+      <div className="flex justify-between mt-3 pt-2.5 border-t border-[#162848] text-[11px]">
         <span className="text-zinc-500">Stake <b className="font-mono text-zinc-200" data-testid={`open-bet-stake-${b.id}`}>{fmtAmt(b.stake, b.coin)}</b></span>
         <span className="text-zinc-500">To win <b className="font-mono text-emerald-400" data-testid={`open-bet-towin-${b.id}`}>{fmtAmt(toWin, b.coin)}</b></span>
       </div>
@@ -177,11 +177,11 @@ export function OpenBetsPanel({ data }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="open-bets-panel">
       <div className="mx-4 mb-3 grid grid-cols-2 gap-2 text-center">
-        <div className="bg-[#12141C] border border-[#232838] rounded-xl py-2">
+        <div className="bg-[#0C1A36] border border-[#1A2D50] rounded-xl py-2">
           <p className="text-[10px] font-mono uppercase text-zinc-500">At risk</p>
           <p className="font-mono text-sm font-bold" data-testid="open-bets-at-risk">{fmtAmt(atRisk, "USD")}</p>
         </div>
-        <div className="bg-[#12141C] border border-[#232838] rounded-xl py-2">
+        <div className="bg-[#0C1A36] border border-[#1A2D50] rounded-xl py-2">
           <p className="text-[10px] font-mono uppercase text-zinc-500">Potential win</p>
           <p className="font-mono text-sm font-bold text-emerald-400" data-testid="open-bets-to-win">{fmtAmt(toWin, "USD")}</p>
         </div>

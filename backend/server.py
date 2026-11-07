@@ -1005,7 +1005,7 @@ async def _tg_handle(msg: dict):
     if not linked:
         if text.startswith("/start"):
             await db.admin_settings.update_one({"key": "telegram"}, {"$set": {"chat_id": chat}}, upsert=True)
-            await tg_notify("✅ ApexOdds alerts are connected. You'll be pinged here for tickets, deposits and withdrawals.")
+            await tg_notify("✅ Housebets alerts are connected. You'll be pinged here for tickets, deposits and withdrawals.")
         return
     if chat != linked or not text:
         return
@@ -1062,7 +1062,7 @@ async def admin_telegram_test(admin: dict = Depends(get_admin_user)):
         raise HTTPException(status_code=503, detail="Telegram bot not configured")
     if not await _tg_chat_id():
         raise HTTPException(status_code=400, detail="Open your bot in Telegram and send /start first (on the live site)")
-    await tg_notify("🔔 Test ping from ApexOdds — alerts are working.")
+    await tg_notify("🔔 Test ping from Housebets — alerts are working.")
     return {"ok": True}
 
 
@@ -1279,7 +1279,7 @@ async def oxapay_invoice(body: WalletTxInput, user: dict = Depends(get_current_u
         "network": COIN_NETWORK.get(body.coin), "lifetime": 120, "fee_paid_by_payer": 0,
         "under_paid_coverage": 2.5,
         "callback_url": f"{base}/api/oxapay/webhook",
-        "order_id": order_id, "description": f"ApexOdds deposit (${body.amount} in {body.coin})",
+        "order_id": order_id, "description": f"Housebets deposit (${body.amount} in {body.coin})",
     }
     try:
         async with httpx.AsyncClient(timeout=20) as hc:
@@ -1408,7 +1408,7 @@ async def get_deposit_address(coin: str, user: dict = Depends(get_current_user))
     base = os.environ.get("FRONTEND_URL", "")
     payload = {"network": COIN_NETWORK.get(coin), "auto_withdrawal": 0,
                "callback_url": f"{base}/api/oxapay/webhook", "email": user.get("email"),
-               "order_id": f"static:{user['id']}:{coin}", "description": f"ApexOdds {coin} deposit address"}
+               "order_id": f"static:{user['id']}:{coin}", "description": f"Housebets {coin} deposit address"}
     try:
         async with httpx.AsyncClient(timeout=20) as hc:
             r = await hc.post(f"{OXAPAY_API}/payment/static-address", json=payload,
@@ -1611,7 +1611,7 @@ async def _submit_payout(wd):
         "address": wd["address"], "currency": wd["coin"], "amount": wd["amount"],
         "network": wd.get("network"),
         "callback_url": f"{os.environ.get('FRONTEND_URL', '')}/api/oxapay/payout/webhook",
-        "description": f"ApexOdds withdrawal ({wd['coin']})",
+        "description": f"Housebets withdrawal ({wd['coin']})",
     }
     if wd.get("memo"):
         payload["memo"] = wd["memo"]
@@ -3218,7 +3218,7 @@ async def rotate_seed(user: dict = Depends(get_current_user)):
 
 @api_router.get("/")
 async def root():
-    return {"message": "ApexOdds API"}
+    return {"message": "Housebets API"}
 
 
 async def _migrate_to_usd():
@@ -4232,7 +4232,7 @@ MAINTENANCE_OPEN = ("/api/auth/", "/api/admin/", "/api/oxapay/", "/api/marketing
 async def maintenance_gate(request: Request, call_next):
     p = request.url.path
     if MAINTENANCE and p.startswith("/api/") and not p.startswith(MAINTENANCE_OPEN):
-        return JSONResponse(status_code=423, content={"detail": "ApexOdds is offline for maintenance (12-24 hours). Thank you for your patience."})
+        return JSONResponse(status_code=423, content={"detail": "Housebets is offline for maintenance (12-24 hours). Thank you for your patience."})
     if not CASINO_ON and p.startswith("/api/casino/"):
         return JSONResponse(status_code=410, content={"detail": "Casino games are no longer available"})
     return await call_next(request)

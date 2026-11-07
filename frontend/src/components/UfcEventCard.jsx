@@ -8,10 +8,10 @@ function Headshot({ f, size }) {
   const [err, setErr] = useState(false);
   if (f.photo && !err) {
     return <img src={f.photo} alt={f.name} onError={() => setErr(true)}
-      className={`${size} object-cover object-top rounded-full bg-[#1A1D2A] border border-[#2A2F45]`} />;
+      className={`${size} object-cover object-top rounded-full bg-[#132545] border border-[#1D3157]`} />;
   }
   return (
-    <div className={`${size} rounded-full bg-[#1A1D2A] border border-[#2A2F45] flex items-center justify-center font-display font-black text-zinc-400`}>
+    <div className={`${size} rounded-full bg-[#132545] border border-[#1D3157] flex items-center justify-center font-display font-black text-zinc-400`}>
       {initials(f.name)}
     </div>
   );
@@ -59,7 +59,7 @@ function MainEvent({ ev }) {
   const meta = buildMeta(ev);
   return (
     <div data-testid={`ufc-main-event-${ev.event_id}`}
-      className="relative rounded-lg border border-[#2A2F45] bg-gradient-to-b from-[#1A1220] to-[#12141C] p-5 overflow-hidden">
+      className="relative rounded-lg border border-[#1D3157] bg-gradient-to-b from-[#1A1220] to-[#0C1A36] p-5 overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/70 to-transparent" />
       <div className="flex items-center justify-center gap-2 mb-4">
         <span data-testid={`ufc-headline-label-${ev.event_id}`} className={`text-[10px] font-mono uppercase tracking-[0.25em] rounded px-2 py-0.5 border ${ev.main_event ? "text-red-400 bg-red-500/10 border-red-500/30" : "text-amber-300 bg-amber-500/10 border-amber-500/30"}`}>
@@ -91,7 +91,7 @@ function MainEvent({ ev }) {
 function BoutRow({ ev }) {
   const meta = buildMeta(ev);
   return (
-    <div data-testid={`ufc-bout-${ev.event_id}`} className="py-3 border-t border-[#1E2234] first:border-t-0">
+    <div data-testid={`ufc-bout-${ev.event_id}`} className="py-3 border-t border-[#162848] first:border-t-0">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{ev.weight_class || "Bout"}</span>
         <span className="text-[10px] font-mono text-zinc-600">{ev.state === "in" ? "LIVE" : ev.status_detail}</span>
@@ -122,8 +122,8 @@ export function UfcEventCard({ name, fights }) {
   const main = sorted.find((f) => f.main_event) || sorted[0];
   const rest = sorted.filter((f) => f !== main);
   return (
-    <section data-testid={`ufc-event-card-${name}`} className="col-span-full bg-[#12141C] border border-[#2A2F45] rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#1E2234]">
+    <section data-testid={`ufc-event-card-${name}`} className="col-span-full bg-[#0C1A36] border border-[#1D3157] rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#162848]">
         <Swords size={16} className="text-red-400" />
         <h3 className="font-display text-sm sm:text-base font-bold tracking-tight uppercase" data-testid="ufc-event-name">{name}</h3>
         <span className="ml-auto text-[11px] font-mono text-zinc-500">{fights.length} fights</span>

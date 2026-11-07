@@ -15,7 +15,7 @@ export const CASINO_GAMES = [
   { key: "limbo", name: "Limbo", to: "/casino/limbo", img: IMG.limbo, accent: "#2DD4BF" },
   { key: "mines", name: "Mines", to: "/casino/mines", img: IMG.mines, accent: "#F59E0B" },
   { key: "keno", name: "Keno", to: "/casino/keno", img: IMG.keno, accent: "#22C55E" },
-  { key: "plinko", name: "Plinko", to: "/casino/plinko", img: IMG.plinko, accent: "#34D399" },
-  { key: "blackjack", name: "Blackjack", to: "/casino/blackjack", img: IMG.blackjack, accent: "#10B981" },
+  { key: "plinko", name: "Plinko", to: "/casino/plinko", img: IMG.plinko, accent: "#67E8F9" },
+  { key: "blackjack", name: "Blackjack", to: "/casino/blackjack", img: IMG.blackjack, accent: "#22D3EE" },
   { key: "crash", name: "Crash", to: null, img: IMG.crash, accent: "#F97316", soon: true },
 ];

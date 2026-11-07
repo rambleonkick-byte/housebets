@@ -3,7 +3,7 @@ import { Zap, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 
-const inp = "bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-rose-400";
+const inp = "bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-rose-400";
 const MKT = { moneyline: "Moneyline", spread: "Spread", total: "Total", set1_ml: "1st Set", set2_ml: "2nd Set", total_games: "Total Games", games_spread: "Games Handicap" };
 
 function NewBoostForm({ onCreated }) {
@@ -77,14 +77,14 @@ export function AdminBoosts() {
     catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
   };
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl p-4 space-y-3" data-testid="admin-boosts">
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-4 space-y-3" data-testid="admin-boosts">
       <div>
         <p className="flex items-center gap-2 font-bold"><Zap size={16} className="text-rose-400" /> Super Boosts</p>
         <p className="text-xs text-zinc-500 mt-0.5">Shows first in the Boosted Odds row. Fixed-price boosts hide 5 minutes before start; percent boosts follow the live price and also run during live games.</p>
       </div>
       <NewBoostForm onCreated={load} />
       {list.map((b) => (
-        <div key={b.id} data-testid={`admin-boost-${b.id}`} className="flex items-center gap-3 text-sm bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2">
+        <div key={b.id} data-testid={`admin-boost-${b.id}`} className="flex items-center gap-3 text-sm bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2">
           <span className="mr-auto">
             {b.card ? <><b>{b.card.legs[0].pick}</b> <span className="text-zinc-500">· {b.card.away} @ {b.card.home}</span></> : <span className="text-zinc-500">Not showing (game started, or price already above boost)</span>}
           </span>

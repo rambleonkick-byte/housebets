@@ -3,7 +3,7 @@ import { Gift, Crown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiErrorDetail } from "@/lib/api";
 
-const inp = "bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500";
+const inp = "bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500";
 const L = ({ t, children, className = "" }) => <label className={`flex flex-col gap-1 text-[10px] font-mono uppercase text-zinc-500 ${className}`}>{t}{children}</label>;
 const EMPTY = { code: "", type: "cash", amount: "", pct: "", max_bonus: "", wager_mult: "1", max_uses: "", expires_at: "" };
 
@@ -26,7 +26,7 @@ function PromoForm({ onCreated }) {
   };
   const match = f.type === "deposit_match";
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-4 border-b border-[#1E2234]" data-testid="admin-promo-form">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-4 border-b border-[#162848]" data-testid="admin-promo-form">
       <L t="Code"><input data-testid="admin-promo-code" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="WELCOME25" className={`${inp} font-mono`} /></L>
       <L t="Reward type"><select data-testid="admin-promo-type" value={f.type} onChange={set("type")} className={inp}>
         <option value="cash">Free cash</option><option value="free_bet">Free bet</option><option value="deposit_match">Deposit match</option>
@@ -77,16 +77,16 @@ export const AdminPromos = () => {
   const toggle = async (p) => { await api.post(`/admin/promos/${p.code}/active`, { active: !p.active }); load(); };
 
   return (
-    <div className="bg-[#12141C] border border-[#2A2F45] rounded-2xl" data-testid="admin-promos">
-      <p className="p-4 border-b border-[#1E2234] flex items-center gap-2 font-bold"><Gift size={16} className="text-emerald-400" /> Promo codes & VIP rewards</p>
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl" data-testid="admin-promos">
+      <p className="p-4 border-b border-[#162848] flex items-center gap-2 font-bold"><Gift size={16} className="text-emerald-400" /> Promo codes & VIP rewards</p>
       <PromoForm onCreated={load} />
-      <div className="overflow-x-auto scrollbar-thin border-b border-[#1E2234]">
+      <div className="overflow-x-auto scrollbar-thin border-b border-[#162848]">
         <table className="w-full text-sm" data-testid="admin-promos-table">
           <thead><tr className="text-[10px] font-mono uppercase text-zinc-500 text-left">{["Code", "Reward", "Wager", "Used", "Expires", ""].map((h) => <th key={h} className="px-4 py-2 font-medium">{h}</th>)}</tr></thead>
           <tbody>
             {list?.length === 0 && <tr><td colSpan={6} className="px-4 py-4 text-zinc-500">No promo codes yet.</td></tr>}
             {list?.map((p) => (
-              <tr key={p.code} className="border-t border-[#1E2234]" data-testid={`admin-promo-row-${p.code}`}>
+              <tr key={p.code} className="border-t border-[#162848]" data-testid={`admin-promo-row-${p.code}`}>
                 <td className="px-4 py-2 font-mono font-bold">{p.code}</td>
                 <td className="px-4 py-2">{p.desc}</td>
                 <td className="px-4 py-2 font-mono text-xs">{p.type === "free_bet" ? "—" : `${p.wager_mult}x`}</td>

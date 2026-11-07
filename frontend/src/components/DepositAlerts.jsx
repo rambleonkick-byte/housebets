@@ -13,7 +13,7 @@ export const WD_STAGE = {
   refunded: { title: "Withdrawal refunded", sub: "Returned to your balance", Icon: Undo2, tone: "red" },
 };
 export const TONE = {
-  emerald: { border: "border-emerald-500/40", glow: "rgba(16,185,129,0.5)", bg: "bg-emerald-500/15", text: "text-emerald-400" },
+  emerald: { border: "border-emerald-500/40", glow: "rgba(34,211,238,0.5)", bg: "bg-emerald-500/15", text: "text-emerald-400" },
   amber: { border: "border-amber-500/40", glow: "rgba(245,158,11,0.45)", bg: "bg-amber-500/15", text: "text-amber-400" },
   sky: { border: "border-sky-500/40", glow: "rgba(14,165,233,0.45)", bg: "bg-sky-500/15", text: "text-sky-400" },
   red: { border: "border-red-500/40", glow: "rgba(239,68,68,0.45)", bg: "bg-red-500/15", text: "text-red-400" },
@@ -23,7 +23,7 @@ function AlertToast({ a, kind, title, sub, Icon, tone, sign }) {
   const url = explorerUrl(a.coin, a.tx_hash, a.net);
   const t = TONE[tone];
   return (
-    <div data-testid={`${kind}-alert`} className={`w-[340px] bg-[#12141C] border ${t.border} rounded-xl p-4`}
+    <div data-testid={`${kind}-alert`} className={`w-[340px] bg-[#0C1A36] border ${t.border} rounded-xl p-4`}
       style={{ boxShadow: `0 10px 40px -10px ${t.glow}` }}>
       <div className="flex items-start gap-3">
         <div className={`w-9 h-9 rounded-full ${t.bg} flex items-center justify-center shrink-0`}>

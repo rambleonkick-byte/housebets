@@ -62,7 +62,7 @@ function Shell() {
       <AdminWithdrawalsModal open={adminOpen} onClose={() => setAdminOpen(false)} />
       <BetHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
       <Toaster theme="dark" position="top-center" richColors
-        toastOptions={{ style: { background: "#12141C", border: "1px solid #2A2F45", color: "#F4F4F5" } }} />
+        toastOptions={{ style: { background: "#0C1A36", border: "1px solid #1D3157", color: "#F4F4F5" } }} />
     </div>
   );
 }

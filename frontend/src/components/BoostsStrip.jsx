@@ -7,7 +7,7 @@ import { useBetSlip } from "@/context/BetSlipContext";
 
 const TIER = {
   super: { pill: "bg-rose-500 text-white", arrow: "text-rose-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(244,63,94,0.6)]" },
-  botd: { pill: "bg-emerald-500 text-black", arrow: "text-emerald-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(16,185,129,0.6)]" },
+  botd: { pill: "bg-emerald-500 text-black", arrow: "text-emerald-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(34,211,238,0.6)]" },
   golden: { pill: "bg-amber-400 text-black", arrow: "text-amber-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(251,191,36,0.6)]" },
   boosted: { pill: "bg-sky-500 text-white", arrow: "text-sky-400", glow: "hover:shadow-[0_10px_30px_-12px_rgba(14,165,233,0.6)]" },
 };
@@ -31,10 +31,10 @@ function BoostCard({ b, i }) {
   if (!b.live && left <= 5 * 60000) return null;
   return (
     <motion.div data-testid={`boost-card-${b.tier}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
-      className={`w-[300px] sm:w-[320px] shrink-0 bg-[#16181F] border rounded-2xl p-4 flex flex-col transition-shadow ${t.glow} ${active ? "border-emerald-500/70" : "border-[#262A38]"}`}>
+      className={`w-[300px] sm:w-[320px] shrink-0 bg-[#16181F] border rounded-2xl p-4 flex flex-col transition-shadow ${t.glow} ${active ? "border-emerald-500/70" : "border-[#1B2F55]"}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-md border border-zinc-600 flex items-center justify-center text-[9px] font-black text-zinc-300">AO</span>
+          <span className="w-6 h-6 rounded-md border border-zinc-600 flex items-center justify-center text-[9px] font-black text-zinc-300">HB</span>
           <span data-testid={`boost-tier-${b.tier}`} className={`text-[11px] font-black uppercase tracking-wide rounded-md px-2 py-0.5 ${t.pill}`}>{b.label}</span>
         </div>
         <span data-testid={`boost-countdown-${b.tier}`} className={`font-mono text-[11px] font-bold rounded-md px-2 py-0.5 ${b.live ? "bg-red-500 text-white animate-pulse" : "bg-white text-black"}`}>{b.live ? "● LIVE" : text}</span>

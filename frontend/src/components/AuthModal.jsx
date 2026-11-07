@@ -51,7 +51,7 @@ export function AuthModal() {
           onClick={() => setAuthOpen(false)} data-testid="auth-modal-overlay"
         >
           <motion.div
-            className="relative w-full max-w-md bg-[#12141C] border border-[#2A2F45] rounded-xl p-8 overflow-hidden"
+            className="relative w-full max-w-md bg-[#0C1A36] border border-[#1D3157] rounded-xl p-8 overflow-hidden"
             initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -60,7 +60,7 @@ export function AuthModal() {
               className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors">
               <X size={20} />
             </button>
-            <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-1">ApexOdds</p>
+            <p className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 mb-1">Housebets</p>
             <h2 className="font-display text-3xl font-black tracking-tight mb-1">
               {mode === "login" ? "Sign in" : "Create account"}
             </h2>
@@ -90,7 +90,7 @@ export function AuthModal() {
             </form>
 
             <p className="text-sm text-zinc-500 mt-5 text-center">
-              {mode === "login" ? "New to ApexOdds? " : "Already have an account? "}
+              {mode === "login" ? "New to Housebets? " : "Already have an account? "}
               <button data-testid="auth-toggle-mode"
                 onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
                 className="text-emerald-400 hover:text-emerald-300 font-medium">
@@ -110,7 +110,7 @@ function Field({ icon: Icon, testid, type = "text", value, onChange, placeholder
       <Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
       <input data-testid={testid} type={type} value={value} required={required}
         onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-lg pl-9 pr-3 py-3 text-sm
+        className="w-full bg-[#071024] border border-[#1D3157] rounded-lg pl-9 pr-3 py-3 text-sm
           focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-zinc-600" />
     </div>
   );

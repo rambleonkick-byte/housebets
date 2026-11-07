@@ -67,7 +67,7 @@ export function Limbo() {
             <div className="relative">
               <input data-testid="limbo-target-input" type="number" min="1.01" step="0.01" value={target} disabled={autoOn}
                 onChange={(e) => setTarget(e.target.value)}
-                className="w-full bg-[#090A0F] border border-[#2A2F45] rounded-xl px-3 py-2.5 font-mono text-sm text-white outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                className="w-full bg-[#071024] border border-[#1D3157] rounded-xl px-3 py-2.5 font-mono text-sm text-white outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-sm">×</span>
             </div>
           </div>
@@ -82,16 +82,16 @@ export function Limbo() {
       <div className="flex-1 flex flex-col">
         <div className="flex gap-1.5 justify-end min-h-[26px]" data-testid="limbo-history">
           {history.map((h, i) => (
-            <span key={i} className={`font-mono text-[11px] font-bold px-2 py-1 rounded-lg ${h.won ? "bg-emerald-500/15 text-emerald-300" : "bg-[#1A1D28] text-slate-400"}`}>{h.v.toFixed(2)}×</span>
+            <span key={i} className={`font-mono text-[11px] font-bold px-2 py-1 rounded-lg ${h.won ? "bg-emerald-500/15 text-emerald-300" : "bg-[#132543] text-slate-400"}`}>{h.v.toFixed(2)}×</span>
           ))}
         </div>
         <div className="flex-1 flex flex-col items-center justify-center">
           <motion.div data-testid="limbo-result" animate={{ scale: last ? [1.08, 1] : 1 }}
-            className={`font-mono font-black text-7xl sm:text-8xl tracking-tighter bg-gradient-to-b ${tone} bg-clip-text text-transparent drop-shadow-[0_4px_25px_rgba(16,185,129,0.25)]`}>
+            className={`font-mono font-black text-7xl sm:text-8xl tracking-tighter bg-gradient-to-b ${tone} bg-clip-text text-transparent drop-shadow-[0_4px_25px_rgba(34,211,238,0.25)]`}>
             {display.toFixed(2)}×
           </motion.div>
           <div className="mt-6 flex gap-3">
-            <div className="bg-[#1A1D28] border border-[#2A2F45] rounded-xl px-4 py-2 text-center">
+            <div className="bg-[#132543] border border-[#1D3157] rounded-xl px-4 py-2 text-center">
               <p className="text-[10px] uppercase tracking-wider text-slate-500">Target</p>
               <p className="font-mono font-bold text-white">{targetNum.toFixed(2)}×</p>
             </div>

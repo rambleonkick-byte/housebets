@@ -40,7 +40,7 @@ export function AutoCashout({ bet, value, onSave }) {
       <div className="flex gap-1.5">
         <input data-testid={`auto-cashout-input-${bet.id}`} type="number" min="0" value={target} onChange={(e) => setTarget(e.target.value)}
           placeholder={`Target ${bet.coin}`}
-          className="flex-1 min-w-0 bg-[#090A0F] border border-[#2A2F45] rounded-lg px-2.5 py-1.5 font-mono text-xs focus:outline-none focus:border-sky-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+          className="flex-1 min-w-0 bg-[#071024] border border-[#1D3157] rounded-lg px-2.5 py-1.5 font-mono text-xs focus:outline-none focus:border-sky-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
         <button data-testid={`auto-cashout-save-${bet.id}`} onClick={() => save(tNum)} disabled={!valid || busy}
           className="px-3 text-[11px] font-semibold bg-sky-500 text-black rounded-lg disabled:opacity-40">Save</button>
         <button data-testid={`auto-cashout-cancel-${bet.id}`} onClick={() => setEditing(false)} className="px-2 text-zinc-500 hover:text-white"><X size={13} /></button>

@@ -82,7 +82,7 @@ function MatchSlide({ ev, label }) {
         <div className="text-center">
           {live && ev.away.score != null
             ? <p className="font-mono text-3xl sm:text-4xl font-black" data-testid="hero-live-score">{ev.away.score}<span className="text-zinc-500 mx-2">:</span>{ev.home.score}</p>
-            : <p className="font-display text-3xl sm:text-5xl font-black italic text-emerald-400 drop-shadow-[0_0_18px_rgba(16,185,129,0.6)]">VS</p>}
+            : <p className="font-display text-3xl sm:text-5xl font-black italic text-emerald-400 drop-shadow-[0_0_18px_rgba(34,211,238,0.6)]">VS</p>}
         </div>
         <Side t={ev.home} ufc={ufc} align="justify-self-start" />
       </div>
@@ -99,15 +99,15 @@ function WelcomeSlide({ live, markets }) {
   const { user, setAuthOpen } = useAuth();
   return (
     <div className="relative h-full flex flex-col justify-center px-5 sm:px-8 pt-6 pb-10" data-testid="hero-slide-welcome">
-      <p className="text-xs font-mono uppercase tracking-[0.25em] text-emerald-400 mb-3 flex items-center gap-2"><Zap size={12} fill="currentColor" /> ApexOdds Sportsbook</p>
+      <p className="text-xs font-mono uppercase tracking-[0.25em] text-emerald-400 mb-3 flex items-center gap-2"><Zap size={12} fill="currentColor" /> Housebets Sportsbook</p>
       <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[0.95] uppercase max-w-xl">
-        Under the lights.<br /><span className="text-emerald-400 drop-shadow-[0_0_24px_rgba(16,185,129,0.55)]">On the line.</span>
+        Under the lights.<br /><span className="text-emerald-400 drop-shadow-[0_0_24px_rgba(34,211,238,0.55)]">On the line.</span>
       </h1>
       <p className="text-sm sm:text-base text-zinc-300 mt-4 max-w-md">Live odds on NFL, NBA, UFC and football. Play in USD. Deposit with BTC, ETH, SOL or USDT and get paid fast.</p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-5 sm:mt-6">
         {!user && (
           <button data-testid="hero-cta-signup" onClick={() => setAuthOpen(true)}
-            className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-6 py-3 rounded-full shadow-[0_0_30px_-5px_rgba(16,185,129,0.7)] transition-colors active:scale-95">
+            className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-6 py-3 rounded-full shadow-[0_0_30px_-5px_rgba(34,211,238,0.7)] transition-colors active:scale-95">
             Join now
           </button>
         )}
@@ -143,12 +143,12 @@ export function HeroCarousel({ events, liveCount }) {
   return (
     <div data-testid="hero-carousel" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
       onTouchStart={(e) => setTouchX(e.touches[0].clientX)} onTouchEnd={onTouchEnd}
-      className="relative m-4 mb-0 h-[340px] sm:h-[360px] rounded-2xl overflow-hidden border border-[#2A2F45] bg-[#090A0F] shadow-[0_20px_60px_-25px_rgba(16,185,129,0.35)]">
+      className="relative m-4 mb-0 h-[340px] sm:h-[360px] rounded-2xl overflow-hidden border border-[#1D3157] bg-[#071024] shadow-[0_20px_60px_-25px_rgba(34,211,238,0.35)]">
       <AnimatePresence mode="sync">
         <motion.div key={s.id} className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.7 }}>
           <img src={s.bg} alt="" className="absolute inset-0 w-full h-full object-cover hero-kenburns" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#090A0F] via-[#090A0F]/70 to-[#090A0F]/30" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#090A0F]/90 via-transparent to-[#090A0F]/60" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#071024] via-[#071024]/70 to-[#071024]/30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#071024]/90 via-transparent to-[#071024]/60" />
           <div className="absolute -top-24 left-1/4 w-96 h-48 bg-emerald-400/20 blur-3xl rounded-full" />
           <motion.div className="relative h-full" initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.15, duration: 0.5 }}>
             {s.ev ? <MatchSlide ev={s.ev} label={s.label} /> : <WelcomeSlide live={liveCount} markets={events.length} />}

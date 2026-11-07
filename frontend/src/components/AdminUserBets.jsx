@@ -13,7 +13,7 @@ const GRADES = [["won", "Won", "border-emerald-500/50 text-emerald-300 hover:bg-
 function BetCard({ b, onGrade, busy }) {
   const ret = b.status === "cashed_out" ? b.cashout_amount : b.payout;
   return (
-    <li data-testid={`admin-user-bet-${b.id}`} className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3">
+    <li data-testid={`admin-user-bet-${b.id}`} className="bg-[#0A1530] border border-[#1D3157] rounded-lg p-3">
       <div className="flex justify-between text-[10px] font-mono uppercase text-zinc-500 mb-1.5">
         <span>{b.bet_type} · {b.selections.length} leg{b.selections.length > 1 ? "s" : ""}{b.free_bet && " · free bet"}{b.needs_review && <span className="text-amber-400"> · needs review</span>}</span>
         <span>{new Date(b.created_at).toLocaleString()}</span>
@@ -24,7 +24,7 @@ function BetCard({ b, onGrade, busy }) {
           <span className="font-mono text-xs text-zinc-400 shrink-0">{Number(s.odds).toFixed(2)}</span>
         </div>
       ))}
-      <div className="flex justify-between text-xs mt-2 pt-2 border-t border-[#1E2234] text-zinc-500">
+      <div className="flex justify-between text-xs mt-2 pt-2 border-t border-[#162848] text-zinc-500">
         <span>Stake <b className="font-mono text-zinc-200">{fmtUsd(b.stake)}</b></span>
         {b.status === "open" ? <span>To win <b className="font-mono text-emerald-400">{fmtUsd(b.potential_payout - (b.free_bet ? b.stake : 0))}</b></span>
           : <span data-testid={`admin-user-bet-status-${b.id}`} className={`font-bold uppercase ${TONE[b.status]}`}>{b.status.replace("_", " ")} · <span className="font-mono">{fmtUsd(ret || 0)}</span>{b.lossback > 0 && <span className="text-emerald-300 normal-case font-normal"> +{fmtUsd(b.lossback)} lossback</span>}</span>}
@@ -45,7 +45,7 @@ function BetCard({ b, onGrade, busy }) {
 function GameRow({ g }) {
   const profit = (g.payout || 0) - g.stake;
   return (
-    <li data-testid={`admin-user-game-${g.id}`} className="flex items-center justify-between bg-[#0E1017] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm">
+    <li data-testid={`admin-user-game-${g.id}`} className="flex items-center justify-between bg-[#0A1530] border border-[#1D3157] rounded-lg px-3 py-2 text-sm">
       <div>
         <p className="capitalize font-semibold">{g.game} {g.multiplier > 0 && <span className="font-mono text-xs text-zinc-500">{g.multiplier}x</span>}</p>
         <p className="text-[10px] text-zinc-500">{new Date(g.created_at).toLocaleString()}</p>
@@ -91,7 +91,7 @@ export function AdminUserBets({ uid, onChanged }) {
       <div className="flex gap-1 mb-2">
         {TABS.map(([v, l]) => (
           <button key={v} data-testid={`admin-user-tab-${v}`} onClick={() => setTab(v)}
-            className={`flex-1 text-[11px] font-bold py-1.5 rounded-md border ${tab === v ? "border-emerald-500/60 text-emerald-300 bg-emerald-500/10" : "border-[#2A2F45] text-zinc-400"}`}>
+            className={`flex-1 text-[11px] font-bold py-1.5 rounded-md border ${tab === v ? "border-emerald-500/60 text-emerald-300 bg-emerald-500/10" : "border-[#1D3157] text-zinc-400"}`}>
             {l}{v === "open" && open ? ` (${open.length})` : ""}
           </button>
         ))}

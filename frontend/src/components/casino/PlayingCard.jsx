@@ -15,8 +15,8 @@ export function PlayingCard({ card, index = 0, testId }) {
       style={{ zIndex: index }}>
       {hidden ? (
         <div className="absolute inset-0 rounded-lg border-2 border-white/90 bg-[#0B3D2E] overflow-hidden flex items-center justify-center"
-          style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(16,185,129,0.35) 0 4px, transparent 4px 9px)" }}>
-          <div className="w-8 h-8 rounded-md bg-emerald-500 flex items-center justify-center font-display font-black text-black text-xs">AO</div>
+          style={{ backgroundImage: "repeating-linear-gradient(45deg, rgba(34,211,238,0.35) 0 4px, transparent 4px 9px)" }}>
+          <div className="w-8 h-8 rounded-md bg-emerald-500 flex items-center justify-center font-display font-black text-black text-xs">HB</div>
         </div>
       ) : (
         <div className={`absolute inset-0 rounded-lg bg-white border border-zinc-300 ${red ? "text-red-600" : "text-zinc-900"}`}>

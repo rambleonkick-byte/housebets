@@ -20,7 +20,7 @@ export function TicketThread({ ticket, me, onSend, testid }) {
       <div className="flex-1 overflow-y-auto scrollbar-thin space-y-2 p-3" data-testid={`${testid}-messages`}>
         {ticket.messages.map((m, i) => (
           <div key={i} className={`flex ${m.from === me ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${m.from === me ? "bg-emerald-500 text-black rounded-br-sm" : "bg-[#1A1D29] text-zinc-100 rounded-bl-sm"}`}>
+            <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${m.from === me ? "bg-emerald-500 text-black rounded-br-sm" : "bg-[#132544] text-zinc-100 rounded-bl-sm"}`}>
               <p className="text-[9px] font-mono uppercase opacity-60 mb-0.5">{m.from === "admin" ? "Support" : me === "admin" ? ticket.user_name || "Player" : "You"}</p>
               {m.text}
               <p className="text-[9px] opacity-50 mt-1 text-right">{new Date(m.at).toLocaleString()}</p>
@@ -29,11 +29,11 @@ export function TicketThread({ ticket, me, onSend, testid }) {
         ))}
         <div ref={end} />
       </div>
-      <div className="p-3 border-t border-[#1E2234] flex gap-2">
+      <div className="p-3 border-t border-[#162848] flex gap-2">
         <textarea data-testid={`${testid}-input`} value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={4000}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           placeholder={ticket.status === "closed" ? "Reply to reopen this ticket" : "Type a message"}
-          className="flex-1 resize-none bg-[#0B0D13] border border-[#2A2F45] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/60" />
+          className="flex-1 resize-none bg-[#08122A] border border-[#1D3157] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/60" />
         <button data-testid={`${testid}-send`} onClick={send} disabled={busy || !text.trim()}
           className="self-end w-10 h-10 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center disabled:opacity-40">
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

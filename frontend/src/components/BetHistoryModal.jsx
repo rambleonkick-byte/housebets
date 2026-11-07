@@ -74,10 +74,10 @@ export function BetHistoryModal({ open, onClose }) {
       {open && (
         <motion.div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} data-testid="history-modal">
-          <motion.div className="w-full max-w-lg bg-[#12141C] border border-[#2A2F45] rounded-xl overflow-hidden max-h-[88vh] flex flex-col"
+          <motion.div className="w-full max-w-lg bg-[#0C1A36] border border-[#1D3157] rounded-xl overflow-hidden max-h-[88vh] flex flex-col"
             initial={{ scale: 0.96, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 15 }}
             onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A2F45]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1D3157]">
               <div className="flex items-center gap-2">
                 <History size={18} className="text-emerald-400" />
                 <span className="font-display text-lg font-bold tracking-tight">My Bets</span>
@@ -85,7 +85,7 @@ export function BetHistoryModal({ open, onClose }) {
               <button data-testid="history-close" onClick={onClose} className="text-zinc-500 hover:text-white"><X size={20} /></button>
             </div>
 
-            <div className="flex gap-1 p-3 border-b border-[#2A2F45]">
+            <div className="flex gap-1 p-3 border-b border-[#1D3157]">
               {["all", "open", "won", "lost", "cashed_out"].map((f) => (
                 <button key={f} data-testid={`history-filter-${f}`} onClick={() => setFilter(f)}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md capitalize whitespace-nowrap transition-colors ${
@@ -104,7 +104,7 @@ export function BetHistoryModal({ open, onClose }) {
                   const S = STATUS[b.status] || STATUS.open;
                   const Icon = S.icon;
                   return (
-                    <div key={b.id} data-testid={`history-bet-${b.id}`} className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3">
+                    <div key={b.id} data-testid={`history-bet-${b.id}`} className="bg-[#0A1530] border border-[#1D3157] rounded-lg p-3">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">
                           {b.bet_type} · {b.selections.length} leg{b.selections.length > 1 ? "s" : ""}
@@ -122,7 +122,7 @@ export function BetHistoryModal({ open, onClose }) {
                           </div>
                         ))}
                       </div>
-                      <div className="flex items-center justify-between text-xs pt-2 border-t border-[#1E2234]">
+                      <div className="flex items-center justify-between text-xs pt-2 border-t border-[#162848]">
                         <span className="text-zinc-500">Stake <span className="font-mono text-zinc-300">{fmtAmt(b.stake, b.coin)}</span> {b.coin !== "USD" && <><Usd amount={b.stake} coin={b.coin} prefix="(" />)</>}</span>
                         <span className="text-zinc-500">
                           {b.status === "cashed_out" ? (b.auto_cashed ? "Auto cashed out" : "Cashed out") : b.status === "won" ? "Payout" : "To win"}{" "}

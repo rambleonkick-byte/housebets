@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Ticket, Trash2, X, Loader2, Zap, Share2, ArrowUp, ArrowDown } from "lucide-react";
@@ -41,13 +42,7 @@ function computeParlayOdds(items) {
 function SlipLogo() {
   return (
     <div className="flex items-center gap-2" data-testid="bet-slip-logo">
-      <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center shadow-[0_0_18px_-2px_rgba(16,185,129,0.7)]">
-        <Zap size={15} className="text-black" fill="currentColor" />
-      </div>
-      <div className="leading-none">
-        <span className="font-display text-[15px] font-black tracking-tight">APEX</span>
-        <span className="font-display text-[15px] font-black tracking-tight text-emerald-400">ODDS</span>
-      </div>
+      <BrandLogo className="h-6" testid="betslip-brand-logo" />
     </div>
   );
 }
@@ -61,7 +56,7 @@ function LegOdds({ s }) {
         <span className="font-mono text-[10px] text-zinc-600 line-through mb-0.5" data-testid={`slip-prev-odds-${s._id}`}>{fmtOdds(s.prevOdds)}</span>
       )}
       <motion.span key={s.movedAt || 0} data-testid={`slip-odds-${s._id}`}
-        initial={s.movedAt ? { scale: 1.25, backgroundColor: up ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)" } : false}
+        initial={s.movedAt ? { scale: 1.25, backgroundColor: up ? "rgba(34,211,238,0.35)" : "rgba(239,68,68,0.35)" } : false}
         animate={{ scale: 1, backgroundColor: "rgba(0,0,0,0)" }} transition={{ duration: 0.9 }}
         className={`flex items-center gap-0.5 font-mono text-lg font-bold rounded-md px-1 ${tone}`}>
         {s.move && (up ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}{fmtOdds(s.odds)}
@@ -77,7 +72,7 @@ function GameCard({ legs, selId, onRemove }) {
   return (
     <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       data-testid={`slip-game-${head.event_id}`}
-      className="bg-gradient-to-b from-[#161924] to-[#12141C] border border-[#232838] rounded-2xl p-4">
+      className="bg-gradient-to-b from-[#11213F] to-[#0C1A36] border border-[#1A2D50] rounded-2xl p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-semibold text-[15px] text-white truncate" data-testid={`slip-matchup-${head.event_id}`}>{matchup}</p>
@@ -239,7 +234,7 @@ export function BetSlip() {
           <div className="flex items-center gap-2.5">
             <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
             <span className="font-display text-lg font-bold tracking-tight">Bet Slip</span>
-            <span data-testid="bet-slip-count" className="font-mono text-[11px] text-zinc-400 bg-[#1A1D29] rounded-full px-2 py-0.5">
+            <span data-testid="bet-slip-count" className="font-mono text-[11px] text-zinc-400 bg-[#132544] rounded-full px-2 py-0.5">
               {items.length}
             </span>
           </div>
@@ -256,7 +251,7 @@ export function BetSlip() {
           </div>
         )}
         {items.length > 1 && !boost && (
-          <div className="flex gap-1 bg-[#12141C] border border-[#232838] p-1 rounded-full">
+          <div className="flex gap-1 bg-[#0C1A36] border border-[#1A2D50] p-1 rounded-full">
             {["single", "parlay"].map((m) => (
               <button key={m} data-testid={`bet-slip-mode-${m}`} onClick={() => setMode(m)}
                 className={`flex-1 text-xs font-semibold py-1.5 rounded-full capitalize transition-colors ${
@@ -281,7 +276,7 @@ export function BetSlip() {
 
       {items.length > 0 && (
         <div className="px-4 pb-4 pt-1 space-y-3">
-          <div data-testid="bet-slip-combined" className="bg-[#12141C] border border-[#232838] rounded-2xl px-4 py-3.5 flex items-center justify-between">
+          <div data-testid="bet-slip-combined" className="bg-[#0C1A36] border border-[#1A2D50] rounded-2xl px-4 py-3.5 flex items-center justify-between">
             <div className="leading-tight">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{oddsLabel}</p>
               <p className="text-[10px] uppercase tracking-wider text-zinc-600">{items.length} selection{items.length > 1 ? "s" : ""}</p>
@@ -298,7 +293,7 @@ export function BetSlip() {
             {COINS.map((c) => (
               <button key={c} data-testid={`bet-slip-coin-${c}`} onClick={() => setCoin(c)}
                 className={`flex-1 text-[11px] font-mono font-semibold py-1.5 rounded-full border transition-colors ${
-                  coin === c ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#232838] text-zinc-500 hover:text-zinc-300"}`}>{c}</button>
+                  coin === c ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-[#1A2D50] text-zinc-500 hover:text-zinc-300"}`}>{c}</button>
             ))}
           </div>
 
@@ -323,10 +318,10 @@ export function BetSlip() {
             <div className="flex gap-1.5">
               <input data-testid="bet-slip-stake-input" type="number" min="0" value={stake} disabled={!!freeBet}
                 onChange={(e) => setStake(e.target.value)} placeholder="0.00"
-                className="flex-1 min-w-0 bg-[#090A0F] border border-[#232838] rounded-xl px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-60 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                className="flex-1 min-w-0 bg-[#071024] border border-[#1A2D50] rounded-xl px-3 py-2.5 font-mono text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-60 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
               {[10, 50].map((v) => (
                 <button key={v} data-testid={`bet-slip-quick-${v}`} disabled={!!freeBet} onClick={() => setStake(String(v))}
-                  className="px-2.5 text-[11px] font-mono text-zinc-400 border border-[#232838] rounded-xl hover:border-emerald-500/60 disabled:opacity-40">{v}</button>
+                  className="px-2.5 text-[11px] font-mono text-zinc-400 border border-[#1A2D50] rounded-xl hover:border-emerald-500/60 disabled:opacity-40">{v}</button>
               ))}
               <button data-testid="bet-slip-quick-max" disabled={!!freeBet} onClick={() => setStake(String(isParlay ? bal : bal / Math.max(items.length, 1)))}
                 className="px-2.5 text-[11px] font-mono font-bold text-emerald-400 border border-emerald-500/40 rounded-xl hover:bg-emerald-500/10 disabled:opacity-40">MAX</button>
@@ -355,7 +350,7 @@ export function BetSlip() {
             <span className="text-[11px] text-zinc-400">Auto-accept better odds</span>
             <button type="button" role="switch" aria-checked={acceptBetter} data-testid="bet-slip-accept-better-toggle"
               onClick={() => setAcceptBetter((v) => !v)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${acceptBetter ? "bg-emerald-500" : "bg-[#2A2F45]"}`}>
+              className={`relative w-9 h-5 rounded-full transition-colors ${acceptBetter ? "bg-emerald-500" : "bg-[#1D3157]"}`}>
               <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${acceptBetter ? "translate-x-4" : ""}`} />
             </button>
           </div>
@@ -371,7 +366,7 @@ export function BetSlip() {
             </p>
           )}
           <button data-testid="bet-slip-place-button" onClick={pendingChanges ? acceptChanges : place} disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-full transition-colors disabled:opacity-60 shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)]">
+            className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-full transition-colors disabled:opacity-60 shadow-[0_8px_24px_-8px_rgba(34,211,238,0.6)]">
             {loading && <Loader2 size={16} className="animate-spin" />}
             {pendingChanges ? "Accept odds changes" : user ? (boost?.fixed ? "Place Bet" : isParlay ? "Place Parlay" : `Place ${items.length} Bet${items.length > 1 ? "s" : ""}`) : "Sign in to bet"}
           </button>
@@ -383,12 +378,12 @@ export function BetSlip() {
   const openCount = openBets.bets?.length || 0;
   const content = (
     <div className="flex flex-col h-full">
-      <div className="flex gap-1 mx-3 mt-3 bg-[#12141C] border border-[#232838] p-1 rounded-full" data-testid="sidebar-tabs">
+      <div className="flex gap-1 mx-3 mt-3 bg-[#0C1A36] border border-[#1A2D50] p-1 rounded-full" data-testid="sidebar-tabs">
         {[["slip", "Bet Slip", items.length], ["open", "Open Bets", openCount]].map(([v, l, n]) => (
           <button key={v} data-testid={`sidebar-tab-${v}`} onClick={() => setTab(v)}
             className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2 rounded-full transition-colors ${tab === v ? "bg-emerald-500 text-black" : "text-zinc-400 hover:text-white"}`}>
             {l}
-            <span data-testid={`sidebar-tab-${v}-count`} className={`font-mono text-[10px] rounded-full px-1.5 ${tab === v ? "bg-black/20" : "bg-[#1A1D29]"}`}>{n}</span>
+            <span data-testid={`sidebar-tab-${v}-count`} className={`font-mono text-[10px] rounded-full px-1.5 ${tab === v ? "bg-black/20" : "bg-[#132544]"}`}>{n}</span>
           </button>
         ))}
         <button className="lg:hidden w-8 flex items-center justify-center text-zinc-500 hover:text-white" onClick={() => setOpen(false)} aria-label="Close"><X size={16} /></button>
@@ -401,7 +396,7 @@ export function BetSlip() {
     <>
       <ShareSlipModal share={share} onClose={() => setShare(null)} />
       <aside className="hidden lg:flex flex-col w-80 shrink-0 h-[calc(100vh-4rem)] sticky top-16 p-3">
-        <div className="flex-1 min-h-0 bg-[#0D0F16] border border-[#1E2234] rounded-3xl overflow-hidden shadow-[0_20px_60px_-20px_rgba(0,0,0,0.8)]">
+        <div className="flex-1 min-h-0 bg-[#09142D] border border-[#162848] rounded-3xl overflow-hidden shadow-[0_20px_60px_-20px_rgba(0,0,0,0.8)]">
           {content}
         </div>
       </aside>
@@ -416,7 +411,7 @@ export function BetSlip() {
         {open && (
           <motion.div className="lg:hidden fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpen(false)}>
-            <motion.div className="absolute bottom-0 inset-x-0 h-[85vh] bg-[#0D0F16] border-t border-[#1E2234] rounded-t-3xl overflow-hidden"
+            <motion.div className="absolute bottom-0 inset-x-0 h-[85vh] bg-[#09142D] border-t border-[#162848] rounded-t-3xl overflow-hidden"
               initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 28 }}
               onClick={(e) => e.stopPropagation()}>
               {content}

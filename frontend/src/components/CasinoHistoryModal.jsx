@@ -7,7 +7,7 @@ import { verifyGame, sha256Hex } from "@/lib/fairness";
 import { Usd } from "@/components/Usd";
 import { toast } from "sonner";
 
-const GAME_COLORS = { limbo: "#10B981", dice: "#627EEA", plinko: "#8B5CF6", keno: "#22C55E", mines: "#F59E0B", blackjack: "#14B8A6" };
+const GAME_COLORS = { limbo: "#22D3EE", dice: "#627EEA", plinko: "#8B5CF6", keno: "#22C55E", mines: "#F59E0B", blackjack: "#14B8A6" };
 
 export function CasinoHistoryModal({ open, onClose }) {
   const [tab, setTab] = useState("history");
@@ -75,10 +75,10 @@ export function CasinoHistoryModal({ open, onClose }) {
       {open && (
         <motion.div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} data-testid="casino-history-modal">
-          <motion.div className="w-full max-w-xl bg-[#12141C] border border-[#2A2F45] rounded-xl overflow-hidden max-h-[88vh] flex flex-col"
+          <motion.div className="w-full max-w-xl bg-[#0C1A36] border border-[#1D3157] rounded-xl overflow-hidden max-h-[88vh] flex flex-col"
             initial={{ scale: 0.96, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 15 }}
             onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A2F45]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1D3157]">
               <div className="flex items-center gap-2">
                 <ShieldCheck size={18} className="text-emerald-400" />
                 <span className="font-display text-lg font-bold tracking-tight">Casino · History & Fairness</span>
@@ -86,7 +86,7 @@ export function CasinoHistoryModal({ open, onClose }) {
               <button data-testid="casino-history-close" onClick={onClose} className="text-zinc-500 hover:text-white"><X size={20} /></button>
             </div>
 
-            <div className="flex gap-1 p-3 border-b border-[#2A2F45]">
+            <div className="flex gap-1 p-3 border-b border-[#1D3157]">
               {["history", "fairness"].map((t) => (
                 <button key={t} data-testid={`casino-tab-${t}`} onClick={() => setTab(t)}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md capitalize transition-colors ${
@@ -106,7 +106,7 @@ export function CasinoHistoryModal({ open, onClose }) {
                     {games.map((gme) => {
                       const v = verifs[gme.id];
                       return (
-                        <div key={gme.id} data-testid={`casino-history-row-${gme.id}`} className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3">
+                        <div key={gme.id} data-testid={`casino-history-row-${gme.id}`} className="bg-[#0A1530] border border-[#1D3157] rounded-lg p-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="w-2 h-2 rounded-full" style={{ background: GAME_COLORS[gme.game] || "#A1A1AA" }} />
@@ -123,7 +123,7 @@ export function CasinoHistoryModal({ open, onClose }) {
                               <Usd amount={gme.won ? gme.payout : gme.stake} coin={gme.coin} prefix={gme.won ? "+" : "-"} className="text-[10px] text-zinc-500" />
                             </div>
                           </div>
-                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#1E2234]">
+                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#162848]">
                             <span className="font-mono text-[10px] text-zinc-600 truncate">nonce {gme.nonce ?? "—"} · {(gme.server_seed_hash || "").slice(0, 12)}…</span>
                             <button data-testid={`casino-verify-${gme.id}`} onClick={() => doVerify(gme)}
                               className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 shrink-0 ml-2">
@@ -159,7 +159,7 @@ function FairnessPanel({ seed, clientSeedInput, setClientSeedInput, onSave, onRo
   const copy = () => { navigator.clipboard?.writeText(seed.server_seed_hash); setCopied(true); setTimeout(() => setCopied(false), 1200); };
   return (
     <div className="space-y-4">
-      <div className="bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3">
+      <div className="bg-[#0A1530] border border-[#1D3157] rounded-lg p-3">
         <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 mb-1">Active server seed hash</p>
         <div className="flex items-center gap-2">
           <code className="font-mono text-xs text-emerald-300 break-all flex-1" data-testid="fairness-server-hash">{seed.server_seed_hash}</code>
@@ -172,14 +172,14 @@ function FairnessPanel({ seed, clientSeedInput, setClientSeedInput, onSave, onRo
         <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 mb-1.5">Client seed</p>
         <div className="flex gap-2">
           <input data-testid="fairness-client-seed-input" value={clientSeedInput} onChange={(e) => setClientSeedInput(e.target.value)}
-            className="flex-1 bg-[#090A0F] border border-[#2A2F45] rounded-lg px-3 py-2 font-mono text-xs focus:outline-none focus:border-emerald-500" />
+            className="flex-1 bg-[#071024] border border-[#1D3157] rounded-lg px-3 py-2 font-mono text-xs focus:outline-none focus:border-emerald-500" />
           <button data-testid="fairness-save-client-seed" onClick={onSave}
-            className="text-xs bg-[#222636] hover:bg-[#2b3047] text-zinc-200 font-semibold px-4 rounded-lg">Save</button>
+            className="text-xs bg-[#182B4C] hover:bg-[#2b3047] text-zinc-200 font-semibold px-4 rounded-lg">Save</button>
         </div>
         <p className="text-[11px] text-zinc-500 mt-1">You control this value — it mixes into every result.</p>
       </div>
 
-      <div className="flex items-center justify-between bg-[#0E1017] border border-[#2A2F45] rounded-lg p-3">
+      <div className="flex items-center justify-between bg-[#0A1530] border border-[#1D3157] rounded-lg p-3">
         <div>
           <p className="text-sm font-semibold">Rotate server seed</p>
           <p className="text-[11px] text-zinc-500">Reveals the current seed so past bets become verifiable.</p>
@@ -195,7 +195,7 @@ function FairnessPanel({ seed, clientSeedInput, setClientSeedInput, onSave, onRo
           <p className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 mb-1.5">Revealed seeds ({seed.revealed.length})</p>
           <div className="space-y-1.5" data-testid="fairness-revealed-list">
             {seed.revealed.map((r, i) => (
-              <div key={i} className="bg-[#0E1017] border border-[#2A2F45] rounded px-2 py-1.5">
+              <div key={i} className="bg-[#0A1530] border border-[#1D3157] rounded px-2 py-1.5">
                 <p className="font-mono text-[10px] text-zinc-500 break-all">hash {r.server_seed_hash.slice(0, 20)}…</p>
                 <p className="font-mono text-[10px] text-emerald-300/80 break-all">seed {r.server_seed.slice(0, 20)}…</p>
               </div>
