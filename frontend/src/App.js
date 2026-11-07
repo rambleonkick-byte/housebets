@@ -64,7 +64,7 @@ function Shell() {
   );
 }
 
-const MAINTENANCE = true;
+const MAINTENANCE = false;
 
 function App() {
   if (MAINTENANCE) return <Maintenance />;

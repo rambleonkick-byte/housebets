@@ -4223,7 +4223,7 @@ async def download_marketing(name: str):
     return FileResponse(path, media_type=mt, filename=out)
 
 
-MAINTENANCE = True
+MAINTENANCE = False
 MAINTENANCE_OPEN = ("/api/auth/", "/api/admin/", "/api/oxapay/", "/api/marketing/")
 
 
