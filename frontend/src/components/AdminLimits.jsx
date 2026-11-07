@@ -68,6 +68,28 @@ export function AdminBigWin() {
   );
 }
 
+export function AdminParlaysToggle() {
+  const [on, setOn] = useState(null);
+  useEffect(() => { api.get("/admin/parlays").then(({ data }) => setOn(data.enabled)); }, []);
+  const flip = async () => {
+    try {
+      const { data } = await api.put("/admin/parlays", { enabled: !on });
+      setOn(data.enabled);
+      toast.success(data.enabled ? "Parlays are back on" : "Single bets only — parlays turned off");
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+  };
+  if (on === null) return null;
+  return (
+    <div className="bg-[#0C1A36] border border-[#1D3157] rounded-2xl p-4 flex flex-wrap items-center gap-3" data-testid="admin-parlays-toggle">
+      <p className="font-bold mr-auto">Parlays <span className="text-xs font-normal text-zinc-500">(parlays, same-game parlays and boosted combos)</span></p>
+      <button data-testid="admin-parlays-toggle-button" onClick={flip}
+        className={`text-xs font-bold px-3 py-2 rounded-lg border ${on ? "border-emerald-500/50 text-emerald-300 bg-emerald-500/10" : "border-red-500/50 text-red-300 bg-red-500/10"}`}>
+        {on ? "ON — tap to turn off" : "OFF (singles only) — tap to turn on"}
+      </button>
+    </div>
+  );
+}
+
 export function AdminCashoutToggle() {
   const [on, setOn] = useState(null);
   useEffect(() => { api.get("/admin/cashout").then(({ data }) => setOn(data.enabled)); }, []);

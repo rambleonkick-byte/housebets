@@ -117,7 +117,10 @@ export function BetSlip() {
   const [stake, setStake] = useState("");
   const [coin, setCoin] = useState("USD");
   const [mode, setMode] = useState("single");
+  const [parlaysOn, setParlaysOn] = useState(false);
+  useEffect(() => { api.get("/config").then(({ data }) => setParlaysOn(!!data.parlays)).catch(() => {}); }, []);
   useEffect(() => { if (boost) setMode("parlay"); }, [boost]);
+  useEffect(() => { if (!parlaysOn && !boost) setMode("single"); }, [parlaysOn, boost, mode]);
   const [loading, setLoading] = useState(false);
   const [share, setShare] = useState(null);
   const [sharing, setSharing] = useState(false);
@@ -137,7 +140,7 @@ export function BetSlip() {
     setFreeBet(fb); setStake(String(fb.amount));
   };
 
-  const isParlay = !!boost || (mode === "parlay" && items.length > 1);
+  const isParlay = !!boost || (parlaysOn && mode === "parlay" && items.length > 1);
   const rawParlay = useMemo(() => computeParlayOdds(items), [items]);
   const parlayOdds = boost?.fixed || (boost ? 1 + (rawParlay - 1) * (1 + boost.pct) : rawParlay);
   const groups = useMemo(() => groupByGame(items), [items]);
@@ -250,7 +253,12 @@ export function BetSlip() {
             <Zap size={12} fill="currentColor" /> {boost.label} · {boost.fixed ? `boosted to ${fmtOdds(boost.fixed)}` : `+${Math.round(boost.pct * 100)}% boost applied`}
           </div>
         )}
-        {items.length > 1 && !boost && (
+        {items.length > 1 && !boost && !parlaysOn && (
+          <p data-testid="bet-slip-singles-only" className="text-[11px] text-zinc-400 bg-[#0C1A36] border border-[#1A2D50] rounded-lg px-3 py-2">
+            Single bets only for now — each pick is placed as its own bet.
+          </p>
+        )}
+        {items.length > 1 && !boost && parlaysOn && (
           <div className="flex gap-1 bg-[#0C1A36] border border-[#1A2D50] p-1 rounded-full">
             {["single", "parlay"].map((m) => (
               <button key={m} data-testid={`bet-slip-mode-${m}`} onClick={() => setMode(m)}

@@ -2003,11 +2003,39 @@ def build_boosts():
     return out
 
 
+class ToggleInput(BaseModel):
+    enabled: bool
+
+
+async def _parlays_on() -> bool:
+    d = await db.settings.find_one({"_id": "parlays"}) or {}
+    return d.get("enabled", False)
+
+
+@api_router.get("/config")
+async def public_config():
+    return {"parlays": await _parlays_on()}
+
+
+@api_router.get("/admin/parlays")
+async def admin_parlays(admin: dict = Depends(get_admin_user)):
+    return {"enabled": await _parlays_on()}
+
+
+@api_router.put("/admin/parlays")
+async def admin_set_parlays(body: ToggleInput, admin: dict = Depends(get_admin_user)):
+    await db.settings.update_one({"_id": "parlays"}, {"$set": {"enabled": body.enabled}}, upsert=True)
+    return {"enabled": body.enabled}
+
+
 @api_router.get("/boosts")
 async def get_boosts():
     if not any(c["data"] for c in _SGO_CACHE.values()):
         await _fetch_sgo_sequential(SGO_LEAGUES)
-    return {"boosts": build_boosts()}
+    boosts = build_boosts()
+    if not await _parlays_on():
+        boosts = [b for b in boosts if b.get("fixed_odds") and len(b["legs"]) == 1]
+    return {"boosts": boosts}
 
 
 def _leg_sig(x):
@@ -2029,6 +2057,8 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
     is_parlay = (body.bet_type == "parlay" and len(body.selections) > 1) or bool(boost and not boost.get("fixed_odds"))
     if not is_parlay and len(body.selections) != 1:
         raise HTTPException(status_code=400, detail="Single bets take exactly one selection")
+    if is_parlay and not await _parlays_on():
+        raise HTTPException(status_code=400, detail="Parlays are currently unavailable — single bets only")
     total_odds = round(compute_parlay_odds(body.selections), 2) if is_parlay else round(body.selections[0].odds, 2)
     if boost and boost.get("fixed_odds"):
         total_odds = boost["fixed_odds"]
@@ -2225,10 +2255,6 @@ async def _settle_loop():
         except Exception as e:
             logger.warning(f"settlement sweep failed: {e}")
         await asyncio.sleep(600)
-
-
-class ToggleInput(BaseModel):
-    enabled: bool
 
 
 async def _auto_settle_on() -> bool:

@@ -9,7 +9,7 @@ import { AdminBetReview } from "@/components/AdminBetReview";
 import { AdminTickets } from "@/components/AdminTickets";
 import { AdminPromos } from "@/components/AdminPromos";
 import { AdminUserBets } from "@/components/AdminUserBets";
-import { AdminBigWin, AdminCashoutToggle, AdminGlobalLimit, PlayerLimitForm } from "@/components/AdminLimits";
+import { AdminBigWin, AdminCashoutToggle, AdminGlobalLimit, AdminParlaysToggle, PlayerLimitForm } from "@/components/AdminLimits";
 import { AdminBoosts } from "@/components/AdminBoosts";
 
 const COINS = ["USD"];
@@ -256,6 +256,7 @@ export default function AdminPanel({ onWithdrawals }) {
       <AdminGlobalLimit />
       <AdminBigWin />
       <AdminCashoutToggle />
+      <AdminParlaysToggle />
       <AdminBoosts />
       <AdminPromos />
       <AdminTickets />

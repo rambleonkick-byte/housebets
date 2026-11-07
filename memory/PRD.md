@@ -338,3 +338,4 @@
 - Odds buttons recoloured to neutral slate (#1C2433 / border #2E3A4F, hover #243045) so they stand out from navy cards; alt-line panels slate too. Fixed mobile logo squash (shrink-0), bet-slip green glow + lime total chip -> cyan/sky.
 - Hero welcome slide background replaced with AI-generated Housebets banner (stadium + navy/cyan wave): frontend/public/brand/housebets-hero.jpg, wired in HeroCarousel.jsx BG.welcome.
 - Hero NFL/NBA/UFC/SOCCER slide backgrounds replaced with AI Housebets wave banners: public/brand/hb-{nfl,nba,ufc,soccer}.jpg.
+- SINGLES ONLY: db.settings{_id:parlays}.enabled (default False). GET /api/config {parlays}; GET/PUT /api/admin/parlays; place_bet rejects parlays (fixed single super boosts still allowed); /boosts returns only single-leg super boosts when off. BetSlip hides Single/Parlay toggle and shows "Single bets only" note. Admin "Parlays" toggle card.
