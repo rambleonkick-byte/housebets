@@ -7,10 +7,10 @@ import { useAuth } from "@/context/AuthContext";
 const IMG = (id) => `https://images.unsplash.com/${id}?crop=entropy&cs=srgb&fm=jpg&w=1600&q=80`;
 const BG = {
   welcome: "/brand/housebets-hero.jpg",
-  NFL: IMG("photo-1566577739112-5180d4bf9390"),
-  NBA: IMG("photo-1546519638-68e109498ffc"),
-  UFC: "https://images.pexels.com/photos/28550405/pexels-photo-28550405.jpeg?auto=compress&cs=tinysrgb&w=1600",
-  SOCCER: IMG("photo-1676746424139-77f8bd8922a8"),
+  NFL: "/brand/hb-nfl.jpg",
+  NBA: "/brand/hb-nba.jpg",
+  UFC: "/brand/hb-ufc.jpg",
+  SOCCER: "/brand/hb-soccer.jpg",
 };
 const FEATURED = [
   { key: "NFL", label: "NFL", leagues: ["NFL", "NCAAF"] },
