@@ -27,7 +27,7 @@ export function VipCard({ vip }) {
         <p className="text-xs text-zinc-400 mt-2" data-testid="vip-next">
           {vip.next_tier ? <>{Math.ceil(vip.next_points - vip.points).toLocaleString()} points to <b className="text-white">{vip.next_tier}</b></> : "Top rank reached"}
         </p>
-        <p className="text-[11px] text-zinc-500 mt-1">Every $1 on sports = {vip.sports_mult} points · every $1 in the casino = 1 point</p>
+        <p className="text-[11px] text-zinc-500 mt-1">Every $1 on sports = {vip.sports_mult} points</p>
       </div>
       <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2" data-testid="vip-ladder">
         {vip.tiers.map((t) => (

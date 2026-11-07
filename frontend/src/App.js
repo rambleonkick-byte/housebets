@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { CASINO_ON } from "@/lib/casinoGames";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { BetSlipProvider } from "@/context/BetSlipContext";
@@ -40,13 +41,15 @@ function Shell() {
       <div className="pt-16">
         <Routes>
           <Route path="/" element={<Sportsbook />} />
-          <Route path="/casino" element={<Casino />} />
-          <Route path="/casino/limbo" element={<Limbo />} />
-          <Route path="/casino/mines" element={<Mines />} />
-          <Route path="/casino/plinko" element={<Plinko />} />
-          <Route path="/casino/keno" element={<Keno />} />
-          <Route path="/casino/dice" element={<Dice />} />
-          <Route path="/casino/blackjack" element={<Blackjack />} />
+          {CASINO_ON ? <>
+            <Route path="/casino" element={<Casino />} />
+            <Route path="/casino/limbo" element={<Limbo />} />
+            <Route path="/casino/mines" element={<Mines />} />
+            <Route path="/casino/plinko" element={<Plinko />} />
+            <Route path="/casino/keno" element={<Keno />} />
+            <Route path="/casino/dice" element={<Dice />} />
+            <Route path="/casino/blackjack" element={<Blackjack />} />
+          </> : <Route path="/casino/*" element={<Navigate to="/" replace />} />}
           <Route path="/affiliate" element={<Affiliate />} />
           <Route path="/admin" element={<AdminPanel onWithdrawals={() => setAdminOpen(true)} />} />
           <Route path="/profile" element={<Profile />} />

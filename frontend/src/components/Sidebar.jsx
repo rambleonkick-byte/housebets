@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { CASINO_ON } from "@/lib/casinoGames";
 import { Link } from "react-router-dom";
 import { LayoutGrid, Goal, Dribbble, Shield, CircleDot, Snowflake, Dices, Swords, Volleyball } from "lucide-react";
 
@@ -17,10 +18,10 @@ function Tabs() {
   return (
     <div className="flex gap-1 bg-[#12141C] border border-[#1E2234] rounded-full p-1" data-testid="sidebar-tabs">
       <span className="flex-1 text-center text-sm font-bold text-white bg-[#262A38] rounded-full py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">Sport</span>
-      <Link to="/casino" data-testid="sidebar-tab-casino"
+      {CASINO_ON && <Link to="/casino" data-testid="sidebar-tab-casino"
         className="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-zinc-400 hover:text-white rounded-full py-2 transition-colors">
         <Dices size={14} /> Casino
-      </Link>
+      </Link>}
     </div>
   );
 }

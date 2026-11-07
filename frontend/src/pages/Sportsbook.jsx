@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { CASINO_ON } from "@/lib/casinoGames";
 import { RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 import { Sidebar } from "@/components/Sidebar";
@@ -77,7 +78,7 @@ export function Sportsbook() {
         <div className="h-4" />
 
         <BoostsStrip ready={allDone} />
-        <CasinoStrip />
+        {CASINO_ON && <CasinoStrip />}
 
         {/* Mobile sport chips */}
         <div className="lg:hidden flex gap-2 overflow-x-auto scrollbar-thin px-4 pb-2">

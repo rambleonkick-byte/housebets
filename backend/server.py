@@ -4224,6 +4224,7 @@ async def download_marketing(name: str):
 
 
 MAINTENANCE = False
+CASINO_ON = False
 MAINTENANCE_OPEN = ("/api/auth/", "/api/admin/", "/api/oxapay/", "/api/marketing/")
 
 
@@ -4232,6 +4233,8 @@ async def maintenance_gate(request: Request, call_next):
     p = request.url.path
     if MAINTENANCE and p.startswith("/api/") and not p.startswith(MAINTENANCE_OPEN):
         return JSONResponse(status_code=423, content={"detail": "ApexOdds is offline for maintenance (12-24 hours). Thank you for your patience."})
+    if not CASINO_ON and p.startswith("/api/casino/"):
+        return JSONResponse(status_code=410, content={"detail": "Casino games are no longer available"})
     return await call_next(request)
 
 

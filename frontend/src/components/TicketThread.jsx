@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Send, Loader2 } from "lucide-react";
 
-export const TOPICS = ["Deposit", "Withdrawal", "Bet", "Casino", "Account", "Other"];
+export const TOPICS = ["Deposit", "Withdrawal", "Bet", "Account", "Other"];
 
 export function TicketThread({ ticket, me, onSend, testid }) {
   const [text, setText] = useState("");

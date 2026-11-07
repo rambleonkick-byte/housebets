@@ -8,6 +8,8 @@ const IMG = {
   crash: "https://static.prod-images.emergentagent.com/jobs/2da7fdf4-e166-4ed4-bfba-3c73b2857ea1/images/dbc86b8d5787e13a830cbd583f67b0a13fd61d703af6bc195a5b33c56869b92d.jpeg",
 };
 
+export const CASINO_ON = false;
+
 export const CASINO_GAMES = [
   { key: "dice", name: "Dice", to: "/casino/dice", img: IMG.dice, accent: "#3B82F6" },
   { key: "limbo", name: "Limbo", to: "/casino/limbo", img: IMG.limbo, accent: "#2DD4BF" },

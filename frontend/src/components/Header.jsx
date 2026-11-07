@@ -1,4 +1,5 @@
 import { Zap, Wallet, History, LogOut, User as UserIcon, ShieldCheck } from "lucide-react";
+import { CASINO_ON } from "@/lib/casinoGames";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { usdValue } from "@/lib/format";
@@ -34,10 +35,10 @@ export function Header({ onWallet, onHistory, onAdmin }) {
               className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${onSports ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
               Sports
             </Link>
-            <Link to="/casino" data-testid="nav-casino"
+            {CASINO_ON && <Link to="/casino" data-testid="nav-casino"
               className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${onCasino ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
               Casino
-            </Link>
+            </Link>}
             <Link to="/affiliate" data-testid="nav-affiliate"
               className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${pathname === "/affiliate" ? "bg-emerald-500/10 text-emerald-300" : "text-zinc-400 hover:text-white"}`}>
               Affiliate

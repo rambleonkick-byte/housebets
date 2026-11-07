@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { CASINO_ON } from "@/lib/casinoGames";
 import { Loader2, TrendingUp, TrendingDown, ArrowDownToLine, ArrowUpFromLine, Trophy, Dices, Ticket, Lock } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -85,7 +86,7 @@ export default function Profile() {
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat icon={p.pnl >= 0 ? TrendingUp : TrendingDown} label="Net P&L" value={signed(p.pnl)} tone={pnlTone(p.pnl)} sub="Sports + casino" testid="profile-pnl" />
+        <Stat icon={p.pnl >= 0 ? TrendingUp : TrendingDown} label="Net P&L" value={signed(p.pnl)} tone={pnlTone(p.pnl)} sub={CASINO_ON ? "Sports + casino" : "Sportsbook"} testid="profile-pnl" />
         <Stat icon={ArrowDownToLine} label="Deposited" value={fmtUsd(p.deposits.total)} sub={`${p.deposits.count} deposits`} testid="profile-deposits" />
         <Stat icon={ArrowUpFromLine} label="Withdrawn" value={fmtUsd(p.withdrawals)} testid="profile-withdrawals" />
         <Stat icon={Trophy} label="Total wagered" value={fmtUsd(p.wagered)} sub={`Bonuses received ${fmtUsd(p.bonuses)}`} testid="profile-wagered" />
@@ -97,13 +98,13 @@ export default function Profile() {
           <Bonuses p={p} />
         </div>
       </div>
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className={`grid gap-6 ${CASINO_ON ? "md:grid-cols-2" : ""}`}>
         <Breakdown title="Sportsbook" icon={Trophy} testid="profile-sports" rows={[
           ["Settled bets", s.bets], ["Open bets", s.open], ["Win rate", `${s.win_rate}%`], ["Staked", fmtUsd(s.staked)],
           ["Returned", fmtUsd(s.returned)], ["Biggest win", fmtUsd(s.biggest_win)], ["P&L", signed(s.pnl), pnlTone(s.pnl)]]} />
-        <Breakdown title="Casino" icon={Dices} testid="profile-casino" rows={[
+        {CASINO_ON && <Breakdown title="Casino" icon={Dices} testid="profile-casino" rows={[
           ["Games played", c.games], ["Staked", fmtUsd(c.staked)], ["Returned", fmtUsd(c.returned)],
-          ["Biggest win", fmtUsd(c.biggest_win)], ["P&L", signed(c.pnl), pnlTone(c.pnl)]]} />
+          ["Biggest win", fmtUsd(c.biggest_win)], ["P&L", signed(c.pnl), pnlTone(c.pnl)]]} />}
       </div>
     </div>
   );
