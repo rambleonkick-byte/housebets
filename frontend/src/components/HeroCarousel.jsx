@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 
 const IMG = (id) => `https://images.unsplash.com/${id}?crop=entropy&cs=srgb&fm=jpg&w=1600&q=80`;
 const BG = {
-  welcome: IMG("photo-1679391029864-d46f366a456b"),
+  welcome: "/brand/housebets-hero.jpg",
   NFL: IMG("photo-1566577739112-5180d4bf9390"),
   NBA: IMG("photo-1546519638-68e109498ffc"),
   UFC: "https://images.pexels.com/photos/28550405/pexels-photo-28550405.jpeg?auto=compress&cs=tinysrgb&w=1600",
