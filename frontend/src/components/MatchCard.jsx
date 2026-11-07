@@ -44,9 +44,9 @@ export function OddsButton({ sel, meta }) {
       className={`flex flex-col items-center justify-center py-2 rounded-md border transition-all ${
         active
           ? "bg-emerald-500 border-emerald-400 text-black"
-          : "bg-[#0A1530] border-[#1D3157] hover:border-emerald-500/60 hover:bg-[#161922] text-zinc-200"
+          : "bg-[#1C2433] border-[#2E3A4F] hover:border-emerald-400/60 hover:bg-[#243045] text-white"
       }`}>
-      <span className={`text-[10px] font-medium truncate max-w-full px-1 ${active ? "text-black/70" : "text-zinc-500"}`}>
+      <span className={`text-[10px] font-medium truncate max-w-full px-1 ${active ? "text-black/70" : "text-slate-400"}`}>
         {sel.label || sel.pick}
       </span>
       <span className="font-mono text-sm font-bold tracking-wide">{fmtOdds(sel.odds)}</span>

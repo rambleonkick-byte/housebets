@@ -14,7 +14,7 @@ import { toast } from "sonner";
 const COINS = ["USD"];
 const SGP_CORRELATION = 0.8;
 const PILL = {
-  total: "bg-lime-400/10 border-lime-400/25 text-lime-300",
+  total: "bg-sky-400/10 border-sky-400/25 text-sky-300",
   moneyline: "bg-emerald-400/10 border-emerald-400/25 text-emerald-300",
   spread: "bg-sky-400/10 border-sky-400/25 text-sky-300",
   prop: "bg-cyan-400/10 border-cyan-400/25 text-cyan-300",
@@ -232,7 +232,7 @@ export function BetSlip() {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
+            <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(34,211,238,0.8)]" />
             <span className="font-display text-lg font-bold tracking-tight">Bet Slip</span>
             <span data-testid="bet-slip-count" className="font-mono text-[11px] text-zinc-400 bg-[#132544] rounded-full px-2 py-0.5">
               {items.length}

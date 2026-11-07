@@ -31,7 +31,7 @@ export function AltLineSlider({ ev, m, main, meta }) {
   const tid = `${ev.event_id}-${m.market}`;
 
   return (
-    <div data-testid={`alt-slider-${tid}`} className="rounded-lg border border-[#162848] bg-[#0A1530]/60 p-3">
+    <div data-testid={`alt-slider-${tid}`} className="rounded-lg border border-[#253046] bg-[#141B28]/70 p-3">
       <div className="flex items-center justify-between mb-2.5">
         <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500">
           <SlidersHorizontal size={11} /> {m.label}

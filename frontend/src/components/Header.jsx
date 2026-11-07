@@ -19,7 +19,7 @@ export function Header({ onWallet, onHistory, onAdmin }) {
     <header className="fixed top-0 inset-x-0 z-50 h-16 bg-[#071024]/90 backdrop-blur-md border-b border-[#1D3157]">
       <div className="h-full px-3 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center gap-5">
-          <Link to="/" className="flex items-center gap-2.5" data-testid="brand-logo">
+          <Link to="/" className="flex items-center gap-2.5 shrink-0" data-testid="brand-logo">
             <div className="leading-none flex flex-col">
               <BrandLogo className="h-7 sm:h-8" />
               <span data-testid="brand-beta-tag" className="text-[9px] font-mono font-bold uppercase tracking-[0.35em] text-emerald-400/80 mt-0.5">Beta</span>
