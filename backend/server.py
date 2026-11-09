@@ -2052,13 +2052,12 @@ async def place_bet(body: PlaceBetInput, user: dict = Depends(get_current_user))
         boost = next((b for b in build_boosts() if b["id"] == body.boost_id), None)
         if not boost or {_leg_sig(l) for l in boost["legs"]} != {_leg_sig(s.model_dump()) for s in body.selections}:
             raise HTTPException(status_code=409, detail={"msg": "This boost is no longer available", "changed": [], "unavailable": [], "boost_gone": True})
-    await _verify_selections(body.selections, body.accept_better)
-
     is_parlay = (body.bet_type == "parlay" and len(body.selections) > 1) or bool(boost and not boost.get("fixed_odds"))
     if not is_parlay and len(body.selections) != 1:
         raise HTTPException(status_code=400, detail="Single bets take exactly one selection")
     if is_parlay and not await _parlays_on():
         raise HTTPException(status_code=400, detail="Parlays are currently unavailable — single bets only")
+    await _verify_selections(body.selections, body.accept_better)
     total_odds = round(compute_parlay_odds(body.selections), 2) if is_parlay else round(body.selections[0].odds, 2)
     if boost and boost.get("fixed_odds"):
         total_odds = boost["fixed_odds"]

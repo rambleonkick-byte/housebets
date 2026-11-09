@@ -20,7 +20,7 @@ function TeamLogo({ team }) {
 export function OddsButton({ sel, meta }) {
   const { addSelection, has } = useBetSlip();
   const active = has({ ...sel, event_id: meta.event_id });
-  const closed = meta.state === "post";
+  const closed = meta.state === "post" || !(Number(sel.odds) > 1.0);
   const ref = useRef(null);
   const prev = useRef(sel.odds);
 

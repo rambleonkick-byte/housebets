@@ -1,0 +1,31 @@
+{
+  "summary": "Tested the singles-only bet slip (parlays admin toggle, OFF by default) in both backend and frontend. Backend: 9/9 pytest tests pass. /api/config returns {parlays:false}. A parlay POST /api/bets returns 400 'Parlays are currently unavailable — single bets only'. A single with 2 selections returns 400. A $1 single as admin succeeded and was voided, and the balance came back to exactly where it started. /api/boosts returns [] while parlays are OFF and the multi-leg combos are filtered out. /api/admin/parlays requires admin (401 when logged out). Cash out is OFF and auto-settle is OFF (manual grading on); neither was changed. Frontend: with 2 picks from different games there is no Single/Parlay toggle, the singles-only note shows, the button reads 'Place 2 Bets', and a $5 stake shows a $10.00 total. The Boosted Odds strip is hidden while OFF. Turning the admin toggle ON shows 'ON — tap to turn off', /api/config returns parlays:true, and after reload the Single/Parlay toggle appears, 'Place Parlay' works and the boosted combos strip appears. Turning it back OFF was verified: config parlays:false and the slip is back to singles only. Parlays are LEFT OFF.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/bets", "issue": "The parlay guard runs after _verify_selections, so a parlay with stale odds or unavailable picks returns 409 (odds changed) instead of 400 'parlays unavailable'. Moving the _parlays_on check before _verify_selections would give a clearer error and avoid unneeded price lookups."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MatchCard odds buttons (live)", "issue": "Heavy live favourites show odds of 1.00 and can still be clicked into the slip, giving zero profit. The backend rejects price<=1 as unavailable (409). This existed before this change.", "selector": "[data-testid^=odds-button-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_singles_only_parlays_toggle.py", "/app/test_reports/pytest/it25.xml"],
+  "action_items": [
+    "Optional: move the parlay-disabled check before _verify_selections in place_bet",
+    "Optional: disable or hide odds buttons with price <= 1.00"
+  ],
+  "critical_code_review_comments": [
+    "BetSlip renders twice (desktop sidebar + mobile drawer), so data-testids are duplicated. Tests must use .first.",
+    "server.py is over 4000 lines and should be split into modules"
+  ],
+  "updated_files": ["/app/backend/tests/test_singles_only_parlays_toggle.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "One $1 USD single bet placed as admin, then voided via admin grade (refunded, balance unchanged). The voided bet record remains in the bets collection.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Parlays setting is db.settings _id 'parlays' and is left OFF. Cashout is OFF and auto-settle is OFF. Use .first for bet-slip testids because the slip is duplicated. Log in via page.request.post /api/auth/login (cookie)."
+}
