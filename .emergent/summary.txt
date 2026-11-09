@@ -1,0 +1,150 @@
+<analysis>**original_problem_statement**: 
+i need a crypto sportsbook built that sources odds from free sources and also lets me plug in my own payment api
+
+PRODUCT REQUIREMENTS:
+- Modern dark crypto-betting UI, recently completely rebranded to **Housebets** (Navy and Cyan aesthetic).
+- Real-time Sports Odds using SportsGameOdds API (Unlimited tier enabled, ESPN fallbacks removed).
+- **Wallet System:** Deposits are made via Crypto (OxaPay), instantly converted and played strictly in **USD**. Now includes a **Vault** system for secure storage.
+- Admin Panel for user management, custom Super Boosts, mass delete, manual bet grading, ticket resolution, withdrawal approvals.
+- Built-in toggles (controlled via Admin) to dynamically turn ON/OFF: Parlays, Cashouts, Manual Bet Grading.
+- Casino games (Provably Fair) currently entirely disabled globally via configuration.
+- Internal Support Ticket system.
+- VIP Tier Ranking, Promo codes, and user profiles.
+- Integrated Telegram Bot for real-time notifications to the admin on deposits, withdrawals, big wins, and support tickets, with the ability to reply to tickets from Telegram.
+
+**User's preferred language**: English (INSTRUCT next agent to respond in English only)
+
+**what currently exists?**: 
+A fully functional React 19 + Tailwind v4 + FastAPI + MongoDB sportsbook, freshly rebranded from ApexOdds to **Housebets**. The app utilizes JWT auth, SGO API for odds (including NFL, NBA, NHL, MLB, Soccer, UFC, and newly added Tennis), and OxaPay for crypto transactions in a USD-native wallet. Recent major additions include a Vault for player fund storage, an admin-controlled Super Boosts feature (fixed or percentage live boosts), and a Telegram Bot integration to instantly alert the admin to tickets, transactions, and big wins (and reply to tickets directly). Casino games, parlays, and cashouts are currently disabled globally based on user requests, utilizing new feature toggles built into the admin panel and codebase.
+
+**Last working item**:
+- Last item agent was working: The user requested no parlays on bet slips and a permanent preview of the site. The agent built an Admin toggle to turn parlays off, updated the backend to reject parlay placements, and updated the UI to enforce single bets only. The agent also advised the user on the manual steps required to set up a permanent staging server by forking and publishing a new deployment.
+- Status: COMPLETED (Staging server setup requires manual user action).
+- Agent Testing Done: Y
+- Which testing method agent to use? testing agent
+- User Testing Done: N
+
+**All Pending/In progress Issue list**:
+Issue 1: Valid Email Address required for Withdrawal Alerts
+- Attempted fixes: The  logic via Resend throws a 422 Undeliverable error because  is not verified or accepting alerts.
+- Next debug checklist: Ask the user to provide a verified inbox or rely solely on the new Telegram Bot alerts for withdrawals.
+- Why fix this issue and what will be achieved with the fix? Fixes email alerts for pending OxaPay withdrawals.
+- Status: BLOCKED / USER VERIFICATION PENDING
+- Is recurring issue? Y
+- Should Test frontend/backend/both after fix? Backend
+
+Issue 2: Set up a permanent staging copy for testing
+- Attempted fixes: Instructed user on how to fork the job and publish a basic plan to act as a staging environment.
+- Next debug checklist: Check if the user needs further assistance deploying the staging environment or migrating their DB setup to it.
+- Why fix this issue and what will be achieved with the fix? Allows the user to view fast-loading, permanent prototypes before publishing to their live domain.
+- Status: USER VERIFICATION PENDING
+- Is recurring issue? N
+- Should Test frontend/backend/both after fix? N/A
+
+**In progress Task List**:
+*None*
+
+**Upcoming and Future Tasks**:
+Upcoming Tasks:
+- Task 1 (P0): Build Crash Game. (Currently, the entire casino is toggled OFF, so clarify if the user still wants this built before proceeding).
+- Task 2 (P1): Prop Search & Filters for the Sportsbook.
+- Task 3 (P2): Hot Game Tags for Casino (If Casino is re-enabled).
+- Task 4 (P3): Inbound email routing (e.g., admin@apexodds.io) to the ticket panel.
+
+**Completed work in this session**:
+- Rebranded the entire site from ApexOdds to **Housebets** (Navy/Cyan theme, updated logos, replaced 5 slider banners via AI generation). (DONE)
+- Integrated a Telegram Bot to ping the admin on support tickets, deposits, withdrawals, and Big Wins (>00), supporting direct swipe-replies to tickets. (DONE)
+- Created a **Vault** system for players to safely store funds (instantly accessible but separated from betting balances), and added a view for this in the Admin Panel. (DONE)
+- Removed ESPN scraper and updated SGO API integration to an Unlimited tier key. (DONE)
+- Added Tennis (ATP/WTA) markets including Set Winner and Total Games, and adjusted scoring parsers. (DONE)
+- Built a custom **Super Boosts** system inside the Admin Panel (allows fixed odds boosts or live % boosts for specific events). (DONE)
+- Added Admin Toggles to turn ON/OFF globally: Parlays, Cashout options, and Manual Bet Grading. (DONE)
+- Added a  flag to  to completely remove Casino visibility from the UI per user request. (DONE)
+- Upgraded OxaPay withdrawal UX: Added automatic address validation to catch smart-contract errors upfront, and a Move back to pending button for failed/rejected payouts. (DONE)
+
+**Earlier issues found/mentioned but not fixed**:
+*None*
+
+**Known issue recurrence from previous fork**:
+- Issue recurrence in previous fork: None
+- Recurrence count: 0
+- Status: NOT STARTED
+
+**Code Architecture**:
+
+
+**Key Technical Concepts**:
+- **Feature Toggles**: Parlays, Cashouts, and Manual Grading are dynamically controlled via DB  (accessed via ). Casino is hard-toggled via  in the frontend .
+- **Telegram Webhook**: Backend intercepts Telegram messages to allow the admin to reply directly to user support tickets without logging in.
+- **SGO API Odds Caching**: The app polls SportsGameOdds API heavily now that it is on an Unlimited tier.
+
+**key DB schema**:
+- :  (USD),  (USD), , , , .
+- : Tracks transactional ledger, including moves to/from the .
+- : Now heavily utilized for feature toggles (e.g., , , , ).
+
+**changes in tech stack**:
+- Added  logic patterns for webhooks.
+
+**All files of reference**:
+1. : Contains massive routing payload (4200+ lines). Handles all sportsbook logic, bot integrations, OxaPay webhooks, and admin toggles.
+2. : Expanded to include toggles for Big Wins, Cashouts, and Parlays.
+3. : New component to manage custom Super Boosts.
+4. : New UI to move money between balance and vault.
+5. : Contains the master  toggle.
+
+**Areas that need refactoring**:
+-  is critically overloaded (>4200 lines). It urgently requires router separation for maintainability (e.g., , , ), as simple additions are risking severe syntax errors.
+
+**key api endpoints**:
+-  (Returns feature toggles like parlays, cashouts, manual_grading)
+-  (GET/POST for moving funds to/from vault)
+-  (CRUD for super boosts)
+-  (Move failed/rejected withdrawals back to pending)
+
+**Critical Info for New Agent**:
+- **BRANDING:** The platform is now named **Housebets**. Ensure all generated content, UI text, and ad materials reflect Housebets (Dark Blue/Navy and Cyan), NOT ApexOdds.
+- **CASINO IS OFF:** The user explicitly demanded Casino games be removed. The code remains, but  is  in . Do not re-enable unless explicitly requested.
+- **PARLAYS & CASHOUTS ARE OFF:** Toggled off in the Admin DB settings. Only singles are permitted.
+
+**documents and test reports created in this job**:
+-  (Housebets Rebrand verification)
+-  (Parlays toggle verification)
+-  (Housebets welcome and sports banners)
+
+**Last 10 User Messages and any pending HUMAN messages**:
+1. (Latest) FINISH AND ALSO MAKE A PERMANENT PREVIEW OF SITE WHERE IT DOESNT NEEED TO REFRESH SERVERS (COMPLETED - Agent fixed odds disabled state and advised user on manual staging setup)
+2. change it to where we currently only allow single bets no parlays on bet slips (COMPLETED)
+3. GIVE ME A SCREENSHOUT OF SPORTSBOOK (COMPLETED)
+4. OK SETUP SECOND COPY FOR TESTING (Agent explained this must be done manually by user via Fork & Publish)
+5. I NEED IT TO LOAD FAST ALWAYS (Clarified preview limits)
+6. GIVE ME A LINK THAT I CAN VIEW THE PROTOTYPE BEFORE PUBLISHING (Provided)
+7. Banners For Every Slide: Make matching Housebets wave banners for the NFL, NBA, UFC and soccer slides too (COMPLETED)
+8. MAKE A HOUSEBETS BANNER FOR THE WELCOME IMAGE WHERE IT SAYS UNDER THE LIGHTS ON THE LINE ETC (COMPLETED)
+9. ALTER THE COLOR OF THE BETTING SQUARES A LITTLE SO ITS NOT SO MUCH BLUE ON BLUE AND EASIER ON THE EYES (COMPLETED)
+10. RETHEME IT TO HOUSEBETS WITH THIS LOGO AND COLOR THEME SHOULD BE DARK BLUE (COMPLETED)
+
+**Project Health Check:**
+- Broken: None.
+- Mocked: Withdrawal email alert (Waiting for an active inbox; relying on Telegram alerts currently).
+
+**3rd Party Integrations**:
+- OxaPay Merchant/Payout API — requires User API Key
+- SportsGameOdds (Unlimited Tier) — requires User API Key
+- Telegram Bot API — requires User API Key
+- Emergent Managed Email (Resend) — uses Emergent LLM Key
+- Fal.ai / Gemini (Banner/Ad Generation) — uses Emergent LLM Key
+
+**Testing status**:
+- Testing agent used after significant changes: YES (Iterations 24, 25).
+- Troubleshoot agent used after agent stuck in loop: NO.
+- Test files created: None.
+- Known regressions: None.
+
+**Credentials to test flow**:
+Check 
+- Admin:  /  (Note: Email remains apexodds.io for login currently)
+- Tester:  / 
+
+**What agent forgot to execute**:
+- Nothing from the immediate prompts. The Crash Game and Prop Search features from the previous backlog remain deferred.</analysis>
